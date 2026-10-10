@@ -1,0 +1,5 @@
+[
+  { "date": "2026-10-10", "macrostructure": "Ledger (app UI: vertical version graph + event feed)", "theme": "custom", "theme_axes": "light / grotesk-sans (IBM Plex Sans) / chromatic-other (green)", "vibe": "engineering ledger, ruled paper, release stamps", "enrichment": "none", "brief": "应用维护工具 · 方案 版本流水 (releaselog)" },
+  { "date": "2026-10-10", "macrostructure": "Map / Diagram (app UI: real-date lifecycle chart)", "theme": "Grid", "theme_axes": "light / grotesk-heavy (Archivo) / warm (signal red)", "enrichment": "none", "brief": "应用维护工具 · 方案 生命周期 (lifecycle)" },
+  { "date": "2026-10-10", "macrostructure": "Workbench (app UI: three-pane, graph always visible)", "theme": "custom", "theme_axes": "light / system CJK sans / warm (vermilion)", "enrichment": "none", "brief": "应用维护工具 · 方案 工作台 (workbench)" }
+]

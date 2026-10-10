@@ -1,0 +1,257 @@
+/*
+ * 工作台 (workbench) direction. Every rule is scoped under
+ * html[data-direction="workbench"] because main.tsx loads all directions' CSS.
+ * Tokens only; components reference them by name.
+ */
+
+html[data-direction='workbench'] {
+  /* Ink scale: three steps, all readable. ink-3 is the floor (5:1 on white), used only for meta. */
+  --color-ink: #121416;
+  --color-ink-2: #383d43;
+  --color-ink-3: #62686f;
+  --color-line: #c9cdd1;
+  --color-line-2: #e4e6e8;
+  --color-paper: #ffffff;
+  --color-wash: #eff0ee;
+  /* 朱 — vermilion annotation ink. The one accent. It means "needs a person's attention":
+     planned end inside 30 days, validation errors, irreversible actions. Never decoration. */
+  --color-accent: #b5321b;
+  --color-accent-wash: #f9ebe7;
+  --color-danger: #b5321b;
+
+  --wb-sel-row: #e8ebee; /* selected row in the graph / tables */
+  --wb-hover-row: #f4f5f6;
+  --wb-retired: #9aa0a6; /* 终止 rails and marks */
+  --wb-nav: #eff0ee;
+  --wb-focus: #121416;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, Menlo, 'Cascadia Mono', Consolas, monospace;
+
+  --wb-text-xs: 11.5px;
+  --wb-text-sm: 12.5px;
+  --wb-text-base: 13.5px;
+  --wb-text-md: 15px;
+  --wb-text-lg: 20px;
+  --wb-text-xl: 28px;
+
+  font-size: var(--wb-text-base);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Component rules sit in Tailwind's components layer so utility classes on an element still win. */
+@layer components {
+  html[data-direction='workbench'] body {
+    margin: 0;
+  }
+
+  html[data-direction='workbench'] :focus-visible {
+    outline: 2px solid var(--wb-focus);
+    outline-offset: 1px;
+  }
+
+  html[data-direction='workbench'] .wb-mono {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+    letter-spacing: 0;
+  }
+
+  /* ---------- buttons: one radius (2px), four voices ---------- */
+  html[data-direction='workbench'] .wb-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--color-line);
+    border-radius: 2px;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-size: var(--wb-text-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color 120ms ease-out, border-color 120ms ease-out;
+  }
+  html[data-direction='workbench'] .wb-btn:hover:not(:disabled) {
+    background: var(--wb-hover-row);
+    border-color: var(--color-ink-3);
+  }
+  html[data-direction='workbench'] .wb-btn:active:not(:disabled) {
+    background: var(--wb-sel-row);
+  }
+  html[data-direction='workbench'] .wb-btn:disabled {
+    opacity: 0.45;
+  }
+  html[data-direction='workbench'] .wb-btn-primary {
+    background: var(--color-ink);
+    border-color: var(--color-ink);
+    color: #fff;
+  }
+  html[data-direction='workbench'] .wb-btn-primary:hover:not(:disabled) {
+    background: #2b2f33;
+    border-color: #2b2f33;
+  }
+  html[data-direction='workbench'] .wb-btn-danger {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  html[data-direction='workbench'] .wb-btn-danger:hover:not(:disabled) {
+    background: var(--color-accent-wash);
+    border-color: var(--color-accent);
+  }
+  html[data-direction='workbench'] .wb-btn-solid-danger {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+  }
+  html[data-direction='workbench'] .wb-btn-solid-danger:hover:not(:disabled) {
+    background: #962817;
+    border-color: #962817;
+  }
+  html[data-direction='workbench'] .wb-link {
+    color: var(--color-ink);
+    text-decoration: underline;
+    text-decoration-color: var(--color-line);
+    text-underline-offset: 3px;
+    transition: text-decoration-color 120ms ease-out;
+  }
+  html[data-direction='workbench'] .wb-link:hover {
+    text-decoration-color: var(--color-ink);
+  }
+
+  /* ---------- inputs ---------- */
+  html[data-direction='workbench'] .wb-input {
+    width: 100%;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--color-line);
+    border-radius: 2px;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-size: var(--wb-text-base);
+    outline: none;
+  }
+  html[data-direction='workbench'] textarea.wb-input {
+    height: auto;
+    padding: 6px 8px;
+    line-height: 1.55;
+    resize: vertical;
+  }
+  html[data-direction='workbench'] .wb-input:focus {
+    border-color: var(--color-ink);
+    box-shadow: 0 0 0 1px var(--color-ink);
+  }
+  html[data-direction='workbench'] .wb-input[aria-invalid='true'] {
+    border-color: var(--color-accent);
+  }
+  html[data-direction='workbench'] .wb-input[readonly] {
+    background: var(--wb-hover-row);
+    color: var(--color-ink-2);
+  }
+  html[data-direction='workbench'] .wb-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: var(--wb-text-sm);
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+  html[data-direction='workbench'] .wb-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: var(--wb-text-xs);
+    color: var(--color-ink-3);
+  }
+  html[data-direction='workbench'] .wb-error {
+    display: block;
+    margin-top: 4px;
+    font-size: var(--wb-text-xs);
+    font-weight: 600;
+    color: var(--color-accent);
+  }
+
+  /* ---------- dense index tables ---------- */
+  html[data-direction='workbench'] .wb-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+  }
+  html[data-direction='workbench'] .wb-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-paper);
+    border-bottom: 2px solid var(--color-ink);
+    padding: 6px 10px;
+    font-size: var(--wb-text-sm);
+    font-weight: 600;
+    color: var(--color-ink);
+    white-space: nowrap;
+  }
+  html[data-direction='workbench'] .wb-table td {
+    border-bottom: 1px solid var(--color-line-2);
+    padding: 7px 10px;
+    vertical-align: top;
+  }
+  html[data-direction='workbench'] .wb-table tbody tr.wb-click {
+    cursor: pointer;
+  }
+  html[data-direction='workbench'] .wb-table tbody tr.wb-click:hover {
+    background: var(--wb-hover-row);
+  }
+  html[data-direction='workbench'] .wb-table tbody tr[aria-selected='true'] {
+    background: var(--wb-sel-row);
+  }
+
+  /* ---------- dialog ---------- */
+  html[data-direction='workbench'] .wb-dialog {
+    position: fixed;
+    top: 9vh;
+    left: 50%;
+    transform: translateX(-50%);
+    max-height: 82vh;
+    overflow-y: auto;
+    background: var(--color-paper);
+    border: 1px solid var(--color-ink);
+    border-radius: 2px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 6px 16px rgb(0 0 0 / 0.1);
+    outline: none;
+    z-index: 51;
+  }
+  html[data-direction='workbench'] .wb-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgb(18 20 22 / 0.32);
+    z-index: 50;
+  }
+
+  /* ---------- graph ---------- */
+  html[data-direction='workbench'] .wb-graph text {
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+  }
+  html[data-direction='workbench'] .wb-graph .wb-ver {
+    cursor: pointer;
+  }
+  html[data-direction='workbench'] .wb-graph .wb-ver:hover .wb-ver-dot {
+    r: 6;
+  }
+  html[data-direction='workbench'] .wb-graph .wb-row-hit {
+    cursor: pointer;
+  }
+
+  /* scrollbars inside the workbench panes stay thin */
+  html[data-direction='workbench'] .wb-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html[data-direction='workbench'] * {
+      transition: none !important;
+    }
+  }
+}

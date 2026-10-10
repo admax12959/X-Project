@@ -1,0 +1,472 @@
+/* Hallmark · genre: editorial · theme: Grid (signal red) · direction: lifecycle · pre-emit critique: P5 H5 E4 S5 R4 V4 · contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (34, 49) at 768–1920 */
+
+/*
+ * 生命周期 — time is the primary axis everywhere, on a real calendar scale.
+ * Locked tokens. Every colour, font, space step, radius and easing used by the
+ * lifecycle direction comes from this block. Nothing outside it names a colour.
+ *
+ * Signal red is spent on time pressure only: the 今天 line, 30-day expiry,
+ * and the one primary action per view. Errors borrow the same ink because an
+ * error is the other thing that must stop you.
+ */
+html[data-direction='lifecycle'] {
+  /* paper and ink (cool, hue 255) */
+  --lc-paper: oklch(99% 0.003 255);
+  --lc-paper-2: oklch(97.2% 0.004 255);
+  --lc-paper-3: oklch(94.5% 0.006 255);
+  --lc-rule: oklch(89% 0.006 255); /* hairlines: month grid, row dividers */
+  --lc-rule-2: oklch(80% 0.008 255); /* year lines, retired bars */
+  --lc-edge: oklch(56% 0.010 255); /* control boundaries, >=3:1 on paper */
+  --lc-muted: oklch(44% 0.012 255); /* secondary text, >=7:1 on paper, >=6:1 on paper-3 */
+  --lc-ink-2: oklch(30% 0.012 255);
+  --lc-ink: oklch(16% 0.010 255);
+  --lc-signal: oklch(55% 0.21 28);
+  --lc-signal-deep: oklch(47% 0.19 28); /* hover / pressed on the signal fill */
+  --lc-signal-ink: oklch(99% 0.003 255); /* text on the signal fill */
+  --lc-error: oklch(50% 0.20 28);
+  --lc-focus: oklch(16% 0.010 255);
+  --lc-scrim: oklch(16% 0.010 255 / 0.32);
+
+  /* type: one family. Archivo for Latin and figures, the OS CJK face for Chinese */
+  --lc-font: 'Archivo Variable', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --lc-text-xs: 12px; /* axis labels, label voice */
+  --lc-text-sm: 13px; /* meta under a name */
+  --lc-text-base: 15px; /* body */
+  --lc-text-md: 18px; /* section heads */
+  --lc-text-lg: 24px; /* dialog titles, big counts */
+  --lc-text-display: 44px; /* one per page: the page title */
+  --lc-text-numeral: 40px; /* days-left numerals on the home runway only */
+  --lc-text-poster: 64px; /* the login title only */
+
+  /* 4pt spacing */
+  --lc-s1: 4px;
+  --lc-s2: 8px;
+  --lc-s3: 12px;
+  --lc-s4: 16px;
+  --lc-s5: 20px;
+  --lc-s6: 24px;
+  --lc-s8: 32px;
+  --lc-s10: 40px;
+  --lc-s12: 48px;
+  --lc-s16: 64px;
+
+  --lc-radius: 0px;
+  --lc-control-h: 36px;
+
+  --lc-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --lc-ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --lc-dur-short: 140ms;
+  --lc-dur-med: 180ms;
+
+  /* chart geometry */
+  --lc-lane-h: 64px;
+  --lc-label-w: 248px;
+
+  font-size: 16px;
+  font-family: var(--lc-font);
+  background: var(--lc-paper);
+  color: var(--lc-ink);
+}
+html[data-direction='lifecycle'] body {
+  font-size: var(--lc-text-base);
+  line-height: 1.5;
+}
+html[data-direction='lifecycle'] ::selection {
+  background: var(--lc-signal);
+  color: var(--lc-signal-ink);
+}
+html[data-direction='lifecycle'] :focus-visible {
+  outline: 2px solid var(--lc-focus);
+  outline-offset: 2px;
+}
+
+/* ---------- type ---------- */
+.lc-display {
+  font-size: var(--lc-text-display);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  font-style: normal;
+}
+.lc-h2 {
+  font-size: var(--lc-text-md);
+  font-weight: 700;
+  line-height: 1.3;
+}
+.lc-label {
+  font-size: var(--lc-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--lc-muted);
+}
+.lc-muted {
+  color: var(--lc-muted);
+}
+.lc-code {
+  font-family: var(--lc-font);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.lc-num {
+  font-variant-numeric: tabular-nums;
+}
+.lc-signal-text {
+  color: var(--lc-signal);
+  font-weight: 700;
+}
+
+/* ---------- buttons ---------- */
+.lc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--lc-s2);
+  height: var(--lc-control-h);
+  padding: 0 var(--lc-s4);
+  border: 1px solid var(--lc-ink);
+  border-radius: var(--lc-radius);
+  background: var(--lc-paper);
+  color: var(--lc-ink);
+  font-size: var(--lc-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color var(--lc-dur-short) var(--lc-ease-out),
+    transform var(--lc-dur-short) var(--lc-ease-out);
+}
+.lc-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.lc-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.lc-btn--primary {
+  background: var(--lc-signal);
+  border-color: var(--lc-signal);
+  color: var(--lc-signal-ink);
+}
+.lc-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  padding: 0 var(--lc-s2);
+  text-decoration: underline;
+  text-decoration-color: var(--lc-rule-2);
+  text-underline-offset: 4px;
+}
+.lc-btn--danger {
+  /* destructive stays ink: red is reserved for time pressure and the primary action;
+     the confirm dialog carries the weight */
+  border-width: 1px;
+  font-weight: 700;
+}
+@media (hover: hover) {
+  .lc-btn:hover:not(:disabled) {
+    background: var(--lc-paper-3);
+  }
+  .lc-btn--primary:hover:not(:disabled) {
+    background: var(--lc-signal-deep);
+    border-color: var(--lc-signal-deep);
+  }
+  .lc-btn--ghost:hover:not(:disabled) {
+    background: transparent;
+    text-decoration-color: var(--lc-ink);
+  }
+}
+.lc-btn--primary:active:not(:disabled) {
+  background: var(--lc-signal-deep);
+}
+
+/* segmented control (zoom presets, ref kind) */
+.lc-seg {
+  display: inline-flex;
+  border: 1px solid var(--lc-ink);
+}
+.lc-seg > button {
+  height: 32px;
+  padding: 0 var(--lc-s3);
+  font-size: var(--lc-text-sm);
+  font-weight: 600;
+  color: var(--lc-ink-2);
+  background: var(--lc-paper);
+  transition: background-color var(--lc-dur-short) var(--lc-ease-out);
+}
+.lc-seg > button + button {
+  border-left: 1px solid var(--lc-ink);
+}
+.lc-seg > button[aria-pressed='true'] {
+  background: var(--lc-ink);
+  color: var(--lc-paper);
+}
+@media (hover: hover) {
+  .lc-seg > button[aria-pressed='false']:hover {
+    background: var(--lc-paper-3);
+  }
+}
+.lc-seg > button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline-offset: 2px;
+}
+
+/* text link */
+.lc-link {
+  color: var(--lc-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--lc-rule-2);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--lc-dur-short) var(--lc-ease-out);
+}
+@media (hover: hover) {
+  .lc-link:hover {
+    text-decoration-color: var(--lc-ink);
+  }
+}
+
+/* ---------- fields ---------- */
+.lc-input {
+  width: 100%;
+  height: var(--lc-control-h);
+  padding: 0 var(--lc-s3);
+  border: 1px solid var(--lc-edge);
+  border-radius: var(--lc-radius);
+  background: var(--lc-paper);
+  color: var(--lc-ink);
+  font-size: var(--lc-text-base);
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+  transition: background-color var(--lc-dur-short) var(--lc-ease-out);
+}
+textarea.lc-input {
+  height: auto;
+  min-height: 5.5rem;
+  padding: var(--lc-s2) var(--lc-s3);
+  resize: vertical;
+  line-height: 1.5;
+}
+select.lc-input {
+  padding-right: var(--lc-s2);
+}
+.lc-input::placeholder {
+  color: var(--lc-muted);
+}
+@media (hover: hover) {
+  .lc-input:hover:not(:disabled):not([readonly]) {
+    background: var(--lc-paper-2);
+  }
+}
+.lc-input:focus-visible,
+.lc-input:focus {
+  outline: 2px solid var(--lc-focus);
+  outline-offset: 1px;
+}
+.lc-input[aria-invalid='true'] {
+  border-color: var(--lc-error);
+}
+.lc-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.lc-input[readonly] {
+  background: var(--lc-paper-3);
+  border-color: var(--lc-rule-2);
+  color: var(--lc-ink-2);
+}
+.lc-field-label {
+  display: block;
+  margin-bottom: var(--lc-s1);
+  font-size: var(--lc-text-sm);
+  font-weight: 600;
+  color: var(--lc-ink);
+}
+.lc-field-help {
+  display: block;
+  min-height: 1lh;
+  margin-top: var(--lc-s1);
+  font-size: var(--lc-text-sm);
+  color: var(--lc-muted);
+}
+.lc-field-help[data-error] {
+  color: var(--lc-error);
+  font-weight: 600;
+}
+.lc-check {
+  accent-color: var(--lc-ink);
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- shell ---------- */
+.lc-nav a {
+  display: flex;
+  align-items: center;
+  gap: var(--lc-s2);
+  height: 36px;
+  padding: 0 var(--lc-s4);
+  font-size: var(--lc-text-base);
+  color: var(--lc-ink-2);
+  transition: background-color var(--lc-dur-short) var(--lc-ease-out);
+}
+.lc-nav a::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background: transparent;
+  flex: none;
+}
+.lc-nav a[aria-current='page'] {
+  color: var(--lc-ink);
+  font-weight: 700;
+}
+.lc-nav a[aria-current='page']::before {
+  background: var(--lc-ink);
+}
+@media (hover: hover) {
+  .lc-nav a:hover {
+    background: var(--lc-paper-3);
+    color: var(--lc-ink);
+  }
+}
+.lc-nav a:focus-visible {
+  outline-offset: -2px;
+}
+
+/* clickable full-width rows (home runway, app index, lanes) */
+.lc-row {
+  transition: background-color var(--lc-dur-short) var(--lc-ease-out);
+}
+@media (hover: hover) {
+  .lc-row:hover {
+    background: var(--lc-paper-2);
+  }
+}
+.lc-row:focus-visible {
+  outline-offset: -2px;
+}
+
+/* pressed states for everything clickable that is not a .lc-btn */
+.lc-row:active,
+.lc-nav a:active,
+.lc-seg > button:active {
+  background: var(--lc-paper-3);
+}
+.lc-link:active {
+  text-decoration-color: var(--lc-ink);
+  text-decoration-thickness: 2px;
+}
+.lc-tick:active > i {
+  transform: scaleX(3);
+}
+
+/* ---------- time marks ---------- */
+.lc-hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--lc-ink) 0 1.5px,
+    transparent 1.5px 5px
+  );
+}
+.lc-hatch--signal {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--lc-signal) 0 2px,
+    transparent 2px 5px
+  );
+}
+.lc-window {
+  background: var(--lc-paper-3);
+}
+.lc-bar-active {
+  background: var(--lc-ink);
+}
+.lc-bar-frozen {
+  background: var(--lc-paper);
+  box-shadow: inset 0 0 0 2px var(--lc-ink);
+}
+.lc-bar-retired {
+  background: var(--lc-rule-2);
+}
+
+/* version tick on the chart */
+.lc-tick {
+  position: absolute;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.lc-tick > i {
+  display: block;
+  width: 2px;
+  height: 20px;
+  background: var(--lc-ink);
+  transition: transform var(--lc-dur-short) var(--lc-ease-out);
+}
+.lc-tick[data-retired] > i {
+  background: var(--lc-muted);
+}
+.lc-tick[aria-pressed='true'] > i {
+  transform: scaleX(2);
+}
+@media (hover: hover) {
+  .lc-tick:hover > i {
+    transform: scaleX(2);
+  }
+}
+
+/* ---------- dialog ---------- */
+.lc-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--lc-scrim);
+  transition: opacity var(--lc-dur-med) var(--lc-ease-out);
+}
+.lc-scrim[data-starting-style],
+.lc-scrim[data-ending-style] {
+  opacity: 0;
+}
+.lc-dialog {
+  position: fixed;
+  z-index: 61;
+  top: 6vh;
+  left: 50%;
+  translate: -50% 0;
+  max-height: 88vh;
+  max-width: calc(100vw - 32px);
+  overflow-y: auto;
+  background: var(--lc-paper);
+  color: var(--lc-ink);
+  border: 1px solid var(--lc-ink);
+  border-top: 4px solid var(--lc-ink);
+  border-radius: var(--lc-radius);
+  padding: var(--lc-s6) var(--lc-s8) var(--lc-s6);
+  outline: none;
+  transition:
+    opacity var(--lc-dur-med) var(--lc-ease-out),
+    transform var(--lc-dur-med) var(--lc-ease-out);
+}
+.lc-dialog[data-starting-style],
+.lc-dialog[data-ending-style] {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-direction='lifecycle'] *,
+  html[data-direction='lifecycle'] *::before {
+    transition-duration: 0.01ms !important;
+    animation: none !important;
+  }
+  html[data-direction='lifecycle'] {
+    scroll-behavior: auto;
+  }
+}
+
+@media (max-width: 1100px) {
+  html[data-direction='lifecycle'] {
+    --lc-label-w: 188px;
+    --lc-text-display: 36px;
+  }
+}
