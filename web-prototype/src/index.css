@@ -1,0 +1,42 @@
+@import 'tailwindcss';
+
+/*
+ * Visual decisions, held everywhere:
+ * - Type: the OS's own CJK UI face (PingFang SC / Microsoft YaHei). It is an
+ *   internal Chinese tool; the system face renders CJK best and costs nothing.
+ *   Tabular numerals so version numbers and dates scan down a column.
+ *   Mono only for things you would paste into git: branch names, tags, commits.
+ * - Colour: neutral greys plus one accent (a dull steel blue) for links,
+ *   selection and the primary action. Status is carried in words, not hues.
+ * - Shape: one radius (3px), hairlines for structure, a shadow only on dialogs.
+ */
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --color-ink: #1d2124;
+  --color-ink-2: #5a6168;
+  --color-ink-3: #8a9097;
+  --color-line: #dfe2e5;
+  --color-line-2: #eef0f2;
+  --color-paper: #ffffff;
+  --color-wash: #f6f7f8;
+  --color-accent: #2d5d7b;
+  --color-accent-wash: #e9f0f4;
+  --color-danger: #9b2c1f;
+  --radius-sm: 3px;
+}
+
+html {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-wash);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
