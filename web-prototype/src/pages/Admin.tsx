@@ -103,12 +103,12 @@ function DisableDialog({ user, onClose }: { user: User; onClose: () => void }) {
   const blocking = soleOwnerOf(s, user.username);
   if (blocking.length)
     return (
-      <Dialog open onOpenChange={(o) => !o && onClose()} title={`不能禁用 ${user.displayName}`} description="下面这些应用只有这一个 Owner。先给应用添加其他 Owner 或移交，再禁用。">
+      <Dialog open onOpenChange={(o) => !o && onClose()} title={`不能禁用 ${user.displayName}`} description={`下面这些应用只有 ${user.displayName} 一个 Owner。需要先由 Owner 在应用里添加其他 Owner，再禁用。`}>
         <ul className="divide-y divide-line-2 border-y border-line">
           {blocking.map((a) => (
             <li key={a.key} className="flex items-baseline justify-between py-2.5">
               <span>{a.name}<Mono className="ml-2 text-ink-2">{a.key}</Mono></span>
-              <Button kind="quiet" onClick={() => navigate(`/apps/${a.key}`)}>去移交</Button>
+              <Button kind="quiet" onClick={() => navigate(`/apps/${a.key}`)}>查看应用</Button>
             </li>
           ))}
         </ul>

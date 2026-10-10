@@ -31,7 +31,7 @@ export function Settings() {
 
         <section>
           <SectionTitle>登录身份</SectionTitle>
-          <p className="mb-4 text-[13px] text-ink-2">同一个用户可以用多种登录身份登录。系统不会按邮箱自动合并用户，追加身份需要在这里用新身份完成一次认证。</p>
+          <p className="mb-4 text-[13px] text-ink-2">同一个用户可以用多种登录身份登录。工具不会按邮箱自动合并用户，追加身份需要在这里用新身份完成一次认证。</p>
           <ul className="divide-y divide-line-2 border-y border-line">
             {me.identities.map((i) => (
               <li key={i.type} className="flex items-baseline gap-4 py-3">
@@ -76,7 +76,7 @@ export function BindDialog({ user, type, by, onClose }: { user: User; type: Iden
       open
       onOpenChange={(o) => !o && onClose()}
       title={`为 ${user.displayName} 绑定${IDENTITY_LABEL[type]}`}
-      description={ldap ? '用要绑定的 LDAP 账号登录一次以证明归属。绑定后显示名、邮箱、部门改为从 LDAP 同步。' : '设置本地登录用的用户名和密码，之后可以不经过 LDAP 登录。'}
+      description={ldap ? '用要绑定的 LDAP 身份完成一次认证，证明归属。绑定后显示名、邮箱、部门改为从 LDAP 同步。' : '设置本地登录用的用户名和密码，之后可以不经过 LDAP 登录。'}
     >
       <div className="space-y-4">
         <Field label={ldap ? 'LDAP 用户名' : '本地登录名'}>

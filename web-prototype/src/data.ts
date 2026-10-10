@@ -123,7 +123,7 @@ line({ id: 'order-svc:main', appKey: 'order-svc', isMain: true, name: '主线', 
 v('order-svc:main', 'v3.3', '2025-09-01');
 const o34 = v('order-svc:main', 'v3.4', '2026-02-10');
 v('order-svc:main', 'v4.0', '2026-07-19');
-line({ id: 'order-svc:gov', appKey: 'order-svc', name: '3.x 政务云', branch: 'maint/3.x-govcloud', sourceVersionId: o34, reason: '政务云环境只允许已过安全审查的 3.4 基线', status: '活跃', plannedEnd: '2026-10-31' });
+line({ id: 'order-svc:gov', appKey: 'order-svc', name: '3.x 政务云', branch: 'maint/3.x-govcloud', sourceVersionId: o34, reason: '政务云环境只允许部署已过安全审查的 3.4', status: '活跃', plannedEnd: '2026-10-31' });
 v('order-svc:gov', 'v3.4.1-gov', '2026-05-30');
 
 // risk-engine: mainline only
@@ -135,7 +135,7 @@ v('risk-engine:main', '1.0.0', '2026-09-14');
 line({ id: 'settle-batch:main', appKey: 'settle-batch', isMain: true, name: '主线', branch: 'main', status: '活跃' });
 const s52 = v('settle-batch:main', '5.2', '2023-11-20');
 v('settle-batch:main', '6.0', '2025-06-01');
-line({ id: 'settle-batch:legacy', appKey: 'settle-batch', name: '旧核心兼容', branch: 'maint/legacy-core', sourceVersionId: s52, reason: '旧核心系统下线前需要保持日终批量接口不变', status: '终止', plannedEnd: '2025-12-31' });
+line({ id: 'settle-batch:legacy', appKey: 'settle-batch', name: '旧核心兼容', branch: 'maint/legacy-core', sourceVersionId: s52, reason: '旧核心下线前需要保持日终批量接口不变', status: '终止', plannedEnd: '2025-12-31' });
 v('settle-batch:legacy', '5.2.7', '2025-03-14');
 
 let state: State = {
@@ -144,7 +144,7 @@ let state: State = {
   users: [
     { username: 'linqiao', displayName: '林乔', email: 'linqiao@corp.example', dept: '交易平台部', status: '正常', identities: [{ type: 'ldap', login: 'linqiao', boundAt: '2026-09-02', boundBy: '首次登录' }] },
     { username: 'chenjing', displayName: '陈静', email: 'chenjing@corp.example', phone: '138 0000 4721', dept: '交易平台部', status: '正常', identities: [{ type: 'ldap', login: 'chenjing', boundAt: '2026-09-02', boundBy: '首次登录' }, { type: 'local', login: 'chenjing', boundAt: '2026-09-10', boundBy: '本人绑定' }] },
-    { username: 'zhoumin', displayName: '周敏', email: 'zhoumin@corp.example', dept: '基础运维部', status: '正常', identities: [{ type: 'ldap', login: 'zhoumin', boundAt: '2026-09-03', boundBy: '首次登录' }] },
+    { username: 'zhoumin', displayName: '周敏', email: 'zhoumin@corp.example', dept: '基础架构部', status: '正常', identities: [{ type: 'ldap', login: 'zhoumin', boundAt: '2026-09-03', boundBy: '首次登录' }] },
     { username: 'hanlei', displayName: '韩磊', email: 'hanlei@vendor.example', status: '正常', identities: [{ type: 'local', login: 'hanlei', boundAt: '2026-09-05', boundBy: '管理员 admin' }] },
     { username: 'songyu', displayName: '宋宇', email: 'songyu@corp.example', dept: '风控研发部', status: '已禁用', identities: [{ type: 'ldap', login: 'songyu', boundAt: '2026-09-04', boundBy: '首次登录' }] },
     { username: 'admin', displayName: '初始管理员', email: '', status: '正常', identities: [{ type: 'local', login: 'admin', boundAt: '2026-09-01', boundBy: '首次启动' }] },
@@ -155,7 +155,7 @@ let state: State = {
   ],
   apps: [
     { key: 'billing-core', name: '计费核心', description: '账单生成、计费规则和对账', repo: { platformId: 'gl-corp', path: 'trade/billing-core', projectId: '1182' }, mainBranch: 'main', owners: ['linqiao', 'chenjing'], pes: ['zhoumin'], deployInfo: '生产：k8s 集群 prod-sh-2，命名空间 billing\n发布窗口：周二、周四 22:00 后\n回滚：helm rollback，保留 3 个历史版本' },
-    { key: 'order-svc', name: '订单服务', description: '下单、订单状态机和履约回调', repo: { platformId: 'gh-ent', path: 'platform/order-service', projectId: '552310987' }, mainBranch: 'develop', owners: ['chenjing'], pes: ['linqiao'], deployInfo: '政务云环境由客户运维部署，我方只提供镜像' },
+    { key: 'order-svc', name: '订单服务', description: '下单、订单状态机和履约回调', repo: { platformId: 'gh-ent', path: 'platform/order-service', projectId: '552310987' }, mainBranch: 'develop', owners: ['chenjing'], pes: ['linqiao'], deployInfo: '政务云环境由客户自行部署，我方只提供镜像' },
     { key: 'risk-engine', name: '风控引擎', description: '实时交易风控规则执行', repo: { platformId: 'gl-corp', path: 'risk/engine', projectId: '2047' }, mainBranch: 'main', owners: ['zhoumin'], pes: [], deployInfo: '' },
     { key: 'settle-batch', name: '结算批处理', description: '日终清算与结算文件生成', repo: { platformId: 'gl-corp', path: 'trade/settle-batch', projectId: '640' }, mainBranch: 'main', owners: ['hanlei'], pes: ['linqiao'], deployInfo: '日终批量 01:30 启动，失败需人工重跑' },
   ],
