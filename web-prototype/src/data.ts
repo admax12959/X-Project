@@ -187,8 +187,91 @@ function log(appKey: string, text: string) {
   set({ audit: [{ appKey, at: `${TODAY} ${new Date().toTimeString().slice(0, 5)}`, actor: state.me, text }, ...state.audit] });
 }
 
+// ---------- validation (shared by every direction; returns field → message) ----------
+
+export type AppInput = {
+  key: string;
+  name: string;
+  description: string;
+  platformId: string;
+  repoPath: string;
+  projectId: string; // filled by verifyRepo
+  mainBranch: string;
+  owners: string[];
+  pes: string[];
+};
+export type Errors<T> = Partial<Record<keyof T, string>>;
+
+export function validateApp(input: AppInput, mode: 'create' | 'edit'): Errors<AppInput> {
+  const e: Errors<AppInput> = {};
+  if (mode === 'create') {
+    if (!input.key) e.key = '填写应用标识';
+    else if (!/^[a-z][a-z0-9-]{1,39}$/.test(input.key)) e.key = '小写字母开头，只能用小写字母、数字和 -，2–40 位';
+    else if (state.apps.some((a) => a.key === input.key)) e.key = '应用标识已被占用';
+    if (!input.platformId) e.platformId = '选择代码平台';
+    if (!input.repoPath.trim()) e.repoPath = '填写仓库路径';
+    else if (!input.projectId) e.repoPath = '先校验仓库';
+  }
+  if (!input.name.trim()) e.name = '填写显示名';
+  if (!input.mainBranch.trim()) e.mainBranch = '填写主线分支名';
+  if (input.owners.length === 0) e.owners = '至少一个 Owner';
+  const inactive = [...input.owners, ...input.pes].filter((u) => state.users.find((x) => x.username === u)?.status !== '正常');
+  if (inactive.length) e.owners = `已禁用的用户不能设为 Owner/PE：${inactive.map(userName).join('、')}`;
+  return e;
+}
+
+/** Fake platform API check. Paths containing "missing" fail, everything else returns a stable project ID. */
+export function verifyRepo(platformId: string, path: string): { ok: true; projectId: string } | { ok: false; message: string } {
+  const p = state.platforms.find((x) => x.id === platformId);
+  if (!p) return { ok: false, message: '选择代码平台' };
+  if (!/^[\w.-]+(\/[\w.-]+)+$/.test(path.trim())) return { ok: false, message: '路径格式应为 group/repo' };
+  if (path.includes('missing')) return { ok: false, message: `${p.type} 返回 404：仓库不存在或服务令牌无权访问` };
+  let h = 7;
+  for (const c of path) h = (h * 31 + c.charCodeAt(0)) % 900000;
+  return { ok: true, projectId: String(100000 + h) };
+}
+
+export type LocalUserInput = { username: string; displayName: string; email: string; dept: string; password: string };
+export function validateLocalUser(input: LocalUserInput): Errors<LocalUserInput> {
+  const e: Errors<LocalUserInput> = {};
+  if (!/^[a-z][a-z0-9._-]{1,31}$/.test(input.username)) e.username = '小写字母开头，2–32 位';
+  else if (state.users.some((u) => u.username === input.username)) e.username = '用户名已存在';
+  if (!input.displayName.trim()) e.displayName = '填写显示名';
+  if (input.email && !/^\S+@\S+$/.test(input.email)) e.email = '邮箱格式不对';
+  if (input.password.length < 8) e.password = '至少 8 位';
+  return e;
+}
+
 export const actions = {
   setRole: (role: Role) => set({ role }),
+
+  createApp(input: AppInput) {
+    const app: Application = { key: input.key, name: input.name.trim(), description: input.description.trim(), repo: { platformId: input.platformId, path: input.repoPath.trim(), projectId: input.projectId }, mainBranch: input.mainBranch.trim(), owners: input.owners, pes: input.pes, deployInfo: '' };
+    set({ apps: [...state.apps, app], lines: [...state.lines, { id: `${app.key}:main`, appKey: app.key, isMain: true, name: '主线', branch: app.mainBranch, status: '活跃' }] });
+    log(app.key, `创建应用，Owner：${input.owners.map(userName).join('、')}`);
+  },
+
+  /** 应用标识 and 仓库关联 are not editable here. Owner/PE changes are written to 变更历史 one by one. */
+  updateApp(key: string, patch: Pick<AppInput, 'name' | 'description' | 'mainBranch' | 'owners' | 'pes'>) {
+    const before = state.apps.find((a) => a.key === key)!;
+    set({ apps: state.apps.map((a) => (a.key === key ? { ...a, name: patch.name.trim(), description: patch.description.trim(), mainBranch: patch.mainBranch.trim(), owners: patch.owners, pes: patch.pes } : a)) });
+    const diff = (role: string, was: string[], now: string[]) => {
+      now.filter((u) => !was.includes(u)).forEach((u) => log(key, `添加 ${role} ${userName(u)}`));
+      was.filter((u) => !now.includes(u)).forEach((u) => log(key, `移除 ${role} ${userName(u)}`));
+    };
+    diff('Owner', before.owners, patch.owners);
+    diff('PE', before.pes, patch.pes);
+    if (before.name !== patch.name.trim() || before.description !== patch.description.trim() || before.mainBranch !== patch.mainBranch.trim()) log(key, '修改应用基本信息');
+  },
+
+  deleteApp(key: string) {
+    const lineIds = new Set(state.lines.filter((l) => l.appKey === key).map((l) => l.id));
+    set({ apps: state.apps.filter((a) => a.key !== key), lines: state.lines.filter((l) => l.appKey !== key), versions: state.versions.filter((v) => !lineIds.has(v.lineId)) });
+  },
+
+  createLocalUser(input: LocalUserInput) {
+    set({ users: [...state.users, { username: input.username, displayName: input.displayName.trim(), email: input.email.trim(), dept: input.dept.trim() || undefined, status: '正常', identities: [{ type: 'local', login: input.username, boundAt: TODAY, boundBy: `管理员 ${state.me}` }] }] });
+  },
 
   fork(input: Omit<Line, 'id' | 'isMain' | 'status'>) {
     const id = `${input.appKey}:${input.branch}`;

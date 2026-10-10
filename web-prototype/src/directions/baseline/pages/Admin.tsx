@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { actions, soleOwnerOf, TODAY, useStore, type CodePlatform, type User } from '../data';
-import { navigate } from '../router';
+import { actions, soleOwnerOf, TODAY, useStore, type CodePlatform, type User } from '../../../data';
+import { navigate } from '../../../router';
 import { Shell } from '../Shell';
 import { Button, Dialog, DialogActions, Field, Input, Mono, PageHeader, Table } from '../ui';
 import { BindDialog, IDENTITY_LABEL } from './Settings';
@@ -67,7 +67,7 @@ export function AdminUsers() {
   const [binding, setBinding] = useState<{ user: User; type: 'ldap' | 'local' } | null>(null);
   return (
     <Shell title="管理后台 / 用户">
-      <PageHeader title="用户" sub="用户只能禁用，不能删除。LDAP 用户需要先登录一次才会出现在这里。" actions={<Button kind="primary">新建本地用户</Button>} />
+      <PageHeader title="用户" sub="用户只能禁用，不能删除。LDAP 用户需要先登录一次才会出现在这里。" />
       <Table head={['用户', '邮箱', '部门', '登录身份', '状态', '']}>
         {s.users.map((u) => {
           const unbound = (['ldap', 'local'] as const).filter((t) => !u.identities.some((i) => i.type === t));

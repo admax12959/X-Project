@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { actions, appVersions, lineageOrder, lineById, lineVersions, TODAY, useStore } from '../data';
+import { actions, appVersions, lineageOrder, lineById, lineVersions, TODAY, useStore } from '../../../data';
 import { Button, Dialog, DialogActions, Field, Input, Mono, Textarea } from '../ui';
 
 // Open question (flagged to the user): can you fork from a version on a 终止 line?

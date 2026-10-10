@@ -1,6 +1,6 @@
 // Variant B — 按源版本缩进: each line's versions read top-down; a forked line sits directly under the version it came from.
 import { useState } from 'react';
-import { appLines, can, childLines, lineVersions, useStore, type Line } from '../data';
+import { appLines, can, childLines, lineVersions, useStore, type Line } from '../../../data';
 import { ExpiryText, Mono, StatusText } from '../ui';
 import { LineDetail, type LineageProps } from './LineDetail';
 

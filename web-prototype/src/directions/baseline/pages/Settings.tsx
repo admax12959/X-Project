@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { actions, TODAY, useStore, type IdentityType, type User } from '../data';
+import { actions, TODAY, useStore, type IdentityType, type User } from '../../../data';
 import { Shell } from '../Shell';
 import { Button, Dialog, DialogActions, Field, Input, Mono, PageHeader, SectionTitle } from '../ui';
 

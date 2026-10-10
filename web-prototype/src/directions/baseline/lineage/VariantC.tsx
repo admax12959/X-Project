@@ -1,6 +1,6 @@
 // Variant C — 表格 + 详情栏: lines as flat rows you can filter and sort; lineage shown as a 源版本 column, detail in a side pane.
 import { useState } from 'react';
-import { daysUntil, lineageOrder, lineById, lineVersions, useStore, versionById, type LineStatus } from '../data';
+import { daysUntil, lineageOrder, lineById, lineVersions, useStore, versionById, type LineStatus } from '../../../data';
 import { ExpiryText, Mono, StatusText } from '../ui';
 import { LineDetail, type LineageProps } from './LineDetail';
 

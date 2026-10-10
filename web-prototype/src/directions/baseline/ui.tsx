@@ -1,6 +1,6 @@
 import { Dialog as BaseDialog } from '@base-ui/react/dialog';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
-import { daysUntil, isExpiring, type Line } from './data';
+import { daysUntil, isExpiring, type Line } from '../../data';
 
 export function Button({ kind = 'default', className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { kind?: 'default' | 'primary' | 'quiet' | 'danger' }) {
   const look = {

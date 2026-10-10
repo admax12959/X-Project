@@ -1,4 +1,4 @@
-import { actions, can, lineById, lineVersions, useStore, versionById, type Line } from '../data';
+import { actions, can, lineById, lineVersions, useStore, versionById, type Line } from '../../../data';
 import { Button, ExpiryText, Mono, StatusText } from '../ui';
 
 export type LineageProps = {

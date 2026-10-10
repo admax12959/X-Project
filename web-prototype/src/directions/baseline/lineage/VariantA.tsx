@@ -1,6 +1,6 @@
 // Variant A — 泳道时间轴: one lane per line, x = release order, fork edges drawn from the source version.
 import { useEffect, useRef, useState } from 'react';
-import { appVersions, lineageOrder, lineVersions, useStore } from '../data';
+import { appVersions, lineageOrder, lineVersions, useStore } from '../../../data';
 import { ExpiryText, Mono, StatusText } from '../ui';
 import { LineDetail, type LineageProps } from './LineDetail';
 

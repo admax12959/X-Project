@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { actions, can, useStore, userName } from '../data';
+import { actions, can, useStore, userName } from '../../../data';
 import { VARIANTS } from '../lineage';
 import { ForkDialog, VersionDialog } from '../lineage/Dialogs';
-import { navigate, setParam, useLocation } from '../router';
+import { navigate, setParam, useLocation } from '../../../router';
 import { Shell } from '../Shell';
 import { Button, Mono, PageHeader, SectionTitle, Textarea } from '../ui';
 
@@ -33,12 +33,6 @@ export function AppDetail({ appKey }: { appKey: string }) {
       <PageHeader
         title={app.name}
         sub={app.description}
-        actions={
-          <>
-            {perm.editApp && <Button>编辑应用</Button>}
-            {perm.admin && <Button kind="danger">删除应用</Button>}
-          </>
-        }
       />
 
       <dl className="mb-12 grid grid-cols-[auto_1fr_auto_1fr] gap-x-6 gap-y-2.5 text-[13px] [&>dt]:text-ink-2">

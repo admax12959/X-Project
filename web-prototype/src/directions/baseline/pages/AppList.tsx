@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { appLines, can, daysUntil, isExpiring, lineVersions, useStore, userName } from '../data';
-import { navigate } from '../router';
+import { appLines, can, daysUntil, isExpiring, lineVersions, useStore, userName } from '../../../data';
+import { navigate } from '../../../router';
 import { Shell } from '../Shell';
-import { Button, ExpiryText, Input, Mono, PageHeader, SectionTitle, Table } from '../ui';
+import { ExpiryText, Input, Mono, PageHeader, SectionTitle, Table } from '../ui';
 
 export function AppList() {
   const s = useStore();
@@ -23,7 +23,7 @@ export function AppList() {
 
   return (
     <Shell title="应用">
-      <PageHeader title="应用" actions={can(s.role).admin && <Button kind="primary">创建应用</Button>} />
+      <PageHeader title="应用" />
 
       {expiring.length > 0 && (
         <section className="mb-10">

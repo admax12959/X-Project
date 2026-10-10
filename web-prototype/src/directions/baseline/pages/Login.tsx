@@ -1,5 +1,5 @@
 import { Tabs } from '@base-ui/react/tabs';
-import { navigate } from '../router';
+import { navigate } from '../../../router';
 import { Button, Field, Input } from '../ui';
 
 export function Login() {
