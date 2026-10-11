@@ -1,13 +1,16 @@
 // Register-version dialog (Owners). It names the target line (its Git branch) and the
 // version currently latest on it, so the wrong line is easy to spot. The line is a
 // prop: the dialog works for any line; the Versions tab offers the mainline for now.
+// On a Frozen line the note is required: the dialog says so up front, in a block above the form.
 import { Dialog } from '@base-ui/react/dialog';
 import { useState, type FormEvent } from 'react';
 import { api } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
-import type { Line, RefKind, Version } from '../api/types.ts';
+import type { Line, LineStatus, RefKind, Version } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
 import { Button, Field, Input, Segmented, Textarea } from '../ui/controls.tsx';
+import { LineStatusLabel } from '../ui/LineStatusLabel.tsx';
+import { lineRules } from './lineLifecycle.ts';
 
 /** Today's date in the browser's own time zone, "YYYY-MM-DD" (toISOString would give the UTC date). */
 export function localToday(now = new Date()): string {
@@ -23,7 +26,8 @@ export function RegisterVersionDialog({
   onRegistered,
 }: {
   appKey: string;
-  line: Line;
+  /** The mainline has no status. */
+  line: Line & { status?: LineStatus };
   /** The latest version on this line, if any. */
   previous: Version | undefined;
   onClose: () => void;
@@ -39,6 +43,7 @@ export function RegisterVersionDialog({
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const errors = error ? errorsByField(error) : {};
+  const noteRequired = lineRules(line, true).noteRequired;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -59,6 +64,15 @@ export function RegisterVersionDialog({
         <Dialog.Backdrop className="fixed inset-0 bg-black/30" />
         <Dialog.Popup className="fixed left-1/2 top-[8vh] max-h-[84vh] w-[520px] -translate-x-1/2 overflow-y-auto rounded border border-line bg-white p-6">
           <Dialog.Title className="mb-4 text-xl font-bold">{t('versions.register.title')}</Dialog.Title>
+          {noteRequired && (
+            <div role="note" className="mb-4 rounded border-2 border-accent bg-sel px-3 py-2.5">
+              <div className="mb-0.5 flex items-center gap-1.5 font-bold">
+                <LineStatusLabel status="frozen" />
+                <span>{t('versions.frozen.title')}</span>
+              </div>
+              <p className="text-[13px] text-text-2">{t('versions.frozen.body')}</p>
+            </div>
+          )}
           <dl className="mb-4 grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 rounded border border-sep bg-subtle px-3 py-2.5 text-[13px]">
             <dt className="text-text-3">{t('versions.dialog.line')}</dt>
             <dd>{line.isMain ? t('term.mainline') : line.name}</dd>
@@ -101,8 +115,8 @@ export function RegisterVersionDialog({
             <Field label={t('versions.field.releasedAt')} error={errors.releasedAt}>
               <Input name="releasedAt" type="date" value={releasedAt} onChange={(e) => setReleasedAt(e.target.value)} />
             </Field>
-            <Field label={t('versions.field.note')} error={errors.note}>
-              <Textarea name="note" value={note} onChange={(e) => setNote(e.target.value)} />
+            <Field label={noteRequired ? t('versions.field.noteRequired') : t('versions.field.note')} error={errors.note}>
+              <Textarea name="note" aria-required={noteRequired} value={note} onChange={(e) => setNote(e.target.value)} />
             </Field>
             <div className="flex items-center justify-end gap-2 pt-1">
               <Dialog.Close render={<Button type="button" />}>{t('versions.cancel')}</Dialog.Close>

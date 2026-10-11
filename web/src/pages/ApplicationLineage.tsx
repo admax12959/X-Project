@@ -2,7 +2,8 @@
 // The mainline is the root; maintenance lines nest under the line that holds their source
 // version, to any depth. Selecting a row opens the line's panel on the right; the selection
 // lives in the URL (?line=<id>) so a panel can be linked to. Owners can fork from the panel
-// (any of the line's versions) and register a version on the selected line.
+// (any of the line's versions), register a version on the selected line, edit it and move
+// it along the status state machine (confirmation dialogs; see lineLifecycle.ts).
 //
 // Layout: the panel sits next to the tree inside the tab. With a line selected the "Source
 // version" column is dropped (the panel shows it), and the other columns shrink, so the tree
@@ -16,14 +17,16 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { useSearchParams } from 'react-router';
 import { api } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
-import type { LineDetail, LineageNode, Version } from '../api/types.ts';
+import type { LineDetail, LineStatus, LineStatusChange, LineageNode, Version } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
 import { useCurrentUser } from '../session/session.tsx';
 import { Button, Empty } from '../ui/controls.tsx';
 import { LineStatusLabel } from '../ui/LineStatusLabel.tsx';
 import { useApplication } from './ApplicationPage.tsx';
+import { EditLineDialog } from './EditLineDialog.tsx';
 import { ForkDialog } from './ForkDialog.tsx';
 import { LinePanel } from './LinePanel.tsx';
+import { LineStatusDialog } from './LineStatusDialog.tsx';
 import { RegisterVersionDialog } from './RegisterVersionDialog.tsx';
 import { graphLanes, layoutGraph } from './lineageGraph.ts';
 import { graphWidth, LineageGraphCell, ROW_H } from './LineageGraphCell.tsx';
@@ -77,6 +80,11 @@ export function ApplicationLineage() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [forkFrom, setForkFrom] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [statusTarget, setStatusTarget] = useState<LineStatus | null>(null);
+  // The status log of the selected line (null while loading); `logKey` bumps to refetch.
+  const [log, setLog] = useState<{ lineId: string; items: LineStatusChange[] } | null>(null);
+  const [logKey, setLogKey] = useState(0);
   const [showGraph, setShowGraph] = useGraphSwitch();
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -98,6 +106,26 @@ export function ApplicationLineage() {
   const graph = useMemo(() => (data && showGraph ? { rows: layoutGraph(rows), lanes: graphLanes(data.root) } : null), [data, rows, showGraph]);
   const selectedId = params.get('line') ?? '';
   const selected = data?.lines.find((l) => l.id === selectedId);
+
+  const selectedIsLine = !!selected && !selected.isMain;
+  useEffect(() => {
+    if (!selectedIsLine) return;
+    let live = true;
+    api.applications.line(app.key, selectedId).then(
+      (d) => live && setLog({ lineId: selectedId, items: d.statusChanges }),
+      () => live && setLog({ lineId: selectedId, items: [] }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [app.key, selectedId, selectedIsLine, logKey]);
+  /** After a status change or an edit: reload the tree, the panel and the status log. */
+  const changed = () => {
+    setStatusTarget(null);
+    setEditing(false);
+    setLogKey((k) => k + 1);
+    reload();
+  };
 
   const select = (id: string) => setParams(id ? { line: id } : {}, { replace: true });
   const toggle = (id: string, open: boolean) =>
@@ -300,12 +328,20 @@ export function ApplicationLineage() {
         <LinePanel
           line={selected}
           versions={panelVersions}
+          log={log?.lineId === selected.id ? log.items : null}
           isOwner={isOwner}
           onClose={() => select('')}
           onSelectLine={select}
           onFork={setForkFrom}
           onRegister={() => setRegistering(true)}
+          onEdit={() => setEditing(true)}
+          onStatus={setStatusTarget}
         />
+      )}
+
+      {editing && selected && <EditLineDialog appKey={app.key} line={selected} onClose={() => setEditing(false)} onSaved={changed} />}
+      {statusTarget && selected && (
+        <LineStatusDialog appKey={app.key} line={selected} target={statusTarget} onClose={() => setStatusTarget(null)} onChanged={changed} />
       )}
 
       {forkFrom && (

@@ -1,12 +1,15 @@
 // Right-hand detail panel of the Lineage tab: one line's facts and its versions, with
-// Register version for that line and Fork from any of its versions (Owners). The planned
-// end date is one plain row: no countdown, colour or reminder. Rendered beside the tree
+// Register version for that line and Fork from any of its versions (Owners). Owners also
+// get Edit and the status changes the state machine allows (what is offered: lineRules).
+// The status log lists every change with time and actor. The planned end date is one
+// plain row: no countdown, colour or reminder. Rendered beside the tree
 // (not as a shell-level panel) so the tree can use the width that is left.
 import type { ReactNode } from 'react';
-import type { LineDetail, Version } from '../api/types.ts';
+import type { LineDetail, LineStatus, LineStatusChange, Version } from '../api/types.ts';
 import { useT, type MessageKey } from '../i18n/index.ts';
 import { Button } from '../ui/controls.tsx';
 import { LineStatusLabel } from '../ui/LineStatusLabel.tsx';
+import { lineRules } from './lineLifecycle.ts';
 
 const HINT: Record<NonNullable<LineDetail['status']>, MessageKey> = {
   active: 'lineage.status.active.hint',
@@ -17,24 +20,32 @@ const HINT: Record<NonNullable<LineDetail['status']>, MessageKey> = {
 export function LinePanel({
   line,
   versions,
+  log,
   isOwner,
   onClose,
   onSelectLine,
   onFork,
   onRegister,
+  onEdit,
+  onStatus,
 }: {
   line: LineDetail;
   /** This line's versions, latest release date first. */
   versions: Version[];
+  /** The status log, oldest first; null until it has loaded. */
+  log: LineStatusChange[] | null;
   isOwner: boolean;
   onClose: () => void;
   onSelectLine: (lineId: string) => void;
   /** Fork from this version. */
   onFork: (versionId: string) => void;
   onRegister: () => void;
+  onEdit: () => void;
+  /** Ask to move the line to this status (the page opens the confirmation). */
+  onStatus: (target: LineStatus) => void;
 }) {
   const { t, locale } = useT();
-  const retired = line.status === 'retired';
+  const rules = lineRules(line, isOwner);
   const when = new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', { dateStyle: 'medium', timeStyle: 'short' });
   const none = <span className="text-text-3">{t('lineage.field.none')}</span>;
   const sv = line.sourceVersion;
@@ -77,18 +88,26 @@ export function LinePanel({
       </div>
 
       {isOwner && (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            small
-            disabled={versions.length === 0}
-            title={versions.length === 0 ? t('lineage.panel.forkNoVersion') : undefined}
-            onClick={() => versions[0] && onFork(versions[0].id)}
-          >
-            {t('lineage.panel.fork')}
-          </Button>
-          <Button small kind="primary" disabled={retired} title={retired ? t('lineage.panel.retiredHint') : undefined} onClick={onRegister}>
-            {t('lineage.panel.register')}
-          </Button>
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              small
+              disabled={versions.length === 0}
+              title={versions.length === 0 ? t('lineage.panel.forkNoVersion') : undefined}
+              onClick={() => versions[0] && onFork(versions[0].id)}
+            >
+              {t('lineage.panel.fork')}
+            </Button>
+            <Button small kind="primary" disabled={!rules.canRegister} onClick={onRegister}>
+              {t('lineage.panel.register')}
+            </Button>
+            {rules.canEdit && (
+              <Button small onClick={onEdit}>
+                {t('lineage.panel.edit')}
+              </Button>
+            )}
+          </div>
+          {rules.registerBlockedReason && <p className="text-[13px] text-text-2">{t(rules.registerBlockedReason)}</p>}
         </div>
       )}
 
@@ -97,6 +116,15 @@ export function LinePanel({
           <div className="mb-1 text-[13px] font-semibold">{t('lineage.col.status')}</div>
           <LineStatusLabel status={line.status} />
           <p className="mt-0.5 text-[13px] text-text-3">{t(HINT[line.status])}</p>
+          {rules.targets.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {rules.targets.map((target) => (
+                <Button key={target} small onClick={() => onStatus(target)}>
+                  {t(`lineage.action.${target}`)}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -111,6 +139,34 @@ export function LinePanel({
           ))}
         </dl>
       </section>
+
+      {!line.isMain && (
+        <section>
+          <h3 className="mb-1.5 text-[13px] font-semibold">{t('lineage.panel.statusLog')}</h3>
+          {log === null ? (
+            <p className="text-[13px] text-text-3">{t('common.loading')}</p>
+          ) : log.length === 0 ? (
+            <p className="text-[13px] text-text-3">{t('lineage.panel.statusLogEmpty')}</p>
+          ) : (
+            <ol className="divide-y divide-sep rounded border border-sep">
+              {log.map((c, i) => (
+                <li key={i} className="px-2.5 py-2 text-[13px]">
+                  <div className="flex flex-wrap items-center gap-x-1.5">
+                    <LineStatusLabel status={c.from} />
+                    <span aria-hidden className="text-text-3">
+                      →
+                    </span>
+                    <LineStatusLabel status={c.to} />
+                  </div>
+                  <div className="text-text-3">
+                    {when.format(new Date(c.at))} · {c.actor.displayName || c.actor.username}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
 
       <section>
         <h3 className="mb-1.5 text-[13px] font-semibold">{t('lineage.panel.versions', { count: versions.length })}</h3>
