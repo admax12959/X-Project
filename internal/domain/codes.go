@@ -41,6 +41,9 @@ const (
 	// versions
 	CodeNumberTaken = "numberTaken" // field "number"; params {line: {id,isMain,name,branch}, releasedAt: "YYYY-MM-DD"} of the version that has it
 
+	// lines (fork)
+	CodeBranchTaken = "branchTaken" // field "branch"; params {line: {id,isMain,name,branch}} of the line that has it (the mainline's branch counts)
+
 	// repository binding (field "repo.path" / "repo.platformId")
 	CodeRepoNotFound        = "repoNotFound"        // the platform has no repository at this path
 	CodeRepoForbidden       = "repoForbidden"       // the platform token cannot access this repository

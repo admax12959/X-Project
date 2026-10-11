@@ -73,6 +73,9 @@ func (s *Store) SetDeployInfo(ctx context.Context, id int64, text string) error 
 
 func (s *Store) SetMainBranch(ctx context.Context, applicationID int64, branch string) error {
 	_, err := s.q.ExecContext(ctx, "UPDATE app_lines SET branch = ? WHERE application_id = ? AND is_main", branch, applicationID)
+	if isDuplicate(err) {
+		return domain.ErrBranchTaken // a maintenance line already has this branch
+	}
 	return err
 }
 

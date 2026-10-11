@@ -46,6 +46,7 @@ const renderers: Record<string, Renderer> = {
     ),
   }),
   versionRegistered: (p) => ({ number: String(p.number), line: lineLabel(p.line) }),
+  lineForked: (p) => ({ number: String(p.number), line: lineLabel(p.line) }),
 };
 
 export function renderEvent(e: ChangeEvent, locale: Locale): string {

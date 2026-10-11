@@ -4,6 +4,7 @@ import { BrowserRouter, Link, Route, Routes } from 'react-router';
 import './index.css';
 import { useT } from './i18n/index.ts';
 import { ApplicationHistory } from './pages/ApplicationHistory.tsx';
+import { ApplicationLineage } from './pages/ApplicationLineage.tsx';
 import { ApplicationOverview } from './pages/ApplicationOverview.tsx';
 import { ApplicationPage } from './pages/ApplicationPage.tsx';
 import { ApplicationsPage } from './pages/ApplicationsPage.tsx';
@@ -43,6 +44,7 @@ function App() {
         <Route index element={<ApplicationsPage />} />
         <Route path="apps/:key" element={<ApplicationPage />}>
           <Route index element={<ApplicationOverview />} />
+          <Route path="lineage" element={<ApplicationLineage />} />
           <Route path="versions" element={<ApplicationVersions />} />
           <Route path="history" element={<ApplicationHistory />} />
         </Route>

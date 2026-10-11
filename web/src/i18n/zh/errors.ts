@@ -26,6 +26,7 @@ export default {
   'error.userUnavailable': '该用户不存在或已被禁用，请选择已启用的用户。',
   'error.soleOwner': '该用户是以下应用的唯一 Owner：{applications}。请先把这些应用移交给其他 Owner，再禁用该用户。',
   'error.numberTaken': '该版本号已被{line}上的版本使用，发布时间 {releasedAt}。',
+  'error.branchTaken': '该 Git 分支名已被{line}使用。',
   'error.repoNotFound': '代码平台上找不到这个仓库，请检查仓库路径。',
   'error.repoForbidden': '代码平台的令牌无权访问这个仓库。',
   'error.platformUnreachable': '无法连接代码平台，请稍后再试。',

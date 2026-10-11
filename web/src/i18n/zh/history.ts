@@ -7,6 +7,7 @@ export default {
   'history.event.memberAdded': '添加 {role}：{user}',
   'history.event.memberRemoved': '移除 {role}：{user}',
   'history.event.versionRegistered': '在{line}登记版本 {number}',
+  'history.event.lineForked': '从版本 {number} 分叉维护线{line}',
   'history.event.unknown': '未知事件（{type}）',
   'history.col.time': '时间',
   'history.col.by': '操作人',

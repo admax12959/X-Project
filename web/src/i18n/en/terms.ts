@@ -26,4 +26,5 @@ export default {
   'term.essentials': 'Essentials',
   'term.changeHistory': 'Change history',
   'term.versions': 'Versions',
+  'term.lineage': 'Lineage',
 };

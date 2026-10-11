@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 )
@@ -103,7 +104,9 @@ func (s *Service) UpdateApplication(ctx context.Context, actor Actor, key string
 			if err := tx.UpdateApplicationInfo(ctx, app.ID, name, description); err != nil {
 				return err
 			}
-			if err := tx.SetMainBranch(ctx, app.ID, branch); err != nil {
+			if err := tx.SetMainBranch(ctx, app.ID, branch); errors.Is(err, ErrBranchTaken) {
+				return s.branchTakenError(ctx, tx, app.ID, "mainBranch", branch)
+			} else if err != nil {
 				return err
 			}
 			if err := s.recordEvent(ctx, tx, app.ID, actor, appInfoChangedEvent(changes)); err != nil {

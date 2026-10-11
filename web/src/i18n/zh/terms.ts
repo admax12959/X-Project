@@ -25,4 +25,5 @@ export default {
   'term.essentials': '基本信息',
   'term.changeHistory': '变更历史',
   'term.versions': '版本',
+  'term.lineage': '分支谱系',
 };

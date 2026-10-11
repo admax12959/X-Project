@@ -7,6 +7,7 @@ export default {
   'history.event.memberAdded': 'Added {role}: {user}',
   'history.event.memberRemoved': 'Removed {role}: {user}',
   'history.event.versionRegistered': 'Registered version {number} on {line}',
+  'history.event.lineForked': 'Forked maintenance line {line} from version {number}',
   'history.event.unknown': 'Unknown event ({type})',
   'history.col.time': 'Time',
   'history.col.by': 'By',
