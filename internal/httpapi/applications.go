@@ -79,6 +79,16 @@ type applicationSummaryJSON struct {
 	Repo        repoJSON     `json:"repo"`
 	Owners      []memberJSON `json:"owners"`
 	LineCount   int          `json:"lineCount"`
+	// LatestVersion is null for an application without versions.
+	LatestVersion *homeVersionJSON `json:"latestVersion"`
+}
+
+// homeVersionJSON is the short version form of the home page: which version, and on which line.
+type homeVersionJSON struct {
+	ID         string   `json:"id"`
+	Number     string   `json:"number"`
+	ReleasedAt string   `json:"releasedAt"`
+	Line       lineJSON `json:"line"`
 }
 
 // listApplications serves GET /api/applications?q=<search>.
@@ -90,10 +100,17 @@ func (s *server) listApplications(w http.ResponseWriter, r *http.Request) {
 	}
 	out := listJSON[applicationSummaryJSON]{Items: make([]applicationSummaryJSON, 0, len(apps))}
 	for _, a := range apps {
-		out.Items = append(out.Items, applicationSummaryJSON{
+		item := applicationSummaryJSON{
 			Key: a.Key, Name: a.Name, Description: a.Description, Repo: toRepoJSON(a.Repo), Owners: toMembersJSON(a.Owners),
 			LineCount: a.LineCount,
-		})
+		}
+		if v := a.LatestVersion; v != nil {
+			item.LatestVersion = &homeVersionJSON{
+				ID: strconv.FormatInt(v.ID, 10), Number: v.Number, ReleasedAt: v.ReleasedAt.Format("2006-01-02"),
+				Line: lineJSON{ID: strconv.FormatInt(v.Line.ID, 10), IsMain: v.Line.IsMain, Name: v.Line.Name, Branch: v.Line.Branch},
+			}
+		}
+		out.Items = append(out.Items, item)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

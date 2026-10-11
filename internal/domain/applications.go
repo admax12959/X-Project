@@ -45,6 +45,10 @@ type ApplicationSummary struct {
 	Owners      []UserRef
 	// LineCount is the number of maintenance lines in any status; the mainline is not counted.
 	LineCount int
+	// LatestVersion is the version with the newest release date on any line (ties:
+	// registered last), nil when none is registered. Only ID, Number, ReleasedAt and
+	// Line (ID, IsMain, Name, Branch) are filled.
+	LatestVersion *Version
 }
 
 // Line is the mainline or a maintenance line (GLOSSARY: 线). The mainline has no
