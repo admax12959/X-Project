@@ -374,4 +374,52 @@ func TestTheDetailOfAnUnknownLineIsNotFoundAndTheMainlineHasNoStatusLog(t *testi
 	}
 }
 
+// lifecycleEventBody is a change-history entry of a status change or a line edit.
+type lifecycleEventBody struct {
+	Type  string `json:"type"`
+	Actor struct {
+		Username string `json:"username"`
+	} `json:"actor"`
+	Params struct {
+		Line    lineBody                     `json:"line"`
+		From    string                       `json:"from"`
+		To      string                       `json:"to"`
+		Changes map[string]map[string]string `json:"changes"`
+	} `json:"params"`
+}
+
+func (f lineFixture) events(t *testing.T) []lifecycleEventBody {
+	t.Helper()
+	var h struct {
+		Items []lifecycleEventBody `json:"items"`
+	}
+	f.elarsen.Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
+	return h.Items
+}
+
+func TestStatusChangesAreRecordedInTheChangeHistory(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	base := len(f.events(t)) // app created, version registered, line forked
+
+	f.setStatus("frozen").ExpectStatus(http.StatusOK)
+	f.setStatus("active").ExpectStatus(http.StatusOK)
+	f.setStatus("frozen").ExpectStatus(http.StatusOK)
+	f.setStatus("retired").ExpectStatus(http.StatusOK)
+	f.setStatus("active").ExpectStatus(http.StatusUnprocessableEntity) // a rejected change leaves no event
+
+	h := f.events(t) // newest first
+	if len(h) != base+4 {
+		t.Fatalf("history has %d events, want %d: %+v", len(h), base+4, h)
+	}
+	want := [][2]string{{"frozen", "retired"}, {"active", "frozen"}, {"frozen", "active"}, {"active", "frozen"}}
+	for i, w := range want {
+		e := h[i]
+		if e.Type != "lineStatusChanged" || e.Actor.Username != "elarsen" || e.Params.From != w[0] || e.Params.To != w[1] ||
+			e.Params.Line.ID != f.line.ID || e.Params.Line.Name != "Northwind customization" || e.Params.Line.Branch != "cust/northwind" || e.Params.Line.IsMain {
+			t.Fatalf("event %d = %+v, want %v", i, e, w)
+		}
+	}
+}
+
 // -- tests below are appended as the lifecycle grows --

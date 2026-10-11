@@ -161,9 +161,13 @@ func (s *Service) SetLineStatus(ctx context.Context, actor Actor, appKey, lineID
 		}); err != nil {
 			return err
 		}
+		from := line.Status
 		line.Status = to
 		out, err = s.lineDetail(ctx, tx, line)
-		return err
+		if err != nil {
+			return err
+		}
+		return s.recordEvent(ctx, tx, app.ID, actor, lineStatusChangedEvent(line, from, to))
 	})
 	return out, err
 }

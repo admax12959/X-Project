@@ -45,6 +45,9 @@ const (
 	// {id, isMain, name, branch}, number = the source version's number, sourceLine =
 	// the line that holds the source version {id, isMain, name, branch}.
 	EventLineForked EventType = "lineForked"
+	// EventLineStatusChanged: a maintenance line moved along the state machine. Params:
+	// line = {id, isMain, name, branch}, from, to = "active" | "frozen" | "retired".
+	EventLineStatusChanged EventType = "lineStatusChanged"
 )
 
 // event is a change-history entry that has not been written yet. Build it with
@@ -84,6 +87,10 @@ func versionRegisteredEvent(number string, line Line) event {
 
 func lineForkedEvent(line Line, source Version) event {
 	return event{EventLineForked, map[string]any{"line": lineParam(line), "number": source.Number, "sourceLine": lineParam(source.Line)}}
+}
+
+func lineStatusChangedEvent(line Line, from, to LineStatus) event {
+	return event{EventLineStatusChanged, map[string]any{"line": lineParam(line), "from": string(from), "to": string(to)}}
 }
 
 // userParam is the params form of a reference to a user.
