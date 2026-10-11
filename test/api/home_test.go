@@ -154,6 +154,81 @@ func TestMineFilterKeepsApplicationsWhereTheUserIsOwnerOrPE(t *testing.T) {
 	elarsen.Get("/api/applications?mine=maybe").ExpectError(http.StatusUnprocessableEntity, "mine", "invalid")
 }
 
+type activityBody struct {
+	historyEventBody
+	Application struct {
+		Key  string `json:"key"`
+		Name string `json:"name"`
+	} `json:"application"`
+}
+
+type activityListBody struct {
+	Items []activityBody `json:"items"`
+}
+
+func (a activityBody) String() string { return a.Application.Key + ":" + a.Type }
+
+func activity(t *testing.T, c *apitest.Client, path string) []activityBody {
+	t.Helper()
+	var l activityListBody
+	c.Get(path).ExpectStatus(http.StatusOK).JSON(&l)
+	return l.Items
+}
+
+func TestRecentActivityMergesEveryApplicationsHistoryNewestFirstForEveryUser(t *testing.T) {
+	t.Parallel()
+	f := newAppFixture(t)
+	reader := f.env.SeedUserClient("reader", "reader-password-1") // not an Owner or PE of anything
+	if got := activity(t, reader, "/api/recent-activity"); len(got) != 0 {
+		t.Fatalf("activity of an empty tool = %v", got)
+	}
+
+	createApp(t, f.admin, f.pid, []string{f.owner.ID}, map[string]any{"key": "app-a", "name": "App A"})
+	createApp(t, f.admin, f.pid, []string{f.owner.ID}, map[string]any{"key": "app-b", "name": "App B"})
+	owner := f.env.Client()
+	owner.LoginLocal("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
+	owner.Do(http.MethodPatch, "/api/applications/app-a", map[string]any{"name": "App A2"}).ExpectStatus(http.StatusOK)
+
+	got := activity(t, reader, "/api/recent-activity")
+	want := []string{"app-a:appInfoChanged", "app-b:appCreated", "app-a:appCreated"}
+	if len(got) != 3 {
+		t.Fatalf("activity = %v, want %v", got, want)
+	}
+	for i, w := range want {
+		if got[i].String() != w {
+			t.Fatalf("activity = %v, want %v (newest first, interleaved across applications)", got, want)
+		}
+	}
+	// Same content as the application's own history, plus the application it belongs to.
+	if e := got[0]; e.ID == "" || e.At == "" || e.Actor.Username != "elarsen" || e.Application.Name != "App A2" {
+		t.Fatalf("event = %+v", e)
+	}
+	// User references are expanded exactly like in the per-application history.
+	if o := got[1].Params.Owners; len(o) != 1 || o[0].DisplayName != "Emma Larsen" || o[0].Username != "elarsen" {
+		t.Fatalf("owners = %+v", o)
+	}
+}
+
+func TestRecentActivityIsLimited(t *testing.T) {
+	t.Parallel()
+	f := newAppFixture(t)
+	for _, key := range []string{"app-a", "app-b", "app-c", "app-d", "app-e", "app-f", "app-g", "app-h", "app-i", "app-j"} {
+		createApp(t, f.admin, f.pid, []string{f.owner.ID}, map[string]any{"key": key, "name": key})
+	}
+	if got := activity(t, f.admin, "/api/recent-activity"); len(got) != 8 || got[0].Application.Key != "app-j" || got[7].Application.Key != "app-c" {
+		t.Fatalf("default limit: %v", got)
+	}
+	if got := activity(t, f.admin, "/api/recent-activity?limit=2"); len(got) != 2 || got[0].Application.Key != "app-j" || got[1].Application.Key != "app-i" {
+		t.Fatalf("limit=2: %v", got)
+	}
+	if got := activity(t, f.admin, "/api/recent-activity?limit=50"); len(got) != 10 {
+		t.Fatalf("limit=50: %v", got)
+	}
+	for _, bad := range []string{"0", "-1", "51", "x", "1.5"} {
+		f.admin.Get("/api/recent-activity?limit="+bad).ExpectError(http.StatusUnprocessableEntity, "limit", "invalid")
+	}
+}
+
 // versionID finds a version of payments-core by number through the version list.
 func (f versionFixture) versionID(t *testing.T, number string) string {
 	t.Helper()
