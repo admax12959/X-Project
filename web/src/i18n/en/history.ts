@@ -3,6 +3,9 @@
 export default {
   'history.event.appCreated': 'Created application, Owner: {owners}',
   'history.event.appInfoChanged': 'Changed application info: {fields}',
+  'history.event.deployInfoChanged': 'Changed deployment info',
+  'history.event.memberAdded': 'Added {role}: {user}',
+  'history.event.memberRemoved': 'Removed {role}: {user}',
   'history.event.unknown': 'Unknown event ({type})',
   'history.col.time': 'Time',
   'history.col.by': 'By',

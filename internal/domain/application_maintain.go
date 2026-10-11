@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"slices"
 	"strings"
 )
 
@@ -21,6 +22,7 @@ type ApplicationMaintenanceRepository interface {
 	LockApplication(ctx context.Context, id int64) error
 	// UpdateApplicationInfo overwrites name and description.
 	UpdateApplicationInfo(ctx context.Context, id int64, name, description string) error
+	SetDeployInfo(ctx context.Context, id int64, text string) error
 	// SetMainBranch renames the branch on the application's mainline row.
 	SetMainBranch(ctx context.Context, applicationID int64, branch string) error
 }
@@ -98,6 +100,136 @@ func (s *Service) UpdateApplication(ctx context.Context, actor Actor, key string
 				return err
 			}
 			if err := s.recordEvent(ctx, tx, app.ID, actor, appInfoChangedEvent(changes)); err != nil {
+				return err
+			}
+		}
+		result, _, err = tx.GetApplicationByKey(ctx, key)
+		return err
+	})
+	return result, err
+}
+
+// UpdateMembersInput replaces both lists. Both must be present: an Owner list
+// that is missing or empty is rejected, the PE list may be empty.
+type UpdateMembersInput struct {
+	Owners *[]string
+	PEs    *[]string
+}
+
+// UpdateMembers replaces the Owner and PE lists. Administrators may do it for any
+// application (ADR-0003), Owners for their own; PEs may not. The application keeps
+// at least one Owner. Anyone newly added must be an existing enabled user; a
+// person who is already in a list may stay in it even if disabled since. One
+// change-history event is written per person added or removed, with the real actor.
+func (s *Service) UpdateMembers(ctx context.Context, actor Actor, key string, in UpdateMembersInput) (Application, error) {
+	var result Application
+	err := s.repo.InTx(ctx, func(tx Repository) error {
+		app, err := s.lockApplicationByKey(ctx, tx, key)
+		if err != nil {
+			return err
+		}
+		if !actor.User.IsAdmin && !isOwner(actor, app) {
+			return forbidden()
+		}
+		var c Collector
+		var owners, pes []UserID
+		if in.Owners == nil || len(*in.Owners) == 0 {
+			c.Add("owners", CodeRequired, nil)
+		} else {
+			owners = parseUserIDs(&c, "owners", *in.Owners)
+		}
+		if in.PEs == nil {
+			c.Add("pes", CodeRequired, nil)
+		} else {
+			pes = parseUserIDs(&c, "pes", *in.PEs)
+		}
+		if err := c.Err(); err != nil {
+			return err
+		}
+		oldOwners, oldPEs := userIDsOf(app.Owners), userIDsOf(app.PEs)
+		if err := s.checkMembers(ctx, tx, "owners", without(owners, oldOwners), "pes", without(pes, oldPEs)); err != nil {
+			return err
+		}
+		lists := []struct {
+			role     MemberRole
+			old, new []UserID
+		}{{RoleOwner, oldOwners, owners}, {RolePE, oldPEs, pes}}
+		var events []event
+		for _, l := range lists { // removals first, then additions
+			for _, id := range without(l.old, l.new) {
+				events = append(events, memberRemovedEvent(l.role, id))
+			}
+		}
+		for _, l := range lists {
+			for _, id := range without(l.new, l.old) {
+				events = append(events, memberAddedEvent(l.role, id))
+			}
+		}
+		for _, l := range lists {
+			if !slices.Equal(l.old, l.new) { // a pure reordering is stored but not recorded
+				if err := tx.SetMembers(ctx, app.ID, l.role, l.new); err != nil {
+					return err
+				}
+			}
+		}
+		for _, ev := range events {
+			if err := s.recordEvent(ctx, tx, app.ID, actor, ev); err != nil {
+				return err
+			}
+		}
+		result, _, err = tx.GetApplicationByKey(ctx, key)
+		return err
+	})
+	return result, err
+}
+
+func userIDsOf(refs []UserRef) []UserID {
+	out := make([]UserID, len(refs))
+	for i, r := range refs {
+		out[i] = r.ID
+	}
+	return out
+}
+
+// without returns the IDs of list that are not in other, in order.
+func without(list, other []UserID) []UserID {
+	var out []UserID
+	for _, id := range list {
+		if !slices.Contains(other, id) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+const maxDeployInfoLength = 20000
+
+// UpdateDeployInfo replaces the deployment info (free text). Owners and PEs may
+// edit it; administrators may not (unless they are Owner or PE themselves).
+func (s *Service) UpdateDeployInfo(ctx context.Context, actor Actor, key string, deployInfo *string) (Application, error) {
+	var result Application
+	err := s.repo.InTx(ctx, func(tx Repository) error {
+		app, err := s.lockApplicationByKey(ctx, tx, key)
+		if err != nil {
+			return err
+		}
+		if !isOwner(actor, app) && !containsUser(app.PEs, actor.User.ID) {
+			return forbidden()
+		}
+		if deployInfo == nil {
+			return Validation(Invalid("deployInfo", CodeRequired, nil))
+		}
+		text := strings.TrimRight(*deployInfo, " \t\r\n") // free text: keep leading indentation
+		var c Collector
+		checkLength(&c, "deployInfo", text, maxDeployInfoLength)
+		if err := c.Err(); err != nil {
+			return err
+		}
+		if text != app.DeployInfo {
+			if err := tx.SetDeployInfo(ctx, app.ID, text); err != nil {
+				return err
+			}
+			if err := s.recordEvent(ctx, tx, app.ID, actor, deployInfoChangedEvent()); err != nil {
 				return err
 			}
 		}

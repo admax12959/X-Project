@@ -29,6 +29,15 @@ const (
 	// EventAppInfoChanged: name, description or main branch edited. Params:
 	// changes = {name|description|mainBranch: {from, to}}, only the fields that changed.
 	EventAppInfoChanged EventType = "appInfoChanged"
+	// EventDeployInfoChanged: deployment info edited. No params (the text can be long;
+	// the application page shows the current text).
+	EventDeployInfoChanged EventType = "deployInfoChanged"
+	// EventMemberAdded / EventMemberRemoved: one person added to or removed from the
+	// Owner or PE list (also when an administrator does it; the actor is the real
+	// operator). Params: role = "owner" | "pe", user = userParam. The user is its own
+	// nested value so that history reads can expand it.
+	EventMemberAdded   EventType = "memberAdded"
+	EventMemberRemoved EventType = "memberRemoved"
 )
 
 // event is a change-history entry that has not been written yet. Build it with
@@ -48,6 +57,18 @@ func appCreatedEvent(owners []UserID) event {
 
 func appInfoChangedEvent(changes map[string]any) event {
 	return event{EventAppInfoChanged, map[string]any{"changes": changes}}
+}
+
+func memberAddedEvent(role MemberRole, id UserID) event {
+	return event{EventMemberAdded, map[string]any{"role": string(role), "user": userParam(id)}}
+}
+
+func memberRemovedEvent(role MemberRole, id UserID) event {
+	return event{EventMemberRemoved, map[string]any{"role": string(role), "user": userParam(id)}}
+}
+
+func deployInfoChangedEvent() event {
+	return event{EventDeployInfoChanged, map[string]any{}}
 }
 
 // userParam is the params form of a reference to a user.

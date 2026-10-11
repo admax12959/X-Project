@@ -147,6 +147,39 @@ func (s *server) updateApplication(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toApplicationJSON(a))
 }
 
+// updateMembers serves PUT /api/applications/{key}/members: administrators and Owners.
+func (s *server) updateMembers(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Owners *[]string `json:"owners"`
+		PEs    *[]string `json:"pes"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	a, err := s.svc.UpdateMembers(r.Context(), actorOf(r), r.PathValue("key"), domain.UpdateMembersInput{Owners: body.Owners, PEs: body.PEs})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toApplicationJSON(a))
+}
+
+// updateDeployInfo serves PUT /api/applications/{key}/deploy-info: Owners and PEs.
+func (s *server) updateDeployInfo(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		DeployInfo *string `json:"deployInfo"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	a, err := s.svc.UpdateDeployInfo(r.Context(), actorOf(r), r.PathValue("key"), body.DeployInfo)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toApplicationJSON(a))
+}
+
 // lineJSON: the mainline has no status (and no name of its own).
 type lineJSON struct {
 	ID     string `json:"id"`
