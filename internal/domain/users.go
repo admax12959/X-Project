@@ -22,8 +22,10 @@ type UserRepository interface {
 	// LockUserWithIdentities reads one user and its identities, locking the user
 	// row for the rest of the transaction (call inside InTx).
 	LockUserWithIdentities(ctx context.Context, id UserID) (UserWithIdentities, bool, error)
+	// GetUserWithIdentities reads one user and its identities without locking.
+	GetUserWithIdentities(ctx context.Context, id UserID) (UserWithIdentities, bool, error)
 	// UpdateUser overwrites the editable columns (username, display name, email,
-	// phone, department). Returns ErrUsernameTaken on a username conflict.
+	// phone, department, language). Returns ErrUsernameTaken on a username conflict.
 	UpdateUser(ctx context.Context, u User, at time.Time) error
 	// RenameLocalLogin changes the login name of the user's local identity.
 	// Returns ErrUsernameTaken on a conflict.

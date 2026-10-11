@@ -12,6 +12,18 @@ const (
 	LanguageEn = "en"
 )
 
+// GetMe returns the actor's own profile and login identities.
+func (s *Service) GetMe(ctx context.Context, actor Actor) (UserWithIdentities, error) {
+	me, found, err := s.repo.GetUserWithIdentities(ctx, actor.User.ID)
+	if err != nil {
+		return UserWithIdentities{}, err
+	}
+	if !found {
+		return UserWithIdentities{}, newKind(KindNotFound, CodeNotFound)
+	}
+	return me, nil
+}
+
 // UpdateMeInput is a user's edit of their own settings. A nil field is left unchanged.
 type UpdateMeInput struct {
 	Language *string

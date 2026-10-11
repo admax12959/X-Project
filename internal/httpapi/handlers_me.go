@@ -8,7 +8,17 @@ import (
 
 // meRoutes are the routes of the logged-in user's own settings (personal settings page).
 func (s *server) meRoutes() {
+	s.route("GET /api/me", s.getMe)
 	s.route("PATCH /api/me", s.updateMe)
+}
+
+func (s *server) getMe(w http.ResponseWriter, r *http.Request) {
+	u, err := s.svc.GetMe(r.Context(), actorOf(r))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAdminUserJSON(u))
 }
 
 func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {

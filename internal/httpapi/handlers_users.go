@@ -17,7 +17,8 @@ type adminUserJSON struct {
 	Email       string         `json:"email"`
 	Phone       string         `json:"phone"`
 	Department  string         `json:"department"`
-	Status      string         `json:"status"`
+	Language    string         `json:"language"`
+	Status     string         `json:"status"`
 	IsAdmin     bool           `json:"isAdmin"`
 	Identities  []identityJSON `json:"identities"`
 }
@@ -33,7 +34,7 @@ func toAdminUserJSON(v domain.UserWithIdentities) adminUserJSON {
 	u := v.User
 	out := adminUserJSON{
 		ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName,
-		Email: u.Email, Phone: u.Phone, Department: u.Department, Status: string(u.Status), IsAdmin: u.IsAdmin,
+		Email: u.Email, Phone: u.Phone, Department: u.Department, Language: u.Language, Status: string(u.Status), IsAdmin: u.IsAdmin,
 		Identities: make([]identityJSON, 0, len(v.Identities)),
 	}
 	for _, i := range v.Identities {

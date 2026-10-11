@@ -24,7 +24,15 @@ func mapUsernameConflict(err error) error {
 }
 
 func (s *Store) LockUserWithIdentities(ctx context.Context, id domain.UserID) (domain.UserWithIdentities, bool, error) {
-	u, err := scanUser(s.q.QueryRowContext(ctx, "SELECT "+userCols+" FROM users WHERE id = ? FOR UPDATE", id))
+	return s.userWithIdentities(ctx, id, " FOR UPDATE")
+}
+
+func (s *Store) GetUserWithIdentities(ctx context.Context, id domain.UserID) (domain.UserWithIdentities, bool, error) {
+	return s.userWithIdentities(ctx, id, "")
+}
+
+func (s *Store) userWithIdentities(ctx context.Context, id domain.UserID, lock string) (domain.UserWithIdentities, bool, error) {
+	u, err := scanUser(s.q.QueryRowContext(ctx, "SELECT "+userCols+" FROM users WHERE id = ?"+lock, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.UserWithIdentities{}, false, nil
 	}
