@@ -1,8 +1,9 @@
 // Plan A · Console frame: narrow top bar + left navigation. Pages render inside <Outlet/>.
 // Later tickets add nav entries here (Versions #13, Settings #15, Administration #4/#5).
 import { NavLink, Outlet, useNavigate } from 'react-router';
+import { api } from '../api/client.ts';
 import { useCurrentUser, useSession } from '../session/session.tsx';
-import { LOCALES, setLocale, useT, type MessageKey } from '../i18n/index.ts';
+import { LOCALES, setLocale, useT, type Locale, type MessageKey } from '../i18n/index.ts';
 import { Button, Segmented } from '../ui/controls.tsx';
 
 function NavItem({ to, label, end }: { to: string; label: MessageKey; end?: boolean }) {
@@ -18,9 +19,21 @@ function NavItem({ to, label, end }: { to: string; label: MessageKey; end?: bool
   );
 }
 
-export function LanguageSwitch() {
+/** `persist` (logged-in pages) also saves the choice on the user so it follows them to other devices. */
+export function LanguageSwitch({ persist }: { persist?: boolean }) {
   const { t, locale } = useT();
-  return <Segmented label={t('common.language')} value={locale} onChange={setLocale} options={LOCALES.map((l) => ({ value: l, label: t(`lang.${l}`) }))} />;
+  const { state, setUser } = useSession();
+  const change = (l: Locale) => {
+    setLocale(l);
+    if (persist && state.status === 'authenticated') {
+      const user = state.user;
+      api.me.update({ language: l }).then(
+        () => setUser({ ...user, language: l }),
+        () => undefined, // the choice still applies in this browser
+      );
+    }
+  };
+  return <Segmented label={t('common.language')} value={locale} onChange={change} options={LOCALES.map((l) => ({ value: l, label: t(`lang.${l}`) }))} />;
 }
 
 export function Shell() {
@@ -39,7 +52,7 @@ export function Shell() {
           <b className="font-semibold text-text">{user.displayName}</b>
           {user.isAdmin && <> · {t('term.administrator')}</>}
         </span>
-        <LanguageSwitch />
+        <LanguageSwitch persist />
         <Button
           small
           onClick={async () => {
@@ -53,6 +66,7 @@ export function Shell() {
       <div className="flex min-h-0 flex-1">
         <nav aria-label={t('shell.nav')} className="w-60 flex-none overflow-y-auto border-r border-line bg-white pb-20 pt-3">
           <NavItem to="/" end label="term.applications" />
+          <NavItem to="/settings" label="settings.title" />
           {user.isAdmin && (
             <>
               <div className="px-5 pb-1 pt-4 text-[13px] font-semibold text-text-3">{t('platforms.navGroup')}</div>

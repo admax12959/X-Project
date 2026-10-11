@@ -16,6 +16,8 @@ type IdentityRepository interface {
 	UpdateUserProfile(ctx context.Context, id UserID, displayName, email, department string, at time.Time) error
 	// FindIdentityByUser returns the user's identity of the given kind, if any.
 	FindIdentityByUser(ctx context.Context, userID UserID, kind IdentityKind) (LoginIdentity, bool, error)
+	// DeleteIdentity removes the user's identity of the given kind.
+	DeleteIdentity(ctx context.Context, userID UserID, kind IdentityKind) error
 }
 
 func ldapUnreachable() error { return newKind(KindUnavailable, CodeLdapUnreachable) }
@@ -61,14 +63,9 @@ func (s *Service) loginLDAP(ctx context.Context, in LoginInput) (LoginResult, er
 			if !ok || u.Status != UserEnabled {
 				return invalidCredentials()
 			}
-			name := strings.TrimSpace(entry.DisplayName)
-			if name == "" {
-				name = u.Username
-			}
-			if err := tx.UpdateUserProfile(ctx, u.ID, name, entry.Email, entry.Department, s.nowUTC()); err != nil {
+			if err := s.syncFromDirectory(ctx, tx, &u, entry); err != nil {
 				return err
 			}
-			u.DisplayName, u.Email, u.Department = name, entry.Email, entry.Department
 			user = u
 			return nil
 		}
@@ -111,6 +108,21 @@ func (s *Service) loginLDAP(ctx context.Context, in LoginInput) (LoginResult, er
 		return LoginResult{}, err
 	}
 	return s.openSession(ctx, user)
+}
+
+// syncFromDirectory overwrites the directory-owned fields of u (display name, email,
+// department) with the directory entry, in the store and in *u. An entry without a
+// display name keeps the username as the display name.
+func (s *Service) syncFromDirectory(ctx context.Context, tx Repository, u *User, entry DirectoryEntry) error {
+	name := strings.TrimSpace(entry.DisplayName)
+	if name == "" {
+		name = u.Username
+	}
+	if err := tx.UpdateUserProfile(ctx, u.ID, name, entry.Email, entry.Department, s.nowUTC()); err != nil {
+		return err
+	}
+	u.DisplayName, u.Email, u.Department = name, entry.Email, entry.Department
+	return nil
 }
 
 // CheckUsernameFreeInDirectory is the administrator-side rule of ADR-0004: before a
