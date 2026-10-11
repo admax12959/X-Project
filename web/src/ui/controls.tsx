@@ -5,6 +5,7 @@ import { Input as BaseInput } from '@base-ui/react/input';
 import { ToggleGroup } from '@base-ui/react/toggle-group';
 import { Toggle } from '@base-ui/react/toggle';
 import type { ComponentProps, ReactNode } from 'react';
+import { fill } from './width.ts';
 
 const btnBase = 'inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded border px-3.5 font-semibold disabled:cursor-not-allowed';
 const btnKinds = {
@@ -34,7 +35,7 @@ export function Input({ className = '', ...p }: ComponentProps<typeof BaseInput>
   return (
     <BaseInput
       {...p}
-      className={`h-8 w-full min-w-0 rounded border border-line bg-white px-2.5 focus:border-accent focus:outline-2 focus:-outline-offset-1 focus:outline-accent data-[invalid]:border-danger ${className}`}
+      className={`h-8 ${fill(className)} min-w-0 rounded border border-line bg-white px-2.5 focus:border-accent focus:outline-2 focus:-outline-offset-1 focus:outline-accent data-[invalid]:border-danger ${className}`}
     />
   );
 }
@@ -62,15 +63,15 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
 }
 
 const fieldBox =
-  'w-full min-w-0 rounded border border-line bg-white px-2.5 focus:border-accent focus:outline-2 focus:-outline-offset-1 focus:outline-accent';
+  'min-w-0 rounded border border-line bg-white px-2.5 focus:border-accent focus:outline-2 focus:-outline-offset-1 focus:outline-accent';
 
 export function Textarea({ className = '', ...p }: ComponentProps<'textarea'>) {
-  return <textarea {...p} className={`${fieldBox} min-h-20 py-1.5 ${className}`} />;
+  return <textarea {...p} className={`${fieldBox} ${fill(className)} min-h-20 py-1.5 ${className}`} />;
 }
 
 /** Native select, styled like Input (a short, fixed list of choices). */
 export function Select({ className = '', ...p }: ComponentProps<'select'>) {
-  return <select {...p} className={`${fieldBox} h-8 ${className}`} />;
+  return <select {...p} className={`${fieldBox} ${fill(className)} h-8 ${className}`} />;
 }
 
 /** Titled bordered section of a page. */
