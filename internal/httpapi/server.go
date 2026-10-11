@@ -57,6 +57,7 @@ func (s *server) routes() {
 	s.route("GET /api/applications/{key}", s.getApplication)
 	s.route("GET /api/applications/{key}/lines", s.listLines)
 	s.route("POST /api/applications/{key}/lines", s.forkLine)
+	s.route("GET /api/applications/{key}/lineage", s.lineage)
 	s.route("GET /api/applications/{key}/history", s.listHistory)
 	s.route("GET /api/applications/{key}/versions", s.listVersions)
 	s.route("POST /api/applications/{key}/lines/{lineId}/versions", s.registerVersion)

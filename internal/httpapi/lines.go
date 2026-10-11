@@ -55,6 +55,45 @@ func toLineDetailJSON(l domain.Line) lineDetailJSON {
 	return out
 }
 
+// latestVersionJSON: the newest version of a line by release date.
+type latestVersionJSON struct {
+	ID         string `json:"id"`
+	Number     string `json:"number"`
+	ReleasedAt string `json:"releasedAt"`
+}
+
+// lineageNodeJSON is one line of the lineage tree: the line (with its fork facts)
+// plus what the tree table shows. children is never null; latestVersion is null for
+// a line without versions. Later tickets add fields here (for example the graph column).
+type lineageNodeJSON struct {
+	lineDetailJSON
+	VersionCount  int                `json:"versionCount"`
+	LatestVersion *latestVersionJSON `json:"latestVersion"`
+	Children      []lineageNodeJSON  `json:"children"`
+}
+
+func toLineageNodeJSON(n *domain.LineageNode) lineageNodeJSON {
+	out := lineageNodeJSON{lineDetailJSON: toLineDetailJSON(n.Line), VersionCount: n.VersionCount, Children: make([]lineageNodeJSON, 0, len(n.Children))}
+	if v := n.Latest; v != nil {
+		out.LatestVersion = &latestVersionJSON{ID: strconv.FormatInt(v.ID, 10), Number: v.Number, ReleasedAt: v.ReleasedAt.Format("2006-01-02")}
+	}
+	for _, c := range n.Children {
+		out.Children = append(out.Children, toLineageNodeJSON(c))
+	}
+	return out
+}
+
+// lineage serves GET /api/applications/{key}/lineage: the root node (the mainline)
+// with its children nested to any depth. Not a collection, so no "items".
+func (s *server) lineage(w http.ResponseWriter, r *http.Request) {
+	root, err := s.svc.Lineage(r.Context(), actorOf(r), r.PathValue("key"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toLineageNodeJSON(root))
+}
+
 // forkLine serves POST /api/applications/{key}/lines.
 func (s *server) forkLine(w http.ResponseWriter, r *http.Request) {
 	var body struct {
