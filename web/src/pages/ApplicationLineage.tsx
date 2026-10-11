@@ -26,7 +26,7 @@ import { ForkDialog } from './ForkDialog.tsx';
 import { LinePanel } from './LinePanel.tsx';
 import { RegisterVersionDialog } from './RegisterVersionDialog.tsx';
 import { graphLanes, layoutGraph } from './lineageGraph.ts';
-import { graphWidth, LineageGraphCell } from './LineageGraphCell.tsx';
+import { graphWidth, LineageGraphCell, ROW_H } from './LineageGraphCell.tsx';
 
 const GRAPH_KEY = 'xp.lineage.graph';
 
@@ -191,7 +191,7 @@ export function ApplicationLineage() {
           </Button>
         </div>
         <div role="treegrid" aria-label={t('lineage.tree')} className="text-sm">
-          <div role="row" className="grid h-10 items-center border-b border-line bg-thead" style={{ gridTemplateColumns: template }}>
+          <div role="row" className="grid items-center border-b border-line bg-thead" style={{ gridTemplateColumns: template, height: ROW_H }}>
             {graph && (
               <div role="columnheader">
                 <span className="sr-only">{t('lineage.graph')}</span>
@@ -233,8 +233,8 @@ export function ApplicationLineage() {
                 }}
                 onClick={() => select(node.id)}
                 onKeyDown={(e) => onKey(e, i)}
-                className={`grid h-10 cursor-pointer items-center border-b border-sep ${isSelected ? 'bg-sel' : 'hover:bg-subtle'} ${node.status === 'retired' ? 'text-text-3' : ''}`}
-                style={{ gridTemplateColumns: template }}
+                className={`grid cursor-pointer items-center border-b border-sep ${isSelected ? 'bg-sel' : 'hover:bg-subtle'} ${node.status === 'retired' ? 'text-text-3' : ''}`}
+                style={{ gridTemplateColumns: template, height: ROW_H }}
               >
                 {graph && (
                   <div role="gridcell" className="relative self-stretch">

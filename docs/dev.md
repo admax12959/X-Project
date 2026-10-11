@@ -73,10 +73,13 @@ First start means the `system_state` row has never been marked as bootstrapped. 
 ## Test
 
 ```sh
-make check          # = go vet + go test ./... + pnpm check (typecheck + i18n) + pnpm build
+make check          # = go vet + go test ./... + pnpm check (typecheck + i18n + unit tests) + pnpm build
 go test ./...       # backend only; the API tests start their own MySQL container
 pnpm --dir web check
+pnpm --dir web test   # frontend unit tests only (vitest, node environment)
 ```
+
+Frontend unit tests are for pure logic extracted from components (no DOM, no React): `name.test.ts` next to the module, `import { describe, expect, it } from 'vitest'`. Component behaviour is checked in a browser.
 
 How the API tests work (`internal/apitest`):
 
@@ -197,6 +200,7 @@ Code: `internal/domain/lines.go`, `internal/store/mysqlstore/lines.go`, `interna
 - Event `lineForked` (params `line` = the new line, `number` = the source version's number, `sourceLine`): "Forked maintenance line “name” from version X". Registering on a maintenance line reuses `versionRegistered` with the line's name.
 - Tests: `test/api/lineage_test.go` has `seedPaymentsCore(t)` (the prototype's payments-core: four levels, one version forked into two lines, a line without versions, irregular numbers, all three statuses) returning branch to line ID and number to version ID maps. Reuse it. **`env.SeedLineStatus(appKey, branch, status)` is test-only and bypasses the state machine** (no history event, no status time). Once #10 exists, test lifecycle behaviour through its API and keep the helper for fixtures only.
 - Frontend: the selected line is in the URL (`/apps/:key/lineage?line=<id>`). The panel sits beside the tree inside the tab, not in the shell, and the tree drops the Source version column while a line is selected, so it fits at 1280px without scrolling sideways (the prototype's known issue). `LineStatusLabel` is the one place that renders a status (icon + text, no pills). Add columns in `ApplicationLineage` (`template` grid string and the row cells).
+- **Graph column (#11).** Optional first column, off by default; the switch (`role=switch`) is remembered in `localStorage` key `xp.lineage.graph` (`1`/`0`; storage errors mean off). Layout is the pure `layoutGraph(rows)` in `pages/lineageGraph.ts` (tested by `lineageGraph.test.ts` with ASCII pictures; the payments-core shape is one of the cases); `LineageGraphCell.tsx` draws it, one small SVG per row. One dot per row in lane = depth; per row it returns line segments in lane (x) and row-height fraction (y) units. The rail of a parent runs down to its last visible child; **consecutive children with the same `sourceVersion.id` share one junction** (a half-lane sub-rail), so two lines forked from one version look different from two forks of different versions. A collapsed parent has no rail; the column width comes from `graphLanes(root)` (deepest lane of the whole tree), so collapsing does not move it. The graph is `aria-hidden` and carries meaning by shape, never colour: diamond mainline, filled circle Active, filled square Frozen, hollow circle Retired, dashed ring a line without versions (any status); the status itself stays in the Status column as icon + text. Row height is the constant `ROW_H` (35px, `LineageGraphCell.tsx`); rows set it as an inline style, so change it only there.
 
 ### Global versions (#13)
 
