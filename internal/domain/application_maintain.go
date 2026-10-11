@@ -26,6 +26,9 @@ type ApplicationMaintenanceRepository interface {
 	// key, to keep lock order stable) and reads, under a shared lock, how many other
 	// enabled Owners each has. Call inside InTx.
 	LockOwnedApplications(ctx context.Context, userID UserID) ([]OwnedApplication, error)
+	// DeleteApplication deletes the application row; lines, versions, members and
+	// change events go with it through ON DELETE CASCADE.
+	DeleteApplication(ctx context.Context, id int64) error
 	SetDeployInfo(ctx context.Context, id int64, text string) error
 	// SetMainBranch renames the branch on the application's mainline row.
 	SetMainBranch(ctx context.Context, applicationID int64, branch string) error
@@ -233,6 +236,29 @@ func without(list, other []UserID) []UserID {
 		}
 	}
 	return out
+}
+
+// DeleteApplication deletes an application with its lines, versions and change
+// history (the database cascades; nothing is deleted by hand). Administrators
+// only, and only after typing the application key.
+func (s *Service) DeleteApplication(ctx context.Context, actor Actor, key, confirmKey string) error {
+	if err := requireAdmin(actor); err != nil {
+		return err
+	}
+	return s.repo.InTx(ctx, func(tx Repository) error {
+		app, err := s.lockApplicationByKey(ctx, tx, key)
+		if err != nil {
+			return err
+		}
+		var c Collector
+		if c.Required("confirmKey", confirmKey) && strings.TrimSpace(confirmKey) != app.Key {
+			c.Add("confirmKey", CodeInvalid, nil)
+		}
+		if err := c.Err(); err != nil {
+			return err
+		}
+		return tx.DeleteApplication(ctx, app.ID)
+	})
 }
 
 const maxDeployInfoLength = 20000

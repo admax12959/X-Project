@@ -1,6 +1,9 @@
 package httpapi
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -145,6 +148,23 @@ func (s *server) updateApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toApplicationJSON(a))
+}
+
+// deleteApplication serves DELETE /api/applications/{key} with {"confirmKey": "<key>"}.
+// A missing body counts as an empty confirmation (the domain answers 403 / 404 / 422).
+func (s *server) deleteApplication(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ConfirmKey string `json:"confirmKey"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		writeCode(w, http.StatusBadRequest, domain.CodeBadRequest)
+		return
+	}
+	if err := s.svc.DeleteApplication(r.Context(), actorOf(r), r.PathValue("key"), body.ConfirmKey); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // updateMembers serves PUT /api/applications/{key}/members: administrators and Owners.

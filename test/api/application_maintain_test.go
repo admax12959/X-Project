@@ -317,6 +317,52 @@ func TestOwnerAndPeEditDeploymentInfoAndItIsRecordedInTheHistory(t *testing.T) {
 	f.ownerC.Do(http.MethodPut, f.appPath+"/deploy-info", map[string]any{}).ExpectError(http.StatusUnprocessableEntity, "deployInfo", "required")
 }
 
+func TestOnlyAnAdministratorWhoTypesTheKeyDeletesAnApplicationAndItsLinesAndHistoryGoWithIt(t *testing.T) {
+	t.Parallel()
+	f := newMaintFixture(t)
+	confirm := map[string]any{"confirmKey": "payments-core"}
+
+	// Not even the Owner may delete; this is decided before the confirmation is looked at.
+	for _, c := range []*apitest.Client{f.ownerC, f.peC, f.bobC} {
+		c.Do(http.MethodDelete, f.appPath, confirm).ExpectError(http.StatusForbidden, "", "forbidden")
+		c.Do(http.MethodDelete, f.appPath, nil).ExpectError(http.StatusForbidden, "", "forbidden")
+	}
+	f.env.Client().Do(http.MethodDelete, f.appPath, confirm).ExpectStatus(http.StatusUnauthorized)
+	f.admin.Do(http.MethodDelete, "/api/applications/nope", confirm).ExpectError(http.StatusNotFound, "", "notFound")
+
+	// The application key must be typed exactly.
+	f.admin.Do(http.MethodDelete, f.appPath, nil).ExpectError(http.StatusUnprocessableEntity, "confirmKey", "required")
+	f.admin.Do(http.MethodDelete, f.appPath, map[string]any{"confirmKey": "Payments-Core"}).ExpectError(http.StatusUnprocessableEntity, "confirmKey", "invalid")
+	f.admin.Do(http.MethodDelete, f.appPath, map[string]any{"confirmKey": "payments"}).ExpectError(http.StatusUnprocessableEntity, "confirmKey", "invalid")
+	f.app(t)
+
+	f.admin.Do(http.MethodDelete, f.appPath, confirm).ExpectStatus(http.StatusNoContent)
+	for _, path := range []string{"", "/lines", "/history"} {
+		f.admin.Get(f.appPath + path).ExpectError(http.StatusNotFound, "", "notFound")
+	}
+	var list appListBody
+	f.admin.Get("/api/applications").ExpectStatus(http.StatusOK).JSON(&list)
+	if len(list.Items) != 0 {
+		t.Fatalf("list = %+v", list.Items)
+	}
+	f.admin.Do(http.MethodDelete, f.appPath, confirm).ExpectError(http.StatusNotFound, "", "notFound")
+
+	// Nothing of the old application is left: the same key starts over with one mainline
+	// and one history event. People are not deleted with it.
+	f.post(nil).ExpectStatus(http.StatusCreated)
+	if h := f.history(t); len(h) != 1 || h[0].Type != "appCreated" {
+		t.Fatalf("history = %+v", h)
+	}
+	var lines struct {
+		Items []struct{ IsMain bool } `json:"items"`
+	}
+	f.admin.Get(f.appPath + "/lines").ExpectStatus(http.StatusOK).JSON(&lines)
+	if len(lines.Items) != 1 || !lines.Items[0].IsMain {
+		t.Fatalf("lines = %+v", lines.Items)
+	}
+	findUser(t, listUsers(t, f.admin), "praman")
+}
+
 func TestApplicationInfoIsValidated(t *testing.T) {
 	t.Parallel()
 	f := newMaintFixture(t)

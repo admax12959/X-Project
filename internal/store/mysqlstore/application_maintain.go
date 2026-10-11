@@ -61,6 +61,11 @@ WHERE m.role = 'owner' AND m.user_id <> ? AND m.application_id IN (?`+strings.Re
 	return out, others.Err()
 }
 
+func (s *Store) DeleteApplication(ctx context.Context, id int64) error {
+	_, err := s.q.ExecContext(ctx, "DELETE FROM applications WHERE id = ?", id)
+	return err
+}
+
 func (s *Store) SetDeployInfo(ctx context.Context, id int64, text string) error {
 	_, err := s.q.ExecContext(ctx, "UPDATE applications SET deploy_info = ? WHERE id = ?", text, id)
 	return err
