@@ -22,6 +22,7 @@ import type {
   UpdateMeInput,
   UpdateUserInput,
   Version,
+  VersionPage,
 } from './types.ts';
 
 /** Thrown for every non-2xx response (and network failures, status 0, code "network"). */
@@ -95,6 +96,20 @@ export const api = {
     history: (key: string) => request<List<ChangeEvent>>('GET', `/api/applications/${encodeURIComponent(key)}/history`),
     /** Administrators only. 422 field errors: key, name, mainBranch, owners, pes, repo.platformId, repo.path. */
     create: (input: CreateApplicationInput) => request<Application>('POST', '/api/applications', { body: input }),
+  },
+  versions: {
+    /**
+     * Any logged-in user. All applications, latest release date first. app = application key (an unknown key
+     * gives an empty page), q = part of the version number, page from 1, pageSize 1-100 (default 20).
+     */
+    list: (params: { app?: string; q?: string; page?: number; pageSize?: number } = {}) => {
+      const qs = new URLSearchParams();
+      if (params.app) qs.set('app', params.app);
+      if (params.q?.trim()) qs.set('q', params.q.trim());
+      if (params.page) qs.set('page', String(params.page));
+      if (params.pageSize) qs.set('pageSize', String(params.pageSize));
+      return request<VersionPage>('GET', `/api/versions${qs.size ? `?${qs}` : ''}`);
+    },
   },
   repos: {
     /** Administrators only. Errors: repo.path repoNotFound / repoForbidden, repo.platformId platformUnreachable. */

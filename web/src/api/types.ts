@@ -81,6 +81,12 @@ export type Version = {
   createdAt: string;
 };
 
+/** GET /api/versions: a version plus the application it belongs to. */
+export type GlobalVersion = Version & { application: { key: string; name: string } };
+
+/** One page of the global version list; total counts all matches, not just this page. */
+export type VersionPage = List<GlobalVersion> & { total: number; page: number; pageSize: number };
+
 export type RegisterVersionInput = { number: string; ref: { kind: RefKind; value: string }; releasedAt: string; note: string };
 
 /**

@@ -164,6 +164,14 @@ Codes added with applications (#6): `keyTaken` (field `key`), `userUnavailable` 
 - **Registering on other lines.** `Service.RegisterVersion` takes the line from the URL, locks its row (`LockLine`, `FOR UPDATE`, scoped to the application) inside the transaction and calls `registerVersionOnLine`, which applies the line rules in `checkLineAcceptsVersion` and then inserts. That function is empty today because only the mainline exists. The lifecycle ticket fills it in: Frozen requires a note (`noteRequiredOnFrozen`, field `note`), Retired refuses (`lineRetired`, request-level: no field, because the line is in the URL; the dialog shows it in its alert). Status changes must take the same line lock. The dialog (`RegisterVersionDialog`) already takes the line as a prop; the Versions tab passes the mainline until the Lineage panel (#9) can pick another line.
 - Event `versionRegistered` (params `number`, `line`): "Registered version X on the mainline" or "on “name”".
 
+### Global versions (#13)
+
+- `GET /api/versions?app=<key>&q=<text>&page=<n>&pageSize=<n>`: any session. Versions of all applications, ordered like the per-application list (`releasedAt` desc, then registration desc, never by number). Domain: `Service.ListAllVersions` in `internal/domain/versions_global.go`; store: `internal/store/mysqlstore/versions_global.go`.
+- Response: `{items, total, page, pageSize}`. `total` counts every match, not just the page. Each item is the version JSON of #8 plus `application: {key, name}`. This is the paginated-list shape; the other collections are still plain `{items}`.
+- `app` is an exact application key; an unknown key gives an empty page (not 404). `q` is a case-insensitive substring of the version number (trimmed, `%` and `_` literal); it is the only searched field. They combine with AND.
+- `page` starts at 1 (default 1), `pageSize` is 1-100 (default 20). Anything else is `422 invalid` on `page` / `pageSize`. A page past the end is `200` with no items.
+- Frontend: `/versions` (`pages/VersionsPage.tsx`), sidebar entry for every user. Filters and page are kept in the URL (`?app=&q=&page=`). Links to an application or a line go through `ui/links.ts` (`appPath`, `linePath`); `linePath` is the one place to point at the Lineage tab (`?line=<id>`) once #9 adds the route.
+
 ### Change history
 
 The append-only log of key operations (`change_events`). An event is a type plus structured params. The server never produces sentences; the frontend renders them in the current UI language. User input inside params (names, reasons, branch names...) is stored and displayed verbatim.
