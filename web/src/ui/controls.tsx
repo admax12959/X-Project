@@ -61,6 +61,42 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
   );
 }
 
+const fieldBox =
+  'w-full min-w-0 rounded border border-line bg-white px-2.5 focus:border-accent focus:outline-2 focus:-outline-offset-1 focus:outline-accent';
+
+export function Textarea({ className = '', ...p }: ComponentProps<'textarea'>) {
+  return <textarea {...p} className={`${fieldBox} min-h-20 py-1.5 ${className}`} />;
+}
+
+/** Native select, styled like Input (a short, fixed list of choices). */
+export function Select({ className = '', ...p }: ComponentProps<'select'>) {
+  return <select {...p} className={`${fieldBox} h-8 ${className}`} />;
+}
+
+/** Titled bordered section of a page. */
+export function Container({ title, children }: { title: ReactNode; children: ReactNode }) {
+  return (
+    <section className="rounded border border-line bg-white">
+      <h2 className="border-b border-line px-4 py-2.5 text-base font-bold">{title}</h2>
+      <div className="px-4 py-3">{children}</div>
+    </section>
+  );
+}
+
+/** Key-value grid used on overview pages. */
+export function KV({ rows }: { rows: { label: ReactNode; value: ReactNode }[] }) {
+  return (
+    <dl className="grid grid-cols-[160px_1fr] gap-x-4 gap-y-2.5">
+      {rows.map((r, i) => (
+        <div key={i} className="contents">
+          <dt className="text-text-3">{r.label}</dt>
+          <dd className="min-w-0 break-words">{r.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function Empty({ title, children }: { title: ReactNode; children?: ReactNode }) {
   return (
     <div className="px-5 py-10 text-center text-text-2">

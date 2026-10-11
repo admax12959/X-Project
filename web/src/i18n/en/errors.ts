@@ -19,4 +19,9 @@ export default {
   'error.usernameTaken': 'This username is already taken.',
   'error.usernameLocked': 'The username of a user with an LDAP login identity cannot be changed.',
   'error.ldapManaged': 'This field is managed by LDAP and cannot be changed here.',
+  'error.keyTaken': 'This application key is already in use.',
+  'error.userUnavailable': 'This user does not exist or is disabled. Choose an enabled user.',
+  'error.repoNotFound': 'The code platform has no repository at this path. Check the repository path.',
+  'error.repoForbidden': 'The code platform token has no access to this repository.',
+  'error.platformUnreachable': 'Cannot reach the code platform. Try again later.',
 };

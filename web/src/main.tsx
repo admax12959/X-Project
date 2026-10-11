@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, Route, Routes } from 'react-router';
 import './index.css';
 import { useT } from './i18n/index.ts';
+import { ApplicationHistory } from './pages/ApplicationHistory.tsx';
+import { ApplicationOverview } from './pages/ApplicationOverview.tsx';
+import { ApplicationPage } from './pages/ApplicationPage.tsx';
 import { ApplicationsPage } from './pages/ApplicationsPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { PlatformsPage } from './pages/PlatformsPage.tsx';
@@ -35,6 +38,10 @@ function App() {
         }
       >
         <Route index element={<ApplicationsPage />} />
+        <Route path="apps/:key" element={<ApplicationPage />}>
+          <Route index element={<ApplicationOverview />} />
+          <Route path="history" element={<ApplicationHistory />} />
+        </Route>
         <Route path="admin/platforms" element={<PlatformsPage />} />
         <Route path="admin/users" element={<UsersPage />} />
         <Route path="*" element={<NotFound />} />

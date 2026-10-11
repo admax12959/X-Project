@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/admax12959/X-Project/internal/app"
+	"github.com/admax12959/X-Project/internal/codeplatform"
 )
 
 func main() {
@@ -29,12 +30,12 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// nil = not configured. The code platform adapters arrive with #6.
+	// A nil Directory means LDAP is not configured.
 	dir, err := app.NewDirectory(cfg)
 	if err != nil {
 		return err
 	}
-	a, err := app.Start(ctx, cfg, app.Deps{Directory: dir})
+	a, err := app.Start(ctx, cfg, app.Deps{Directory: dir, CodePlatforms: codeplatform.New()})
 	if err != nil {
 		return err
 	}
