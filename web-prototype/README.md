@@ -12,13 +12,10 @@ pnpm prototype          # 仓库根目录；或 cd web-prototype && pnpm dev
 
 打开 http://localhost:5199 。数据全部在内存里，刷新即重置。
 
-- 底部黑条是原型工具，不属于设计：左右箭头（或 Alt+←/→）切换整站方案，"视角"切换管理员 / Owner / PE。
-- 三套方案（每套都是完整的 6 类页面，所有按钮都能用）：
-  - 工作台 `directions/workbench`：三栏，左侧"应用 → 维护线"目录，中间常驻谱系图（真实日期），右侧详情。强调色朱红 = 需要人处理。
-  - 生命周期 `directions/lifecycle`：时间是主轴。首页是"维护线到期"跑道图，详情页是日历甘特式生命周期图。Grid 主题，Archivo，信号红只用于"今天"和到期。
-  - 版本流水 `directions/releaselog`：像工程记录本。详情页是竖向版本图（类似 git log --graph），首页是到期 + 最近动态。IBM Plex，绿色 = 已发布 / 还活着。
-  - 现状（对照）`directions/baseline`：第一版，只用于对比，不算方案。
-- `计费核心` 的假数据覆盖：多层嵌套的维护线、同一版本分叉出两条线、冻结和终止的线、分叉后还没有版本的线、5 天和 14 天后到期的线、不规则版本号（`R5SP2`、`v2026.08`）、tag 和 commit 混用。`订单服务` 的主线分支名是 `develop`。
+- 当前状态：第一轮的四个方案（工作台 / 生命周期 / 版本流水 / 现状）已被否，代码在 git 历史 `a1a5f10`。`src/main.tsx` 现在只是占位页；新方案见 `RESEARCH.md`，选定后再做。
+- 底部黑条（方案切换 + 视角切换）在 `src/prototype.tsx`，新方案会继续用。
+- 假数据已换成欧美场景（`payments-core`、`order-service`、`fraud-engine`、`settlement-batch`），界面文案为英文，用 GLOSSARY 的英文名。`payments-core` 覆盖：4 层嵌套的维护线、同一版本分叉出两条线、Frozen 和 Retired 的线、分叉后还没有版本的线、不规则版本号（`emea-1.1`、`v2026.08`）、tag 和 commit 混用。`order-service` 的主线分支名是 `develop`；`settlement-batch` 的唯一 Owner 是只有本地身份的用户。
+- 没有"到期"概念：数据里没有计划终止日期。
 - 假的仓库校验：路径里含 `missing` 会返回 404。
 
 ## 待确认
@@ -27,9 +24,10 @@ pnpm prototype          # 仓库根目录；或 cd web-prototype && pnpm dev
 - 状态能否回退（冻结 → 活跃）？原型只允许向前：活跃 → 冻结 → 终止。
 - 应用唯一的 Owner 离职或长期不在时，谁来移交？范围文档只允许 Owner 增删 Owner/PE，管理员没有这个权限，禁用用户时会卡住。
 - "谱系"不在 GLOSSARY 里，界面用了"分支谱系"作为区块名，可以交给 /domain-modeling 决定是否收录。
-- 维护线创建后不能改名称、计划终止日期、备注（不能延期）——范围文档没写，原型没做。
+- 维护线创建后能否改名称和备注？范围文档没写，原型没做。
 - 本地用户能否改自己的显示名 / 邮箱 / 部门？范围只说 LDAP 用户以 LDAP 为准。
 - 没有记录分叉日期，只能用源版本的发布时间近似；终止也没有记录终止日期。
+- `v1-scope.md` 里还有三处写了到期/计划终止日期，和"没有过期概念"冲突，见 `RESEARCH.md`。
 - 主线没有状态（活跃 / 冻结 / 终止只用于维护线），请确认。
 - GLOSSARY 没有"主线或维护线"的统称，方案里用了"线"。
 - `@base-ui-components/react` 已改名为 `@base-ui/react`，原型用的是新包名，`v1-scope.md` 里的技术栈需要同步。
