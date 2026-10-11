@@ -163,21 +163,31 @@ func (s *Service) ListChangeEvents(ctx context.Context, _ Actor, appKey string) 
 	users := userResolver{repo: s.repo, cache: map[UserID]UserRef{}}
 	out := make([]ChangeEvent, 0, len(stored))
 	for _, e := range stored {
-		var params map[string]any
-		if err := json.Unmarshal(e.Params, &params); err != nil {
-			return nil, err
-		}
-		resolved, err := users.enrich(ctx, params)
+		ev, err := users.changeEvent(ctx, e)
 		if err != nil {
 			return nil, err
 		}
-		actor, err := users.ref(ctx, e.ActorID)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, ChangeEvent{ID: e.ID, At: e.At, Actor: actor, Type: e.Type, Params: resolved.(map[string]any)})
+		out = append(out, ev)
 	}
 	return out, nil
+}
+
+// changeEvent turns a stored row into a display event: user references in the
+// params and the actor are resolved to their current names.
+func (r userResolver) changeEvent(ctx context.Context, e StoredChangeEvent) (ChangeEvent, error) {
+	var params map[string]any
+	if err := json.Unmarshal(e.Params, &params); err != nil {
+		return ChangeEvent{}, err
+	}
+	resolved, err := r.enrich(ctx, params)
+	if err != nil {
+		return ChangeEvent{}, err
+	}
+	actor, err := r.ref(ctx, e.ActorID)
+	if err != nil {
+		return ChangeEvent{}, err
+	}
+	return ChangeEvent{ID: e.ID, At: e.At, Actor: actor, Type: e.Type, Params: resolved.(map[string]any)}, nil
 }
 
 // userResolver turns user IDs into UserRefs, remembering what it has looked up.

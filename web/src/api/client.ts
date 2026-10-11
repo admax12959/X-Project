@@ -3,7 +3,7 @@ import type {
   AdminUser,
   ApiFieldError,
   Application,
-  ApplicationSummary,
+  ApplicationListItem,
   AssignableUser,
   BindIdentityInput,
   ChangeEvent,
@@ -22,6 +22,7 @@ import type {
   LoginInput,
   LoginMethod,
   Repo,
+  RecentActivity,
   RegisterVersionInput,
   RepoInput,
   SessionInfo,
@@ -87,8 +88,16 @@ export const api = {
     logout: () => request<void>('DELETE', '/api/session', { expect401: true }),
   },
   applications: {
-    /** Any logged-in user. q matches key, name, repository path and Owner names. */
-    list: (q = '') => request<List<ApplicationSummary>>('GET', `/api/applications${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
+    /**
+     * Any logged-in user. q matches key, name, repository path and Owner names; mine keeps the applications where
+     * the current user is an Owner or a PE (both must hold).
+     */
+    list: (q = '', mine = false) => {
+      const qs = new URLSearchParams();
+      if (q.trim()) qs.set('q', q.trim());
+      if (mine) qs.set('mine', 'true');
+      return request<List<ApplicationListItem>>('GET', `/api/applications${qs.size ? `?${qs}` : ''}`);
+    },
     /** 404 notFound for an unknown key. */
     get: (key: string) => request<Application>('GET', `/api/applications/${encodeURIComponent(key)}`),
     /** Flat, mainline first, with the fork facts and status of every line. */
@@ -154,6 +163,10 @@ export const api = {
       if (params.pageSize) qs.set('pageSize', String(params.pageSize));
       return request<VersionPage>('GET', `/api/versions${qs.size ? `?${qs}` : ''}`);
     },
+  },
+  activity: {
+    /** Any logged-in user. Latest change events of all applications, newest first; limit 1-50 (default 8). */
+    recent: (limit?: number) => request<List<RecentActivity>>('GET', `/api/recent-activity${limit ? `?limit=${limit}` : ''}`),
   },
   repos: {
     /** Administrators only. Errors: repo.path repoNotFound / repoForbidden, repo.platformId platformUnreachable. */
