@@ -1,0 +1,29 @@
+# Local run: app + MySQL 8.
+#   docker compose up --build
+# Then open http://localhost:${XP_PORT:-8080} and sign in as admin / change-me-now.
+# Override the host port with XP_PORT, and use `-p <name>` to run several stacks side by side.
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root-pw
+      MYSQL_DATABASE: xproject
+      MYSQL_USER: xproject
+      MYSQL_PASSWORD: xproject-pw
+    volumes:
+      - db-data:/var/lib/mysql
+
+  app:
+    build: .
+    depends_on:
+      - db
+    ports:
+      - "${XP_PORT:-8080}:8080"
+    environment:
+      XP_DB_DSN: "xproject:xproject-pw@tcp(db:3306)/xproject"
+      XP_ADMIN_USERNAME: admin
+      XP_ADMIN_PASSWORD: change-me-now
+      XP_ADMIN_DISPLAY_NAME: Administrator
+
+volumes:
+  db-data:
