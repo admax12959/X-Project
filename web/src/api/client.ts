@@ -14,7 +14,10 @@ import type {
   IdentityKind,
   ForkInput,
   LineDetail,
+  LineStatus,
+  LineWithLog,
   LineageNode,
+  UpdateLineInput,
   List,
   LoginInput,
   LoginMethod,
@@ -106,6 +109,21 @@ export const api = {
      * (branchTaken with params {line}), reason, plannedEnd, note.
      */
     fork: (key: string, input: ForkInput) => request<LineDetail>('POST', `/api/applications/${encodeURIComponent(key)}/lines`, { body: input }),
+    /** One line with its status log (time and actor of every status change, oldest first). 404 for an unknown line. */
+    line: (key: string, lineId: string) =>
+      request<LineWithLog>('GET', `/api/applications/${encodeURIComponent(key)}/lines/${encodeURIComponent(lineId)}`),
+    /**
+     * Owners only (403 otherwise). Name, note and planned end date of a maintenance line. 422: name, note, plannedEnd
+     * field errors; request-level lineRetired (a retired line is read-only) and lineIsMainline.
+     */
+    updateLine: (key: string, lineId: string, input: UpdateLineInput) =>
+      request<LineWithLog>('PATCH', `/api/applications/${encodeURIComponent(key)}/lines/${encodeURIComponent(lineId)}`, { body: input }),
+    /**
+     * Owners only (403 otherwise). active -> frozen, frozen -> active, frozen -> retired (final). 422 on field "status":
+     * required, invalid, invalidTransition {from, to}; request-level lineIsMainline.
+     */
+    setLineStatus: (key: string, lineId: string, status: LineStatus) =>
+      request<LineWithLog>('PUT', `/api/applications/${encodeURIComponent(key)}/lines/${encodeURIComponent(lineId)}/status`, { body: { status } }),
     /** Versions on all lines, latest release date first. */
     versions: (key: string) => request<List<Version>>('GET', `/api/applications/${encodeURIComponent(key)}/versions`),
     /**

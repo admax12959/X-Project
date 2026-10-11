@@ -33,6 +33,10 @@ function lineLabel(line: unknown): string {
   return lineInSentence(isLineRef(line) ? line : { isMain: false });
 }
 
+function statusName(status: unknown): string {
+  return translate(`lineage.status.${status === 'frozen' || status === 'retired' ? status : 'active'}` as MessageKey);
+}
+
 /** One entry per backend EventType (internal/domain/history.go): maps params to message placeholders. */
 const renderers: Record<string, Renderer> = {
   appCreated: (p, locale) => ({ owners: users(p.owners, locale) }),
@@ -47,6 +51,14 @@ const renderers: Record<string, Renderer> = {
   }),
   versionRegistered: (p) => ({ number: String(p.number), line: lineLabel(p.line) }),
   lineForked: (p) => ({ number: String(p.number), line: lineLabel(p.line) }),
+  lineChanged: (p, locale) => ({
+    line: lineLabel(p.line),
+    fields: joinNames(
+      Object.keys((p.changes as Record<string, unknown> | undefined) ?? {}).map((f) => translate(`lineage.field.${f}` as MessageKey)),
+      locale,
+    ),
+  }),
+  lineStatusChanged: (p) => ({ line: lineLabel(p.line), from: statusName(p.from), to: statusName(p.to) }),
 };
 
 export function renderEvent(e: ChangeEvent, locale: Locale): string {

@@ -8,7 +8,8 @@ import (
 )
 
 // Seam (spec #2, Testing Decisions): the HTTP API against a real MySQL. No SQL, no
-// internal calls; the one exception is apitest.SeedLineStatus (test-only, see there).
+// internal calls; the one exception is apitest.SeedLineStatus (test-only, see there), used only by
+// the seedPaymentsCore fixture. Lifecycle behaviour is tested through the status API.
 
 // sourceVersionBody is the source version of a line: where it was forked from.
 type sourceVersionBody struct {

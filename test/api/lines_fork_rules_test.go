@@ -177,7 +177,9 @@ func TestAVersionOnARetiredLineCanStillBeForked(t *testing.T) {
 	var fix versionBody
 	f.elarsen.Post(versionsPath("payments-core", pci.ID), newVersion(map[string]any{"number": "1.1.1", "releasedAt": "2024-08-02"})).
 		ExpectStatus(http.StatusCreated).JSON(&fix)
-	f.env.SeedLineStatus("payments-core", "maint/1.x-pci", "retired") // TEST ONLY: bypasses the state machine
+	pciPath := linesPath("payments-core") + "/" + pci.ID + "/status"
+	f.elarsen.Do(http.MethodPut, pciPath, map[string]any{"status": "frozen"}).ExpectStatus(http.StatusOK)
+	f.elarsen.Do(http.MethodPut, pciPath, map[string]any{"status": "retired"}).ExpectStatus(http.StatusOK)
 
 	var child lineDetailBody
 	f.fork(fix.ID, map[string]any{"name": "Legacy bank edition", "branch": "cust/legacy-bank"}).ExpectStatus(http.StatusCreated).JSON(&child)
