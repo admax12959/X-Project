@@ -103,7 +103,7 @@ export const api = {
     update: (id: string, input: UpdateUserInput) => request<AdminUser>('PATCH', `/api/users/${id}`, { body: input }),
     disable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/disable`),
     enable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/enable`),
-    /** 422 field errors (identityKindBound, identityTaken, ldapAccountNotFound, password rules); 503 ldapUnreachable. */
+    /** 422 field errors (identityKindBound, identityTaken, ldapLoginNotFound, password rules); 503 ldapUnreachable. */
     bindIdentity: (id: string, input: BindIdentityInput) => request<AdminUser>('POST', `/api/users/${id}/identities`, { body: input }),
   },
   /** The logged-in user's own settings. */

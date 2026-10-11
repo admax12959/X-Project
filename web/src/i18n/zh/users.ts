@@ -38,7 +38,7 @@ export default {
   'users.bindIdentity': '绑定登录身份',
   'users.bindTitle': '为 {username} 绑定登录身份',
   'users.bind.kind': '类型',
-  'users.bind.ldapHint': '系统会向 LDAP 目录确认这个登录名存在。显示名、邮箱和部门在该用户下次登录时以 LDAP 为准。',
+  'users.bind.ldapHint': '系统会向 LDAP 目录确认这个登录名存在。之后该用户的显示名、邮箱和部门以 LDAP 为准。',
   'users.bind.localHint': '用户用自己的用户名和这个密码登录。',
   'users.bind.loginName': 'LDAP 登录名',
   'users.bind.password': '密码',

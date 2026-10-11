@@ -38,7 +38,7 @@ export default {
   'users.bindIdentity': 'Bind identity',
   'users.bindTitle': 'Bind a login identity to {username}',
   'users.bind.kind': 'Type',
-  'users.bind.ldapHint': 'The LDAP directory is asked whether this login name exists. Display name, email and department then follow LDAP at the next sign-in.',
+  'users.bind.ldapHint': 'The LDAP directory is asked whether this login name exists. Display name, email and department then follow LDAP.',
   'users.bind.localHint': 'The user signs in with their username and this password.',
   'users.bind.loginName': 'LDAP login name',
   'users.bind.password': 'Password',

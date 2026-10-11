@@ -22,7 +22,7 @@ export default {
   'error.lastIdentity': 'The last login identity cannot be unbound.',
   'error.identityKindBound': 'This user already has a login identity of this type.',
   'error.identityTaken': 'This login identity is already bound to another user.',
-  'error.ldapAccountNotFound': 'The LDAP directory has no such login name.',
+  'error.ldapLoginNotFound': 'The LDAP directory has no such login name.',
   'error.keyTaken': 'This application key is already in use.',
   'error.userUnavailable': 'This user does not exist or is disabled. Choose an enabled user.',
   'error.repoNotFound': 'The code platform has no repository at this path. Check the repository path.',

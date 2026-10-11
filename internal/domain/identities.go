@@ -149,7 +149,7 @@ func (s *Service) BindIdentityForUser(ctx context.Context, actor Actor, id UserI
 		spec.entry = &res.Entry
 	case DirectoryDisabled: // exists; nothing current to sync
 	case DirectoryNotFound:
-		return UserWithIdentities{}, Validation(Invalid("loginName", CodeLdapAccountNotFound, nil))
+		return UserWithIdentities{}, Validation(Invalid("loginName", CodeLdapLoginNotFound, nil))
 	default: // unreachable or anything unexpected: fail closed
 		return UserWithIdentities{}, ldapUnreachable()
 	}

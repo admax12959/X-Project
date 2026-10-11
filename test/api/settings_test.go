@@ -399,7 +399,7 @@ func TestAdministratorBindRules(t *testing.T) {
 	adminBind(admin, jane.ID, map[string]any{"kind": "ldap", "loginName": " "}).ExpectError(http.StatusUnprocessableEntity, "loginName", "required")
 
 	// The directory must know the login name; an unreachable directory is never "not found".
-	adminBind(admin, jane.ID, map[string]any{"kind": "ldap", "loginName": "nobody"}).ExpectError(http.StatusUnprocessableEntity, "loginName", "ldapAccountNotFound")
+	adminBind(admin, jane.ID, map[string]any{"kind": "ldap", "loginName": "nobody"}).ExpectError(http.StatusUnprocessableEntity, "loginName", "ldapLoginNotFound")
 	env.Directory.SetUnreachable(true)
 	adminBind(admin, jane.ID, map[string]any{"kind": "ldap", "loginName": "elarsen2"}).ExpectError(http.StatusServiceUnavailable, "", "ldapUnreachable")
 	env.Directory.SetUnreachable(false)
