@@ -205,6 +205,21 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 	if err := requireAdmin(actor); err != nil {
 		return UserWithIdentities{}, err
 	}
+	// ADR-0004: a new local login name must not exist in the directory. Like at creation,
+	// the directory is asked before the transaction (a network call) and an unreachable
+	// directory fails the rename; the check is never skipped. The transaction below
+	// re-reads the user under its lock and makes the final decision about the rename.
+	if v, ok := trimmed(in.Username); ok && usernamePattern.MatchString(v) {
+		pre, found, err := s.repo.GetUserWithIdentities(ctx, id)
+		if err != nil {
+			return UserWithIdentities{}, err
+		}
+		if found && v != pre.User.Username && !pre.hasIdentity(IdentityLDAP) {
+			if err := s.CheckUsernameFreeInDirectory(ctx, "username", v); err != nil {
+				return UserWithIdentities{}, err
+			}
+		}
+	}
 	var result UserWithIdentities
 	err := s.repo.InTx(ctx, func(tx Repository) error {
 		cur, found, err := tx.LockUserWithIdentities(ctx, id)
