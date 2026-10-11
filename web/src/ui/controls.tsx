@@ -74,10 +74,13 @@ export function Select({ className = '', ...p }: ComponentProps<'select'>) {
 }
 
 /** Titled bordered section of a page. */
-export function Container({ title, children }: { title: ReactNode; children: ReactNode }) {
+export function Container({ title, actions, children }: { title: ReactNode; actions?: ReactNode; children: ReactNode }) {
   return (
     <section className="rounded border border-line bg-white">
-      <h2 className="border-b border-line px-4 py-2.5 text-base font-bold">{title}</h2>
+      <div className="flex min-h-[45px] items-center justify-between gap-3 border-b border-line px-4 py-1.5">
+        <h2 className="text-base font-bold">{title}</h2>
+        {actions && <div className="flex gap-2">{actions}</div>}
+      </div>
       <div className="px-4 py-3">{children}</div>
     </section>
   );

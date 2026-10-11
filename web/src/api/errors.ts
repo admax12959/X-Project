@@ -9,8 +9,10 @@ function flatParams(p: ApiFieldError['params']): Params {
   for (const [k, v] of Object.entries(p ?? {})) {
     if (typeof v === 'string' || typeof v === 'number') out[k] = v;
     // A conflicting line {id, isMain, name, branch} (numberTaken, later branchTaken) becomes
-    // its in-sentence label, so messages can say "{line}". Other nested params are dropped.
+    // its in-sentence label, so messages can say "{line}".
     else if (isLineRef(v)) out[k] = lineInSentence(v);
+    // A list of objects with a name (soleOwner's applications) reads as "A, B". Other nested params are dropped.
+    else if (Array.isArray(v)) out[k] = v.map((x) => (x as { name?: unknown } | null)?.name ?? '').join(', ');
   }
   return out;
 }

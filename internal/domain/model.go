@@ -95,4 +95,5 @@ type Repository interface {
 	VersionRepository
 	GlobalVersionRepository
 	HistoryRepository
+	ApplicationMaintenanceRepository
 }

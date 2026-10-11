@@ -26,6 +26,18 @@ type EventType string
 const (
 	// EventAppCreated: application created. Params: owners = [userParam].
 	EventAppCreated EventType = "appCreated"
+	// EventAppInfoChanged: name, description or main branch edited. Params:
+	// changes = {name|description|mainBranch: {from, to}}, only the fields that changed.
+	EventAppInfoChanged EventType = "appInfoChanged"
+	// EventDeployInfoChanged: deployment info edited. No params (the text can be long;
+	// the application page shows the current text).
+	EventDeployInfoChanged EventType = "deployInfoChanged"
+	// EventMemberAdded / EventMemberRemoved: one person added to or removed from the
+	// Owner or PE list (also when an administrator does it; the actor is the real
+	// operator). Params: role = "owner" | "pe", user = userParam. The user is its own
+	// nested value so that history reads can expand it.
+	EventMemberAdded   EventType = "memberAdded"
+	EventMemberRemoved EventType = "memberRemoved"
 	// EventVersionRegistered: version registered on a line. Params: number,
 	// line = {id, isMain, name, branch} as the line was when it happened.
 	EventVersionRegistered EventType = "versionRegistered"
@@ -44,6 +56,22 @@ func appCreatedEvent(owners []UserID) event {
 		refs[i] = userParam(id)
 	}
 	return event{EventAppCreated, map[string]any{"owners": refs}}
+}
+
+func appInfoChangedEvent(changes map[string]any) event {
+	return event{EventAppInfoChanged, map[string]any{"changes": changes}}
+}
+
+func memberAddedEvent(role MemberRole, id UserID) event {
+	return event{EventMemberAdded, map[string]any{"role": string(role), "user": userParam(id)}}
+}
+
+func memberRemovedEvent(role MemberRole, id UserID) event {
+	return event{EventMemberRemoved, map[string]any{"role": string(role), "user": userParam(id)}}
+}
+
+func deployInfoChangedEvent() event {
+	return event{EventDeployInfoChanged, map[string]any{}}
 }
 
 func versionRegisteredEvent(number string, line Line) event {
