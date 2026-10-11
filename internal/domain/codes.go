@@ -31,4 +31,13 @@ const (
 	CodeIdentityKindBound   = "identityKindBound"   // the user already has an identity of this kind
 	CodeIdentityTaken       = "identityTaken"       // another user already holds this login identity
 	CodeLdapAccountNotFound = "ldapAccountNotFound" // administrator binding: the directory has no such login name
+
+	// applications
+	CodeKeyTaken        = "keyTaken"        // another application already has this key
+	CodeUserUnavailable = "userUnavailable" // Owner/PE is not an existing enabled user; params {userId}
+
+	// repository binding (field "repo.path" / "repo.platformId")
+	CodeRepoNotFound        = "repoNotFound"        // the platform has no repository at this path
+	CodeRepoForbidden       = "repoForbidden"       // the platform token cannot access this repository
+	CodePlatformUnreachable = "platformUnreachable" // the code platform could not be reached; try again later
 )

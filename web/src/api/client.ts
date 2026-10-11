@@ -2,15 +2,21 @@
 import type {
   AdminUser,
   ApiFieldError,
+  Application,
   ApplicationSummary,
   BindIdentityInput,
+  ChangeEvent,
   CodePlatform,
   CodePlatformInput,
+  CreateApplicationInput,
   CreateUserInput,
   IdentityKind,
+  Line,
   List,
   LoginInput,
   LoginMethod,
+  Repo,
+  RepoInput,
   SessionInfo,
   UpdateMeInput,
   UpdateUserInput,
@@ -70,7 +76,19 @@ export const api = {
     logout: () => request<void>('DELETE', '/api/session', { expect401: true }),
   },
   applications: {
-    list: () => request<List<ApplicationSummary>>('GET', '/api/applications'),
+    /** Any logged-in user. q matches key, name, repository path and Owner names. */
+    list: (q = '') => request<List<ApplicationSummary>>('GET', `/api/applications${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
+    /** 404 notFound for an unknown key. */
+    get: (key: string) => request<Application>('GET', `/api/applications/${encodeURIComponent(key)}`),
+    lines: (key: string) => request<List<Line>>('GET', `/api/applications/${encodeURIComponent(key)}/lines`),
+    /** Newest first. */
+    history: (key: string) => request<List<ChangeEvent>>('GET', `/api/applications/${encodeURIComponent(key)}/history`),
+    /** Administrators only. 422 field errors: key, name, mainBranch, owners, pes, repo.platformId, repo.path. */
+    create: (input: CreateApplicationInput) => request<Application>('POST', '/api/applications', { body: input }),
+  },
+  repos: {
+    /** Administrators only. Errors: repo.path repoNotFound / repoForbidden, repo.platformId platformUnreachable. */
+    verify: (repo: RepoInput) => request<{ repo: Repo }>('POST', '/api/repo-verifications', { body: { repo } }),
   },
   codePlatforms: {
     /** Administrators only (403 otherwise). */

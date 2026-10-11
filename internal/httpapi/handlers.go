@@ -29,12 +29,6 @@ type sessionJSON struct {
 	User userJSON `json:"user"`
 }
 
-type applicationJSON struct {
-	Key         string `json:"key"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
-
 // listJSON is the envelope for every collection response.
 type listJSON[T any] struct {
 	Items []T `json:"items"`
@@ -75,19 +69,4 @@ func (s *server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setSessionCookie(w, "", time.Time{})
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// ---------------------------------------------------------------- applications
-
-func (s *server) listApplications(w http.ResponseWriter, r *http.Request) {
-	apps, err := s.svc.ListApplications(r.Context(), actorOf(r))
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
-	out := listJSON[applicationJSON]{Items: make([]applicationJSON, 0, len(apps))}
-	for _, a := range apps {
-		out.Items = append(out.Items, applicationJSON{Key: a.Key, Name: a.Name, Description: a.Description})
-	}
-	writeJSON(w, http.StatusOK, out)
 }

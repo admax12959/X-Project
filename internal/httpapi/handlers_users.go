@@ -18,7 +18,7 @@ type adminUserJSON struct {
 	Phone       string         `json:"phone"`
 	Department  string         `json:"department"`
 	Language    string         `json:"language"`
-	Status     string         `json:"status"`
+	Status      string         `json:"status"`
 	IsAdmin     bool           `json:"isAdmin"`
 	Identities  []identityJSON `json:"identities"`
 }
