@@ -161,3 +161,4 @@ Prefixes: `term.*` (glossary), `common.*`, `error.*`, then one prefix per area (
 - Any 401 (except the session calls themselves) drops the SPA to anonymous. `RequireSession` then redirects to `/login?next=…`.
 - Styling uses Tailwind with the Console tokens in `src/index.css` (`text-text-2`, `border-line`, `bg-subtle`, `text-accent`…). Use Base UI controls from `src/ui/controls.tsx`.
 - Add pages under `src/pages/`, routes in `src/main.tsx`, and nav entries in `src/shell/Shell.tsx`.
+- Dependencies: the Docker build runs pnpm with a minimum release age, so a package version published only days ago can pass `pnpm install` locally and still fail `docker build`. Pin an older version in that case, and run `docker build` before calling a dependency change done.
