@@ -31,3 +31,8 @@ export function setParam(key: string, value: string | null) {
   else url.searchParams.set(key, value);
   navigate(url.pathname + url.search, { replace: true });
 }
+
+export type Tab = 'overview' | 'lineage' | 'versions' | 'history';
+export const TABS: Tab[] = ['overview', 'lineage', 'versions', 'history'];
+/** /apps/:key and /apps/:key/:tab. Every direction uses these four tabs so the directions stay comparable. */
+export const appPath = (key: string, tab: Tab = 'overview') => (tab === 'overview' ? `/apps/${key}` : `/apps/${key}/${tab}`);
