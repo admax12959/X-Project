@@ -28,6 +28,8 @@ export default {
   'error.soleOwner': '该用户是以下应用的唯一 Owner：{applications}。请先把这些应用移交给其他 Owner，再禁用该用户。',
   'error.numberTaken': '该版本号已被{line}上的版本使用，发布时间 {releasedAt}。',
   'error.branchTaken': '该 Git 分支名已被{line}使用。',
+  'error.numberTakenGeneric': '该版本号已被本应用的另一个版本使用。',
+  'error.branchTakenGeneric': '该 Git 分支名已被本应用的另一条线使用。',
   'error.invalidTransition': '不允许这样变更状态。维护线从活跃改为冻结，再改为终止；冻结的线也可以回到活跃；终止后不能再变更。',
   'error.noteRequiredOnFrozen': '这条线已冻结，只允许紧急修复，请在说明里写明修了什么。',
   'error.lineRetired': '这条线已终止，只读：不能登记版本，也不能修改。',

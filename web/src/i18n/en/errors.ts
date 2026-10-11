@@ -29,6 +29,8 @@ export default {
   'error.soleOwner': 'This user is the only Owner of: {applications}. Hand these applications over to another Owner before disabling the user.',
   'error.numberTaken': 'This version number is already used by a version on {line}, released {releasedAt}.',
   'error.branchTaken': 'This Git branch is already used by {line}.',
+  'error.numberTakenGeneric': 'This version number is already used by another version of this application.',
+  'error.branchTakenGeneric': 'This Git branch is already used by another line of this application.',
   'error.invalidTransition': 'This status change is not allowed. A line goes from Active to Frozen, then to Retired; a Frozen line can also return to Active, and a Retired line cannot change.',
   'error.noteRequiredOnFrozen': 'This line is Frozen and takes emergency fixes only. Say what was fixed in the note.',
   'error.lineRetired': 'This line is Retired and read-only. It takes no new versions and no changes.',

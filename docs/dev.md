@@ -141,6 +141,8 @@ The domain returns `*domain.Error`, built with `domain.Validation(...)`, a `doma
 2. Return it from the service: `domain.Validation(domain.Invalid("branch", domain.CodeBranchTaken, map[string]any{"line": ...}))`.
 3. Add `'error.<code>'` to `web/src/i18n/en/errors.ts` and `web/src/i18n/zh/errors.ts`. Params become `{name}` placeholders.
 
+A message that needs a param the server may not send (`numberTaken`, `branchTaken`: the conflicting line) also gets an `error.<code>Generic` message without placeholders; `errorMessage` uses it when a placeholder has no value, so the UI never shows a literal `{line}`.
+
 `go test ./internal/domain` fails if a code has no English message. `pnpm check:i18n` fails if zh and en differ.
 
 The frontend shows errors with `errorsByField(err)` (field → message, `''` = request-level). Keep the raw error in state and render the messages at render time, so they follow a language switch.
