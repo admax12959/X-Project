@@ -132,15 +132,24 @@ func lineParam(l Line) map[string]any {
 	return map[string]any{"id": strconv.FormatInt(l.ID, 10), "isMain": l.IsMain, "name": l.Name, "branch": l.Branch}
 }
 
-// checkLineAcceptsVersion is where a line's state limits version registration.
-// Only the mainline exists today, and it accepts versions without conditions.
-// Maintenance lines (forking and lifecycle tickets) add their rules here:
-//   - Frozen: c.Add("note", CodeNoteRequiredOnFrozen, nil) when note is empty.
-//   - Retired: c.Add("", CodeLineRetired, nil); nothing may be registered. The error is
-//     request-level (no field): the line is in the URL, not in the body.
+// checkLineAcceptsVersion is where a line's state limits version registration:
+//   - the mainline (no status) and Active lines accept versions without conditions;
+//   - Frozen: a note is required (noteRequiredOnFrozen, field "note");
+//   - Retired: nothing may be registered (lineRetired). The error is request-level
+//     (no field): the line is in the URL, not in the body.
 //
-// It runs inside the transaction that holds the line's row lock.
-func checkLineAcceptsVersion(_ *Collector, _ Line, _ string) {}
+// It runs inside the transaction that holds the line's row lock, so a concurrent
+// status change cannot slip in between the check and the insert.
+func checkLineAcceptsVersion(c *Collector, line Line, note string) {
+	switch line.Status {
+	case LineFrozen:
+		if note == "" {
+			c.Add("note", CodeNoteRequiredOnFrozen, nil)
+		}
+	case LineRetired:
+		c.Add("", CodeLineRetired, nil)
+	}
+}
 
 // RegisterVersion registers a version on one line of the application. Owners only
 // (administrators and PEs cannot). The line is a parameter, not an assumption:

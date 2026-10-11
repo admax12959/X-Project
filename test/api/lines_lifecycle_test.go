@@ -222,4 +222,65 @@ func TestChangingTheStatusOfAnUnknownLineOrApplicationIsNotFound(t *testing.T) {
 	}
 }
 
+// registerOnLine registers a version with a note on the fixture's line.
+func (f lineFixture) registerOnLine(number, note string) *apitest.Response {
+	return f.elarsen.Post(versionsPath("payments-core", f.line.ID), newVersion(map[string]any{
+		"number": number, "releasedAt": "2025-04-03", "note": note,
+	}))
+}
+
+func (f lineFixture) versionCount(t *testing.T) int {
+	t.Helper()
+	return len(f.list(f.elarsen))
+}
+
+func TestRegisteringOnAFrozenLineNeedsANote(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	f.setStatus("frozen").ExpectStatus(http.StatusOK)
+	before := f.versionCount(t)
+
+	f.registerOnLine("2.1.0-nw.1", "").ExpectError(http.StatusUnprocessableEntity, "note", "noteRequiredOnFrozen")
+	f.registerOnLine("2.1.0-nw.1", "   \n").ExpectError(http.StatusUnprocessableEntity, "note", "noteRequiredOnFrozen")
+	if got := f.versionCount(t); got != before {
+		t.Fatalf("a rejected registration stored a version: %d versions, was %d", got, before)
+	}
+
+	var v versionBody
+	f.registerOnLine("2.1.0-nw.1", "Hotfix: rounding error in settlement totals").ExpectStatus(http.StatusCreated).JSON(&v)
+	if v.LineID != f.line.ID || v.Note != "Hotfix: rounding error in settlement totals" {
+		t.Fatalf("version = %+v", v)
+	}
+}
+
+func TestTheNoteIsOptionalAgainOnceAFrozenLineIsActive(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	f.registerOnLine("2.1.0-nw.0", "").ExpectStatus(http.StatusCreated) // active: note optional
+	f.setStatus("frozen").ExpectStatus(http.StatusOK)
+	f.setStatus("active").ExpectStatus(http.StatusOK)
+
+	f.registerOnLine("2.1.0-nw.1", "").ExpectStatus(http.StatusCreated)
+}
+
+func TestNothingCanBeRegisteredOnARetiredLine(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	f.moveTo(t, "retired")
+	before := f.versionCount(t)
+
+	// The error is request-level: the line is in the URL, not in the body.
+	f.registerOnLine("2.1.0-nw.1", "").ExpectError(http.StatusUnprocessableEntity, "", "lineRetired")
+	f.registerOnLine("2.1.0-nw.1", "With a note, still refused").ExpectError(http.StatusUnprocessableEntity, "", "lineRetired")
+	if got := f.versionCount(t); got != before {
+		t.Fatalf("a retired line took a version: %d versions, was %d", got, before)
+	}
+}
+
+func TestTheMainlineAcceptsVersionsWithoutANote(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	f.register(map[string]any{"number": "2.2.0", "note": ""}).ExpectStatus(http.StatusCreated)
+}
+
 // -- tests below are appended as the lifecycle grows --
