@@ -150,34 +150,48 @@ type profileEdit struct {
 	Department  *string
 }
 
-// applyProfileEdit applies e to u and validates the result, reporting problems on c.
-// For LDAP-bound users the directory owns display name, email and department (they are
-// synced at login), so a different value is refused with ldapManaged; sending the
-// current value is fine. Phone is always editable. Used for both the administrator's
+// applyProfileEdit applies e to u and validates the fields that are being changed,
+// reporting problems on c. For LDAP-bound users the directory owns display name, email
+// and department (they are synced at login, without local validation), so a different
+// value is refused with ldapManaged and an unchanged one is neither applied nor
+// validated: a directory value that does not satisfy the local rules must not block the
+// fields the user does own. Phone is always editable. Used for both the administrator's
 // edit of a user and a user's edit of themselves.
 func applyProfileEdit(c *Collector, u User, ldapBound bool, e profileEdit) User {
 	if v, ok := trimmed(e.DisplayName); ok {
-		if ldapBound && v != u.DisplayName {
-			c.Add("displayName", CodeLdapManaged, nil)
+		if ldapBound {
+			if v != u.DisplayName {
+				c.Add("displayName", CodeLdapManaged, nil)
+			}
+		} else {
+			checkDisplayName(c, v)
+			u.DisplayName = v
 		}
-		u.DisplayName = v
 	}
 	if v, ok := trimmed(e.Email); ok {
-		if ldapBound && v != u.Email {
-			c.Add("email", CodeLdapManaged, nil)
+		if ldapBound {
+			if v != u.Email {
+				c.Add("email", CodeLdapManaged, nil)
+			}
+		} else {
+			checkEmail(c, v)
+			u.Email = v
 		}
-		u.Email = v
 	}
 	if v, ok := trimmed(e.Phone); ok {
+		checkLength(c, "phone", v, maxPhoneLength)
 		u.Phone = v
 	}
 	if v, ok := trimmed(e.Department); ok {
-		if ldapBound && v != u.Department {
-			c.Add("department", CodeLdapManaged, nil)
+		if ldapBound {
+			if v != u.Department {
+				c.Add("department", CodeLdapManaged, nil)
+			}
+		} else {
+			checkLength(c, "department", v, maxNameLength)
+			u.Department = v
 		}
-		u.Department = v
 	}
-	checkProfile(c, u.DisplayName, u.Email, u.Phone, u.Department)
 	return u
 }
 
@@ -333,21 +347,31 @@ func checkLength(c *Collector, field, value string, max int) {
 	}
 }
 
-// checkProfile validates display name (required), email (optional, shaped like
-// an address), phone and department. Values are already trimmed.
-func checkProfile(c *Collector, displayName, email, phone, department string) {
+func checkDisplayName(c *Collector, displayName string) {
 	if displayName == "" {
 		c.Add("displayName", CodeRequired, nil)
 	} else {
 		checkLength(c, "displayName", displayName, maxNameLength)
 	}
-	if email != "" {
-		if !emailPattern.MatchString(email) {
-			c.Add("email", CodeInvalid, nil)
-		} else {
-			checkLength(c, "email", email, maxEmailLength)
-		}
+}
+
+// checkEmail: optional, shaped like an address.
+func checkEmail(c *Collector, email string) {
+	if email == "" {
+		return
 	}
+	if !emailPattern.MatchString(email) {
+		c.Add("email", CodeInvalid, nil)
+	} else {
+		checkLength(c, "email", email, maxEmailLength)
+	}
+}
+
+// checkProfile validates a whole profile at creation: display name (required), email
+// (optional, shaped like an address), phone and department. Values are already trimmed.
+func checkProfile(c *Collector, displayName, email, phone, department string) {
+	checkDisplayName(c, displayName)
+	checkEmail(c, email)
 	checkLength(c, "phone", phone, maxPhoneLength)
 	checkLength(c, "department", department, maxNameLength)
 }
