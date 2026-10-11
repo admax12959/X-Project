@@ -157,6 +157,93 @@ func TestLoginPageCanLearnWhichLoginMethodsExistWithoutASession(t *testing.T) {
 	}
 }
 
+func TestFirstLDAPLoginRecordsAnLDAPIdentityBoundByFirstLogin(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addEmma(env)
+	userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw"))
+
+	emma := findUser(t, listUsers(t, env.AdminClient()), "elarsen")
+	if len(emma.Identities) != 1 || emma.Identities[0].Kind != "ldap" || emma.Identities[0].BoundVia != "firstLogin" {
+		t.Fatalf("identities = %+v, want one ldap identity bound by firstLogin", emma.Identities)
+	}
+}
+
+func TestDisabledUserCannotLogInWithLDAPEither(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addEmma(env)
+	emma := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw"))
+	admin := env.AdminClient()
+
+	admin.Post("/api/users/"+emma.ID+"/disable", nil).ExpectStatus(http.StatusOK)
+	loginLDAP(env.Client(), "elarsen", "ldap-pw").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+
+	admin.Post("/api/users/"+emma.ID+"/enable", nil).ExpectStatus(http.StatusOK)
+	if again := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw")); again.ID != emma.ID {
+		t.Fatalf("after re-enable the LDAP login opened user %s, want %s", again.ID, emma.ID)
+	}
+}
+
+func TestRenamingTheLocalUserLetsTheLDAPUserLogInForTheFirstTime(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+	// The local user predates the directory account (otherwise the create would be refused).
+	local := createUser(t, admin, map[string]any{"username": "elarsen", "displayName": "Eric Larsen", "password": "local-pw-1"})
+	addEmma(env)
+
+	loginLDAP(env.Client(), "elarsen", "ldap-pw").ExpectError(http.StatusUnprocessableEntity, "username", "usernameTakenByLocal")
+
+	patchUser(admin, local.ID, map[string]any{"username": "elarsen2"}).ExpectStatus(http.StatusOK)
+	ldap := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw"))
+	if ldap.ID == local.ID || ldap.Username != "elarsen" || ldap.DisplayName != "Emma Larsen" {
+		t.Fatalf("LDAP user = %+v, local = %+v: want a new, separate user", ldap, local)
+	}
+
+	// The renamed local user keeps working under the new name.
+	if got := userOf(t, env.Client().LoginLocal("elarsen2", "local-pw-1")); got.ID != local.ID || got.DisplayName != "Eric Larsen" {
+		t.Fatalf("renamed local user = %+v, want ID %s", got, local.ID)
+	}
+	env.Client().LoginLocal("elarsen", "local-pw-1").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+}
+
+func TestAdminCannotCreateALocalUserWhoseUsernameExistsInLDAP(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addEmma(env)
+	env.Directory.AddAccount("retired", "pw", domain.DirectoryEntry{DisplayName: "Retired Person"})
+	env.Directory.SetDisabled("retired", true)
+	admin := env.AdminClient()
+
+	admin.Post("/api/users", newUser(map[string]any{"username": "elarsen"})).
+		ExpectError(http.StatusUnprocessableEntity, "username", "usernameExistsInLdap")
+	// A disabled directory account still owns its name.
+	admin.Post("/api/users", newUser(map[string]any{"username": "retired"})).
+		ExpectError(http.StatusUnprocessableEntity, "username", "usernameExistsInLdap")
+	if got := len(listUsers(t, admin)); got != 1 {
+		t.Fatalf("%d users after refused creates, want only the initial admin", got)
+	}
+
+	// A name the directory does not know is fine.
+	createUser(t, admin, map[string]any{"username": "contractor1"})
+}
+
+func TestCreatingALocalUserFailsWhenTheDirectoryCannotBeAsked(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	env.Directory.SetUnreachable(true)
+	admin := env.AdminClient()
+
+	admin.Post("/api/users", newUser(nil)).ExpectError(http.StatusServiceUnavailable, "", "ldapUnreachable")
+	if got := len(listUsers(t, admin)); got != 1 {
+		t.Fatalf("%d users after a create with an unreachable directory, want only the initial admin", got)
+	}
+
+	env.Directory.SetUnreachable(false)
+	createUser(t, admin, nil)
+}
+
 func TestLocalLoginStillWorksWhenTheDirectoryIsDown(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)

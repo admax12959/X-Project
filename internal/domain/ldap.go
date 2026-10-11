@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 )
@@ -91,6 +92,9 @@ func (s *Service) loginLDAP(ctx context.Context, in LoginInput) (LoginResult, er
 			Status: UserEnabled, CreatedAt: now,
 		}
 		id, err := tx.CreateUser(ctx, u)
+		if errors.Is(err, ErrUsernameTaken) { // lost a race with another creation of the same name
+			return Validation(Invalid("username", CodeUsernameTakenByLocal, nil))
+		}
 		if err != nil {
 			return err
 		}

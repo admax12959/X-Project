@@ -166,7 +166,8 @@ Applied files are recorded by name in `schema_migrations`. A file merged later w
 - `POST /api/session` with `method: "ldap"`. `GET /api/login-methods` (public) lists `["local"]` or `["local","ldap"]`.
 - The directory is asked on every login. Not found, disabled or wrong password all give `401 invalidCredentials`; unreachable gives `503 ldapUnreachable`. Nothing is deleted when the directory refuses: the user and the LDAP identity stay and work again when the account comes back.
 - A known LDAP identity logs in to its user (whoever bound it) and overwrites display name, email and department. An unknown one creates a user (username = login name, binding source `firstLogin`) only if the username is free; otherwise `422 usernameTakenByLocal` on field `username` and nothing is stored. Never merged by email or username.
-- `Service.CheckUsernameFreeInDirectory(ctx, field, username)` is the admin-side check: call it when creating a local user (`usernameExistsInLdap`, or `ldapUnreachable` when the directory cannot be queried; it never skips the check). With no directory configured it passes.
+- `Service.CheckUsernameFreeInDirectory(ctx, field, username)` is the admin-side check, already called by `CreateLocalUser`: `422 usernameExistsInLdap` (a disabled directory account counts too) or `503 ldapUnreachable` when the directory cannot be queried; it never skips the check. With no directory configured it passes. Any other code path that creates a local user must call it too.
+- Binding an LDAP identity to an existing user (ticket #15) needs no change to login: a known LDAP identity signs in to whichever user holds it and the directory overwrites display name, email and department.
 
 ### i18n
 

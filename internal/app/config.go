@@ -19,7 +19,7 @@ type Config struct {
 		DSN            string        `yaml:"dsn"`             // XP_DB_DSN, go-sql-driver DSN, e.g. user:pw@tcp(host:3306)/xproject
 		ConnectTimeout time.Duration `yaml:"connect_timeout"` // XP_DB_CONNECT_TIMEOUT, default 90s
 	} `yaml:"database"`
-	SecretKey string `yaml:"secret_key"` // XP_SECRET_KEY, required: encrypts stored secrets (code platform tokens); keep it stable
+	SecretKey string   `yaml:"secret_key"` // XP_SECRET_KEY, required: encrypts stored secrets (code platform tokens); keep it stable
 	Admin     struct { // initial administrator, used only on the very first start
 		Username    string `yaml:"username"`     // XP_ADMIN_USERNAME
 		Password    string `yaml:"password"`     // XP_ADMIN_PASSWORD
