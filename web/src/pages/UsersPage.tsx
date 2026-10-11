@@ -1,6 +1,7 @@
 // Administration > Users: list, create local users, edit, disable / enable. Administrators only.
 import { useEffect, useState } from 'react';
-import { api } from '../api/client.ts';
+import { Link } from 'react-router';
+import { api, ApiError } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
 import type { AdminUser } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
@@ -8,7 +9,14 @@ import { useCurrentUser } from '../session/session.tsx';
 import { Button, Empty } from '../ui/controls.tsx';
 import { UserDialog } from './UserDialog.tsx';
 
-type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; items: AdminUser[] };
+/** The applications blocking a disable (422 soleOwner), or undefined for any other error. */
+function soleOwnerApps(err: unknown): { key: string; name: string }[] | undefined {
+  if (!(err instanceof ApiError)) return undefined;
+  const e = err.errors.find((x) => x.code === 'soleOwner');
+  return e ? (e.params?.applications as { key: string; name: string }[] | undefined) : undefined;
+}
+
+type Load ={ status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; items: AdminUser[] };
 // null = closed, 'create' = new local user, otherwise the user being edited.
 type Dialog = null | 'create' | AdminUser;
 
@@ -18,6 +26,7 @@ export function UsersPage() {
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [dialog, setDialog] = useState<Dialog>(null);
   const [actionError, setActionError] = useState<unknown>(null);
+  const [actionUser, setActionUser] = useState<AdminUser | null>(null);
 
   useEffect(() => {
     if (!me.isAdmin) return;
@@ -39,6 +48,7 @@ export function UsersPage() {
 
   const changeStatus = async (u: AdminUser) => {
     setActionError(null);
+    setActionUser(u);
     try {
       replace(await (u.status === 'enabled' ? api.users.disable(u.id) : api.users.enable(u.id)));
     } catch (err) {
@@ -62,9 +72,26 @@ export function UsersPage() {
       </div>
 
       {actionError !== null && (
-        <p role="alert" className="rounded border border-danger/40 bg-danger/5 px-3 py-2 text-[13px] text-danger">
-          {errorsByField(actionError)['']}
-        </p>
+        <div role="alert" className="rounded border border-danger/40 bg-danger/5 px-3 py-2 text-[13px] text-danger">
+          {soleOwnerApps(actionError) && actionUser ? (
+            <>
+              <p>{t('users.soleOwner.intro', { name: actionUser.displayName })}</p>
+              <ul className="mt-1 list-disc pl-5">
+                {soleOwnerApps(actionError)?.map((a) => (
+                  <li key={a.key}>
+                    <Link to={`/apps/${encodeURIComponent(a.key)}`} className="text-accent hover:underline">
+                      {a.name}
+                    </Link>{' '}
+                    <span className="font-mono text-[12.5px]">{a.key}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1">{t('users.soleOwner.hint')}</p>
+            </>
+          ) : (
+            errorsByField(actionError)['']
+          )}
+        </div>
       )}
 
       <div className="overflow-x-auto rounded border border-line bg-white">

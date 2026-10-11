@@ -34,5 +34,7 @@ export default {
   'users.cancel': '取消',
   'users.empty': '没有用户。',
   'users.loadFailed': '无法加载用户列表。',
+  'users.soleOwner.intro': '无法禁用 {name}：他是以下应用的唯一 Owner。',
+  'users.soleOwner.hint': '请先移交这些应用：打开应用，用“编辑 Owner 和 PE”添加另一位 Owner。',
   'users.forbidden': '只有管理员可以管理用户。',
 };

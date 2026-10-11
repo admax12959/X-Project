@@ -34,5 +34,7 @@ export default {
   'users.cancel': 'Cancel',
   'users.empty': 'No users.',
   'users.loadFailed': 'Could not load users.',
+  'users.soleOwner.intro': '{name} cannot be disabled: they are the only Owner of these applications.',
+  'users.soleOwner.hint': 'Hand each application over first: open it and use Edit Owners and PEs to add another Owner.',
   'users.forbidden': 'Only Administrators can manage users.',
 };
