@@ -1,6 +1,5 @@
 // Application page: header and tab strip shared by the tabs (routes under /apps/:key).
-// Tabs are child routes in main.tsx; the fork ticket (#9) adds Lineage between
-// Overview and Versions by adding a <Route> there and an entry in TABS below. Tabs read
+// Tabs are child routes in main.tsx (add a <Route> there and an entry in TABS below). Tabs read
 // the application through useApplication().
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useOutletContext, useParams } from 'react-router';
@@ -14,6 +13,7 @@ type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { stat
 
 const TABS: { to: string; label: MessageKey; end?: boolean }[] = [
   { to: '', label: 'term.overview', end: true },
+  { to: 'lineage', label: 'term.lineage' },
   { to: 'versions', label: 'term.versions' },
   { to: 'history', label: 'term.changeHistory' },
 ];

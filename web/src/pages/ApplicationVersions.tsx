@@ -2,25 +2,29 @@
 // first, filterable by line and by tag/commit. Owners get the Register version button.
 // Filters run in the browser: the list is one application's versions.
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { api } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
-import type { Line, RefKind, Version } from '../api/types.ts';
+import type { LineDetail, RefKind, Version } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
 import { useCurrentUser } from '../session/session.tsx';
 import { Button, Empty, Select } from '../ui/controls.tsx';
 import { useApplication } from './ApplicationPage.tsx';
+import { ForkDialog } from './ForkDialog.tsx';
 import { RegisterVersionDialog } from './RegisterVersionDialog.tsx';
 
-type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; versions: Version[]; lines: Line[] };
+type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; versions: Version[]; lines: LineDetail[] };
 
 export function ApplicationVersions() {
   const { t } = useT();
   const app = useApplication();
   const user = useCurrentUser();
+  const navigate = useNavigate();
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [lineId, setLineId] = useState('');
   const [refKind, setRefKind] = useState<RefKind | ''>('');
   const [registering, setRegistering] = useState(false);
+  const [forkFrom, setForkFrom] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     let live = true;
@@ -43,7 +47,7 @@ export function ApplicationVersions() {
   const filtered = lineId !== '' || refKind !== '';
   const th = 'h-10 whitespace-nowrap border-b border-line bg-thead px-3 text-left text-[13px] font-semibold';
   const td = 'border-b border-sep px-3 py-2 align-top';
-  const lineName = (l: Line) => (l.isMain ? t('term.mainline') : l.name);
+  const lineName = (l: Pick<LineDetail, 'isMain' | 'name'>) => (l.isMain ? t('term.mainline') : l.name);
 
   return (
     <div className="space-y-3">
@@ -92,6 +96,7 @@ export function ApplicationVersions() {
               <th className={th}>{t('versions.col.ref')}</th>
               <th className={th}>{t('versions.col.released')}</th>
               <th className={th}>{t('versions.col.note')}</th>
+              {isOwner && <th className={th} />}
             </tr>
           </thead>
           <tbody>
@@ -107,6 +112,13 @@ export function ApplicationVersions() {
                 </td>
                 <td className={`${td} whitespace-nowrap`}>{v.releasedAt}</td>
                 <td className={`${td} whitespace-pre-wrap`}>{v.note}</td>
+                {isOwner && (
+                  <td className={`${td} whitespace-nowrap`}>
+                    <Button small onClick={() => setForkFrom(v.id)}>
+                      {t('lineage.panel.forkFromVersion')}
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -118,6 +130,18 @@ export function ApplicationVersions() {
         )}
         {load.status === 'ok' && versions.length > 0 && shown.length === 0 && <Empty title={t('versions.noMatch')} />}
       </div>
+
+      {forkFrom && (
+        <ForkDialog
+          appKey={app.key}
+          versions={versions}
+          lines={lines}
+          sourceId={forkFrom}
+          onClose={() => setForkFrom(null)}
+          // Show the new line in the lineage, selected.
+          onForked={(line) => navigate(`/apps/${encodeURIComponent(app.key)}/lineage?line=${line.id}`)}
+        />
+      )}
 
       {registering && target && (
         <RegisterVersionDialog

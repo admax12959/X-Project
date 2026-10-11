@@ -11,7 +11,9 @@ import type {
   CreateApplicationInput,
   CreateUserInput,
   IdentityKind,
-  Line,
+  ForkInput,
+  LineDetail,
+  LineageNode,
   List,
   LoginInput,
   LoginMethod,
@@ -82,7 +84,15 @@ export const api = {
     list: (q = '') => request<List<ApplicationSummary>>('GET', `/api/applications${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
     /** 404 notFound for an unknown key. */
     get: (key: string) => request<Application>('GET', `/api/applications/${encodeURIComponent(key)}`),
-    lines: (key: string) => request<List<Line>>('GET', `/api/applications/${encodeURIComponent(key)}/lines`),
+    /** Flat, mainline first, with the fork facts and status of every line. */
+    lines: (key: string) => request<List<LineDetail>>('GET', `/api/applications/${encodeURIComponent(key)}/lines`),
+    /** The mainline with its children nested to any depth. */
+    lineage: (key: string) => request<LineageNode>('GET', `/api/applications/${encodeURIComponent(key)}/lineage`),
+    /**
+     * Owners only (403 otherwise). Forks an active maintenance line. 422 field errors: sourceVersionId, name, branch
+     * (branchTaken with params {line}), reason, plannedEnd, note.
+     */
+    fork: (key: string, input: ForkInput) => request<LineDetail>('POST', `/api/applications/${encodeURIComponent(key)}/lines`, { body: input }),
     /** Versions on all lines, latest release date first. */
     versions: (key: string) => request<List<Version>>('GET', `/api/applications/${encodeURIComponent(key)}/versions`),
     /**

@@ -64,8 +64,35 @@ export type CreateApplicationInput = {
   pes: string[];
 };
 
-/** GET /api/applications/{key}/lines. The mainline has no status and no name of its own. */
+/** A line as referenced from other records (a version's line, a source version's line). The mainline has no name of its own. */
 export type Line = { id: string; isMain: boolean; name: string; branch: string };
+
+export type LineStatus = 'active' | 'frozen' | 'retired';
+
+/** The version a maintenance line was forked from, with the line that holds it (that line's status: look it up in the lines list). */
+export type SourceVersion = { id: string; number: string; releasedAt: string; line: Line };
+
+/**
+ * GET /api/applications/{key}/lines (flat, mainline first). The mainline has no status, sourceVersion,
+ * reason, plannedEnd, note or forkedAt. plannedEnd is a date "YYYY-MM-DD"; forkedAt a timestamp.
+ */
+export type LineDetail = Line & {
+  status?: LineStatus;
+  sourceVersion?: SourceVersion;
+  reason?: string;
+  plannedEnd?: string;
+  note?: string;
+  forkedAt?: string;
+};
+
+/** GET /api/applications/{key}/lineage: the mainline as the root, children nested to any depth. */
+export type LineageNode = LineDetail & {
+  versionCount: number;
+  latestVersion: { id: string; number: string; releasedAt: string } | null;
+  children: LineageNode[];
+};
+
+export type ForkInput = { sourceVersionId: string; name: string; branch: string; reason: string; plannedEnd?: string; note?: string };
 
 export type RefKind = 'tag' | 'commit';
 
