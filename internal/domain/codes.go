@@ -14,4 +14,11 @@ const (
 
 	// sessions
 	CodeInvalidCredentials = "invalidCredentials" // wrong username or password (deliberately uniform)
+
+	// users (field-level; params noted where present)
+	CodeTooShort       = "tooShort"       // params {min}
+	CodeTooLong        = "tooLong"        // params {max}
+	CodeUsernameTaken  = "usernameTaken"  // another user already has this username
+	CodeUsernameLocked = "usernameLocked" // LDAP-bound users keep their username (ADR-0004)
+	CodeLdapManaged    = "ldapManaged"    // field is owned by the directory for LDAP-bound users
 )

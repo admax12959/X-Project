@@ -2,9 +2,24 @@ package mysqlstore
 
 import (
 	"context"
+	"errors"
+	"strings"
+
+	"github.com/go-sql-driver/mysql"
 
 	"github.com/admax12959/X-Project/internal/domain"
 )
+
+// mapUsernameConflict turns a duplicate-key error on the username or on the local
+// login name into domain.ErrUsernameTaken. Other errors pass through.
+func mapUsernameConflict(err error) error {
+	var me *mysql.MySQLError
+	if errors.As(err, &me) && me.Number == 1062 &&
+		(strings.Contains(me.Message, "uq_users_username") || strings.Contains(me.Message, "uq_identity_login")) {
+		return domain.ErrUsernameTaken
+	}
+	return err
+}
 
 func (s *Store) ListUsers(ctx context.Context) ([]domain.UserWithIdentities, error) {
 	rows, err := s.q.QueryContext(ctx, "SELECT "+userCols+" FROM users ORDER BY id")

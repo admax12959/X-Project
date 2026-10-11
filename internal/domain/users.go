@@ -2,7 +2,10 @@ package domain
 
 import (
 	"context"
+	"errors"
+	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // UserWithIdentities is a user together with every login identity attached to it.
@@ -49,6 +52,25 @@ func (s *Service) CreateLocalUser(ctx context.Context, actor Actor, in CreateLoc
 	if err := requireAdmin(actor); err != nil {
 		return UserWithIdentities{}, err
 	}
+	var c Collector
+	in.Username = strings.TrimSpace(in.Username)
+	in.DisplayName = strings.TrimSpace(in.DisplayName)
+	in.Email = strings.TrimSpace(in.Email)
+	in.Phone = strings.TrimSpace(in.Phone)
+	in.Department = strings.TrimSpace(in.Department)
+	checkUsername(&c, in.Username)
+	checkProfile(&c, in.DisplayName, in.Email, in.Phone, in.Department)
+	if in.Password == "" {
+		c.Add("password", CodeRequired, nil)
+	} else if utf8.RuneCountInString(in.Password) < minPasswordLength {
+		c.Add("password", CodeTooShort, map[string]any{"min": minPasswordLength})
+	} else if len(in.Password) > maxPasswordBytes {
+		c.Add("password", CodeTooLong, map[string]any{"max": maxPasswordBytes})
+	}
+	if err := c.Err(); err != nil {
+		return UserWithIdentities{}, err
+	}
+
 	hash, err := hashPassword(in.Password)
 	if err != nil {
 		return UserWithIdentities{}, err
@@ -61,6 +83,9 @@ func (s *Service) CreateLocalUser(ctx context.Context, actor Actor, in CreateLoc
 			Phone: in.Phone, Department: in.Department, Status: UserEnabled, CreatedAt: now,
 		}
 		id, err := tx.CreateUser(ctx, u)
+		if errors.Is(err, ErrUsernameTaken) {
+			return usernameTaken()
+		}
 		if err != nil {
 			return err
 		}
@@ -70,7 +95,65 @@ func (s *Service) CreateLocalUser(ctx context.Context, actor Actor, in CreateLoc
 			PasswordHash: hash, BoundAt: now, BoundVia: BoundViaAdmin,
 		}
 		created = UserWithIdentities{User: u, Identities: []LoginIdentity{ident}}
-		return tx.CreateIdentity(ctx, ident)
+		err = tx.CreateIdentity(ctx, ident)
+		if errors.Is(err, ErrUsernameTaken) {
+			return usernameTaken()
+		}
+		return err
 	})
 	return created, err
+}
+
+// Field limits, matching the users table.
+const (
+	minPasswordLength = 8
+	maxPasswordBytes  = 72 // bcrypt ignores or rejects anything longer
+	maxUsernameLength = 32
+	maxNameLength     = 200 // display name and department
+	maxEmailLength    = 320
+	maxPhoneLength    = 64
+)
+
+var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+
+// ErrUsernameTaken is returned by the Repository when a unique key on the
+// username (or the local login name derived from it) is violated.
+var ErrUsernameTaken = errors.New("username already taken")
+
+func usernameTaken() error {
+	return Validation(Invalid("username", CodeUsernameTaken, nil))
+}
+
+// checkUsername validates the username format (spec #2: ^[a-z][a-z0-9._-]{1,31}$).
+func checkUsername(c *Collector, username string) {
+	if username == "" {
+		c.Add("username", CodeRequired, nil)
+	} else if !usernamePattern.MatchString(username) {
+		c.Add("username", CodeInvalid, nil)
+	}
+}
+
+func checkLength(c *Collector, field, value string, max int) {
+	if utf8.RuneCountInString(value) > max {
+		c.Add(field, CodeTooLong, map[string]any{"max": max})
+	}
+}
+
+// checkProfile validates display name (required), email (optional, shaped like
+// an address), phone and department. Values are already trimmed.
+func checkProfile(c *Collector, displayName, email, phone, department string) {
+	if displayName == "" {
+		c.Add("displayName", CodeRequired, nil)
+	} else {
+		checkLength(c, "displayName", displayName, maxNameLength)
+	}
+	if email != "" {
+		if !emailPattern.MatchString(email) {
+			c.Add("email", CodeInvalid, nil)
+		} else {
+			checkLength(c, "email", email, maxEmailLength)
+		}
+	}
+	checkLength(c, "phone", phone, maxPhoneLength)
+	checkLength(c, "department", department, maxNameLength)
 }

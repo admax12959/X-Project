@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/admax12959/X-Project/internal/apitest"
@@ -118,6 +119,105 @@ func TestNewUsersLocalIdentityIsBoundByAnAdministrator(t *testing.T) {
 	}
 	if got := findUser(t, users, apitest.AdminUsername).Identities[0].BoundVia; got != "bootstrap" {
 		t.Fatalf("initial admin boundVia = %q, want bootstrap", got)
+	}
+}
+
+func TestCreatingAUserReportsEveryInvalidFieldAtOnce(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+
+	res := admin.Post("/api/users", map[string]any{"username": " ", "displayName": " ", "password": ""})
+	res.ExpectError(http.StatusUnprocessableEntity, "username", "required")
+	res.ExpectError(http.StatusUnprocessableEntity, "displayName", "required")
+	res.ExpectError(http.StatusUnprocessableEntity, "password", "required")
+
+	if got := len(listUsers(t, admin)); got != 1 {
+		t.Fatalf("a rejected create left %d users, want only the initial admin", got)
+	}
+}
+
+func TestUsernameFormatIsEnforced(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+
+	bad := []string{
+		"J.Doe",                             // uppercase
+		"1doe",                              // must start with a letter
+		"a",                                 // too short
+		"jane doe",                          // space
+		"jane@corp",                         // character outside [a-z0-9._-]
+		"abcdefghijklmnopqrstuvwxyz0123456", // 33 characters
+	}
+	for _, name := range bad {
+		admin.Post("/api/users", newUser(map[string]any{"username": name})).
+			ExpectError(http.StatusUnprocessableEntity, "username", "invalid")
+	}
+	// Boundaries that are valid: 2 and 32 characters, and the allowed punctuation.
+	createUser(t, admin, map[string]any{"username": "ab"})
+	createUser(t, admin, map[string]any{"username": "a.b_c-d"})
+	createUser(t, admin, map[string]any{"username": "abcdefghijklmnopqrstuvwxyz012345"})
+}
+
+func TestInitialPasswordNeedsAtLeastEightCharacters(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+
+	e := admin.Post("/api/users", newUser(map[string]any{"password": "1234567"})).
+		ExpectError(http.StatusUnprocessableEntity, "password", "tooShort")
+	if e.Params["min"] != float64(8) {
+		t.Fatalf("params = %v, want min 8", e.Params)
+	}
+	createUser(t, admin, map[string]any{"password": "12345678"})
+}
+
+func TestEmailIsOptionalButMustLookLikeAnEmail(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+
+	admin.Post("/api/users", newUser(map[string]any{"email": "not-an-email"})).
+		ExpectError(http.StatusUnprocessableEntity, "email", "invalid")
+	admin.Post("/api/users", newUser(map[string]any{"email": "a b@example.com"})).
+		ExpectError(http.StatusUnprocessableEntity, "email", "invalid")
+
+	u := createUser(t, admin, map[string]any{"email": "", "department": ""})
+	if u.Email != "" || u.Department != "" {
+		t.Fatalf("optional fields = %+v", u)
+	}
+}
+
+func TestOverlongFieldsAreRejected(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+
+	long := func(n int) string { return strings.Repeat("x", n) }
+	res := admin.Post("/api/users", newUser(map[string]any{
+		"displayName": long(201), "department": long(201), "phone": long(65),
+	}))
+	e := res.ExpectError(http.StatusUnprocessableEntity, "displayName", "tooLong")
+	if e.Params["max"] != float64(200) {
+		t.Fatalf("params = %v, want max 200", e.Params)
+	}
+	res.ExpectError(http.StatusUnprocessableEntity, "department", "tooLong")
+	res.ExpectError(http.StatusUnprocessableEntity, "phone", "tooLong")
+}
+
+func TestUsernameMustBeUnique(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+	createUser(t, admin, nil)
+
+	admin.Post("/api/users", newUser(nil)).ExpectError(http.StatusUnprocessableEntity, "username", "usernameTaken")
+	admin.Post("/api/users", newUser(map[string]any{"username": apitest.AdminUsername})).
+		ExpectError(http.StatusUnprocessableEntity, "username", "usernameTaken")
+
+	if got := len(listUsers(t, admin)); got != 2 {
+		t.Fatalf("users = %d, want 2", got)
 	}
 }
 
