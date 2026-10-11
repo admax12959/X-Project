@@ -1,6 +1,10 @@
 package httpapi
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/admax12959/X-Project/internal/domain"
+)
 
 // globalVersionJSON is a version plus the application it belongs to.
 type globalVersionJSON struct {
@@ -14,7 +18,7 @@ type globalVersionJSON struct {
 // listAllVersions serves GET /api/versions: every application's versions, latest
 // release date first.
 func (s *server) listAllVersions(w http.ResponseWriter, r *http.Request) {
-	versions, err := s.svc.ListAllVersions(r.Context(), actorOf(r))
+	versions, err := s.svc.ListAllVersions(r.Context(), actorOf(r), domain.GlobalVersionFilter{AppKey: r.URL.Query().Get("app")})
 	if err != nil {
 		writeError(w, r, err)
 		return

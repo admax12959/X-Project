@@ -8,11 +8,16 @@ import (
 
 var _ domain.GlobalVersionRepository = (*Store)(nil)
 
-func (s *Store) ListAllVersions(ctx context.Context) ([]domain.GlobalVersion, error) {
-	rows, err := s.q.QueryContext(ctx, `SELECT v.id, v.application_id, v.line_id, v.number, v.ref_kind, v.ref_value, v.released_at, v.note, v.created_at,
+func (s *Store) ListAllVersions(ctx context.Context, f domain.GlobalVersionFilter) ([]domain.GlobalVersion, error) {
+	q := `SELECT v.id, v.application_id, v.line_id, v.number, v.ref_kind, v.ref_value, v.released_at, v.note, v.created_at,
   l.id, l.is_main, l.name, l.branch, l.created_at, a.app_key, a.name
-FROM app_versions v JOIN app_lines l ON l.id = v.line_id JOIN applications a ON a.id = v.application_id
-ORDER BY v.released_at DESC, v.id DESC`)
+FROM app_versions v JOIN app_lines l ON l.id = v.line_id JOIN applications a ON a.id = v.application_id`
+	var args []any
+	if f.AppKey != "" {
+		q += " WHERE a.app_key = ?"
+		args = append(args, f.AppKey)
+	}
+	rows, err := s.q.QueryContext(ctx, q+" ORDER BY v.released_at DESC, v.id DESC", args...)
 	if err != nil {
 		return nil, err
 	}
