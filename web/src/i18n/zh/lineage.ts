@@ -21,6 +21,7 @@ export default {
   'lineage.status.retired.hint': '不再发版，仅保留只读记录。',
   'lineage.panel': '线详情',
   'lineage.panel.close': '关闭',
+  'lineage.panel.kind': '维护线',
   'lineage.panel.sourceOn': '{number}，位于{line}',
   'lineage.panel.details': '详情',
   'lineage.panel.versions': '版本（{count}）',

@@ -69,7 +69,7 @@ export function LinePanel({
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <h2 className="break-words text-base font-bold">{line.isMain ? t('term.mainline') : line.name}</h2>
-          {!line.isMain && <div className="text-[13px] text-text-3">{t('term.maintenanceLines')}</div>}
+          {!line.isMain && <div className="text-[13px] text-text-3">{t('lineage.panel.kind')}</div>}
         </div>
         <Button small aria-label={t('lineage.panel.close')} onClick={onClose}>
           ×

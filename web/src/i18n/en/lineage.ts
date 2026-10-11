@@ -21,6 +21,7 @@ export default {
   'lineage.status.retired.hint': 'No new versions. Kept as a read-only record.',
   'lineage.panel': 'Line details',
   'lineage.panel.close': 'Close',
+  'lineage.panel.kind': 'Maintenance line',
   'lineage.panel.sourceOn': '{number}, on {line}',
   'lineage.panel.details': 'Details',
   'lineage.panel.versions': 'Versions ({count})',
