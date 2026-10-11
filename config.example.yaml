@@ -1,0 +1,15 @@
+# Example configuration. Point XP_CONFIG at a copy of this file.
+# Environment variables (XP_*) override every value here; see docs/dev.md.
+listen: ":8080"
+web_dir: ""                 # built frontend dir; the Docker image sets /srv/web
+database:
+  dsn: "xproject:xproject-pw@tcp(127.0.0.1:3306)/xproject"
+  connect_timeout: 90s      # keep retrying while MySQL starts
+admin:                      # initial administrator, used only on the very first start
+  username: admin
+  password: change-me-now
+  display_name: Administrator
+  email: ""
+session:
+  ttl: 12h
+  cookie_secure: false      # true when served over HTTPS
