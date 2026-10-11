@@ -49,6 +49,8 @@ type LineLifecycleRepository interface {
 	// SetLineStatus overwrites the status of a maintenance line. Call it inside InTx,
 	// after LockLine.
 	SetLineStatus(ctx context.Context, lineID int64, status LineStatus) error
+	// UpdateLineInfo overwrites the editable facts of a maintenance line (nil plannedEnd clears it).
+	UpdateLineInfo(ctx context.Context, lineID int64, name string, plannedEnd *time.Time, note string) error
 	AddLineStatusChange(ctx context.Context, c StoredLineStatusChange) error
 	// ListLineStatusChanges returns a line's status log, oldest first.
 	ListLineStatusChanges(ctx context.Context, lineID int64) ([]StoredLineStatusChange, error)
@@ -63,6 +65,13 @@ var lineTransitions = map[LineStatus][]LineStatus{
 
 func knownLineStatus(s LineStatus) bool {
 	return s == LineActive || s == LineFrozen || s == LineRetired
+}
+
+func dateOrEmpty(d *time.Time) string {
+	if d == nil {
+		return ""
+	}
+	return d.Format(dateLayout)
 }
 
 func parseLineID(raw string) (int64, error) {
@@ -111,6 +120,112 @@ func (s *Service) lineDetail(ctx context.Context, repo Repository, line Line) (L
 		out.StatusChanges = append(out.StatusChanges, LineStatusChange{From: c.From, To: c.To, At: c.At, Actor: actor})
 	}
 	return out, nil
+}
+
+// UpdateLineInput is the Owner's edit of a maintenance line. A nil field is left
+// unchanged; an empty Note or PlannedEnd clears it. The Git branch, the source
+// version, the fork reason and the fork time are not part of this type on purpose:
+// they describe the fork as it happened and have no edit path.
+type UpdateLineInput struct {
+	Name       *string
+	Note       *string
+	PlannedEnd *string // YYYY-MM-DD, or "" to clear
+}
+
+// UpdateLine edits a maintenance line's name, note and planned end date. Owners only.
+// A retired line is read-only (lineRetired); the mainline has no such edits
+// (lineIsMainline). Editing a frozen line is fine.
+//
+// Check order: application exists, actor is an Owner, fields, line exists, mainline,
+// retired.
+func (s *Service) UpdateLine(ctx context.Context, actor Actor, appKey, lineID string, in UpdateLineInput) (LineDetail, error) {
+	app, err := s.GetApplication(ctx, actor, appKey)
+	if err != nil {
+		return LineDetail{}, err
+	}
+	if !actorOwns(app, actor) {
+		return LineDetail{}, forbidden()
+	}
+	var c Collector
+	var name, note *string
+	var plannedEnd **time.Time // nil: unchanged; non-nil: new value (inner nil clears)
+	if in.Name != nil {
+		n := strings.TrimSpace(*in.Name)
+		if c.Required("name", n) {
+			checkLength(&c, "name", n, maxLineNameLength)
+		}
+		name = &n
+	}
+	if in.Note != nil {
+		n := strings.TrimSpace(*in.Note)
+		checkLength(&c, "note", n, maxLineTextLength)
+		note = &n
+	}
+	if in.PlannedEnd != nil {
+		var d *time.Time
+		if raw := strings.TrimSpace(*in.PlannedEnd); raw != "" {
+			parsed, perr := time.Parse(dateLayout, raw)
+			if perr != nil {
+				c.Add("plannedEnd", CodeInvalid, nil)
+			}
+			d = &parsed
+		}
+		plannedEnd = &d
+	}
+	if err := c.Err(); err != nil {
+		return LineDetail{}, err
+	}
+	id, err := parseLineID(lineID)
+	if err != nil {
+		return LineDetail{}, err
+	}
+	var out LineDetail
+	err = s.repo.InTx(ctx, func(tx Repository) error {
+		line, found, err := tx.LockLine(ctx, app.ID, id)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return newKind(KindNotFound, CodeNotFound)
+		}
+		if line.IsMain {
+			return Validation(Invalid("", CodeLineIsMainline, nil))
+		}
+		if line.Status == LineRetired {
+			return Validation(Invalid("", CodeLineRetired, nil))
+		}
+		updated := line
+		if name != nil {
+			updated.Name = *name
+		}
+		if note != nil {
+			updated.Note = *note
+		}
+		if plannedEnd != nil {
+			updated.PlannedEnd = *plannedEnd
+		}
+		changes := map[string]any{}
+		if updated.Name != line.Name {
+			changes["name"] = map[string]any{"from": line.Name, "to": updated.Name}
+		}
+		if updated.Note != line.Note {
+			changes["note"] = map[string]any{"from": line.Note, "to": updated.Note}
+		}
+		if from, to := dateOrEmpty(line.PlannedEnd), dateOrEmpty(updated.PlannedEnd); from != to {
+			changes["plannedEnd"] = map[string]any{"from": from, "to": to}
+		}
+		if len(changes) > 0 {
+			if err := tx.UpdateLineInfo(ctx, line.ID, updated.Name, updated.PlannedEnd, updated.Note); err != nil {
+				return err
+			}
+			if err := s.recordEvent(ctx, tx, app.ID, actor, lineChangedEvent(updated, changes)); err != nil {
+				return err
+			}
+		}
+		out, err = s.lineDetail(ctx, tx, updated)
+		return err
+	})
+	return out, err
 }
 
 // SetLineStatus moves a maintenance line along the state machine. Owners only.

@@ -51,6 +51,13 @@ const renderers: Record<string, Renderer> = {
   }),
   versionRegistered: (p) => ({ number: String(p.number), line: lineLabel(p.line) }),
   lineForked: (p) => ({ number: String(p.number), line: lineLabel(p.line) }),
+  lineChanged: (p, locale) => ({
+    line: lineLabel(p.line),
+    fields: joinNames(
+      Object.keys((p.changes as Record<string, unknown> | undefined) ?? {}).map((f) => translate(`lineage.field.${f}` as MessageKey)),
+      locale,
+    ),
+  }),
   lineStatusChanged: (p) => ({ line: lineLabel(p.line), from: statusName(p.from), to: statusName(p.to) }),
 };
 

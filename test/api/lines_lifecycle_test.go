@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/admax12959/X-Project/internal/apitest"
@@ -419,6 +421,208 @@ func TestStatusChangesAreRecordedInTheChangeHistory(t *testing.T) {
 			e.Params.Line.ID != f.line.ID || e.Params.Line.Name != "Northwind customization" || e.Params.Line.Branch != "cust/northwind" || e.Params.Line.IsMain {
 			t.Fatalf("event %d = %+v, want %v", i, e, w)
 		}
+	}
+}
+
+// edit is the Owner's PATCH of the fixture's line.
+func (f lineFixture) edit(body map[string]any) *apitest.Response {
+	return f.elarsen.Do(http.MethodPatch, f.path(), body)
+}
+
+func (f lineFixture) current(t *testing.T) lineDetailBody {
+	t.Helper()
+	return f.detail(t, f.elarsen).lineDetailBody
+}
+
+func TestOwnerEditsALinesNameNoteAndPlannedEnd(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+
+	var got lineDetailBody
+	f.edit(map[string]any{"name": "Northwind Bank customization", "note": "Renewal signed", "plannedEnd": "2028-01-31"}).
+		ExpectStatus(http.StatusOK).JSON(&got)
+
+	for _, l := range []lineDetailBody{got, f.current(t)} {
+		if l.Name != "Northwind Bank customization" || l.Note != "Renewal signed" || l.PlannedEnd != "2028-01-31" || l.Status != "active" {
+			t.Fatalf("line = %+v", l)
+		}
+	}
+}
+
+func TestOmittedFieldsStayAndEmptyOnesClearTheNoteAndPlannedEnd(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t) // forked with plannedEnd 2027-06-30 and a note
+
+	f.edit(map[string]any{"name": "Renamed"}).ExpectStatus(http.StatusOK)
+	if l := f.current(t); l.Name != "Renamed" || l.Note != "Contract renewal being negotiated" || l.PlannedEnd != "2027-06-30" {
+		t.Fatalf("an omitted field changed: %+v", l)
+	}
+	f.edit(map[string]any{}).ExpectStatus(http.StatusOK) // nothing to change is fine
+
+	f.edit(map[string]any{"note": "", "plannedEnd": ""}).ExpectStatus(http.StatusOK)
+	if l := f.current(t); l.Name != "Renamed" || l.Note != "" || l.PlannedEnd != "" {
+		t.Fatalf("empty values did not clear: %+v", l)
+	}
+}
+
+func TestBranchSourceVersionAndReasonCannotBeEdited(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	other := f.registerMain(t, "2.2.0", "2025-05-27")
+	before := f.current(t)
+
+	f.edit(map[string]any{
+		"name": "Renamed", "branch": "cust/other", "sourceVersionId": other.ID, "reason": "A different reason",
+		"forkedAt": "2000-01-01T00:00:00Z", "status": "retired", "isMain": true,
+	}).ExpectStatus(http.StatusOK)
+
+	after := f.current(t)
+	if after.Name != "Renamed" {
+		t.Fatalf("the allowed field was not applied: %+v", after)
+	}
+	after.Name = before.Name
+	if after.Branch != before.Branch || after.Reason != before.Reason || after.ForkedAt != before.ForkedAt || after.Status != before.Status ||
+		after.IsMain || after.SourceVersion == nil || after.SourceVersion.ID != before.SourceVersion.ID {
+		t.Fatalf("immutable fact changed: before %+v, after %+v", before, after)
+	}
+}
+
+func TestEditingALineChecksItsFields(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	invalid := http.StatusUnprocessableEntity
+	before := f.current(t)
+
+	f.edit(map[string]any{"name": "  "}).ExpectError(invalid, "name", "required")
+	f.edit(map[string]any{"name": strings.Repeat("n", 201)}).ExpectError(invalid, "name", "tooLong")
+	f.edit(map[string]any{"note": strings.Repeat("n", 2001)}).ExpectError(invalid, "note", "tooLong")
+	for _, bad := range []string{"2026-02-30", "31/01/2028", "soon"} {
+		f.edit(map[string]any{"plannedEnd": bad}).ExpectError(invalid, "plannedEnd", "invalid")
+	}
+	// All problems are reported together and nothing is saved.
+	res := f.edit(map[string]any{"name": "", "plannedEnd": "soon", "note": "kept?"})
+	res.ExpectStatus(invalid)
+	if got := len(res.Errors()); got != 2 {
+		t.Fatalf("%d errors, want 2: %s", got, res.Body)
+	}
+	if after := f.current(t); !reflect.DeepEqual(after, before) {
+		t.Fatalf("a rejected edit changed the line: %+v -> %+v", before, after)
+	}
+}
+
+func TestOnlyAnOwnerOfTheApplicationCanEditALine(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	praman := createUser(t, f.admin, map[string]any{"username": "praman", "displayName": "Priya Raman"})
+	dbrooks := createUser(t, f.admin, map[string]any{"username": "dbrooks", "displayName": "Daniel Brooks"})
+	f.admin.Do(http.MethodPut, "/api/applications/payments-core/members", map[string]any{
+		"owners": []string{f.owner.ID}, "pes": []string{praman.ID},
+	}).ExpectStatus(http.StatusOK)
+	f.secondApp(t, dbrooks.ID, nil)
+	before := f.current(t)
+
+	for _, c := range []*apitest.Client{f.admin, f.login("praman"), f.login("dbrooks"), f.env.SeedUserClient("bob", "bob-password-1")} {
+		c.Do(http.MethodPatch, f.path(), map[string]any{"name": "Mine now"}).ExpectError(http.StatusForbidden, "", "forbidden")
+		c.Do(http.MethodPatch, f.path(), map[string]any{"name": ""}).ExpectError(http.StatusForbidden, "", "forbidden") // before the fields
+	}
+	f.env.Client().Do(http.MethodPatch, f.path(), map[string]any{"name": "x"}).ExpectError(http.StatusUnauthorized, "", "unauthenticated")
+	if after := f.current(t); !reflect.DeepEqual(after, before) {
+		t.Fatalf("a forbidden request changed the line: %+v", after)
+	}
+}
+
+func TestEditingAnUnknownLineIsNotFound(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	body := map[string]any{"name": "x"}
+	f.elarsen.Do(http.MethodPatch, linesPath("payments-core")+"/999999", body).ExpectError(http.StatusNotFound, "", "notFound")
+	f.elarsen.Do(http.MethodPatch, linesPath("nope")+"/"+f.line.ID, body).ExpectError(http.StatusNotFound, "", "notFound")
+	other := f.secondApp(t, f.owner.ID, nil)
+	f.elarsen.Do(http.MethodPatch, linesPath("payments-core")+"/"+other.ID, body).ExpectError(http.StatusNotFound, "", "notFound")
+}
+
+func TestAFrozenLineCanStillBeEdited(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	f.setStatus("frozen").ExpectStatus(http.StatusOK)
+
+	f.edit(map[string]any{"note": "Frozen for the compliance review", "plannedEnd": "2026-12-31"}).ExpectStatus(http.StatusOK)
+
+	if l := f.current(t); l.Status != "frozen" || l.Note != "Frozen for the compliance review" || l.PlannedEnd != "2026-12-31" {
+		t.Fatalf("line = %+v", l)
+	}
+}
+
+func TestARetiredLineIsReadOnlyAndTheMainlineHasNothingToEdit(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	f.moveTo(t, "retired")
+	before := f.current(t)
+
+	for _, body := range []map[string]any{
+		{"name": "Renamed"}, {"note": "A late thought"}, {"plannedEnd": "2030-01-01"}, {"note": ""}, {},
+	} {
+		f.edit(body).ExpectError(http.StatusUnprocessableEntity, "", "lineRetired")
+	}
+	if after := f.current(t); !reflect.DeepEqual(after, before) {
+		t.Fatalf("a retired line changed: %+v -> %+v", before, after)
+	}
+
+	f.elarsen.Do(http.MethodPatch, linesPath("payments-core")+"/"+f.mainline.ID, map[string]any{"name": "Trunk"}).
+		ExpectError(http.StatusUnprocessableEntity, "", "lineIsMainline")
+}
+
+func TestALineCannotBeDeleted(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	f.moveTo(t, "retired")
+
+	// There is no delete route at all: not for an Owner, not for an administrator, not for a retired line.
+	for _, c := range []*apitest.Client{f.elarsen, f.admin} {
+		if res := c.Delete(f.path()); res.Status < 400 {
+			t.Fatalf("DELETE a line = %d: %s", res.Status, res.Body)
+		}
+	}
+	if got := f.listLines(f.elarsen); len(got) != 2 {
+		t.Fatalf("lines = %+v", got)
+	}
+	if l := f.current(t); l.Status != "retired" {
+		t.Fatalf("line = %+v", l)
+	}
+}
+
+func TestEditingALineIsRecordedInTheChangeHistoryOnlyWhenSomethingChanged(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	base := len(f.events(t))
+
+	f.edit(map[string]any{"name": "Northwind Bank customization", "note": "Renewal signed", "plannedEnd": "2028-01-31"}).ExpectStatus(http.StatusOK)
+	f.edit(map[string]any{"name": "Northwind Bank customization", "note": "Renewal signed", "plannedEnd": "2028-01-31"}).ExpectStatus(http.StatusOK) // same values
+	f.edit(map[string]any{}).ExpectStatus(http.StatusOK)
+	f.edit(map[string]any{"name": "  "}).ExpectStatus(http.StatusUnprocessableEntity)
+
+	h := f.events(t)
+	if len(h) != base+1 {
+		t.Fatalf("history has %d events, want %d: %+v", len(h), base+1, h)
+	}
+	e := h[0]
+	if e.Type != "lineChanged" || e.Actor.Username != "elarsen" || e.Params.Line.ID != f.line.ID || e.Params.Line.Name != "Northwind Bank customization" {
+		t.Fatalf("event = %+v", e)
+	}
+	want := map[string]map[string]string{
+		"name":       {"from": "Northwind customization", "to": "Northwind Bank customization"},
+		"note":       {"from": "Contract renewal being negotiated", "to": "Renewal signed"},
+		"plannedEnd": {"from": "2027-06-30", "to": "2028-01-31"},
+	}
+	if !reflect.DeepEqual(e.Params.Changes, want) {
+		t.Fatalf("changes = %+v, want %+v", e.Params.Changes, want)
+	}
+
+	// Clearing is a change too: the new value is empty.
+	f.edit(map[string]any{"plannedEnd": ""}).ExpectStatus(http.StatusOK)
+	e = f.events(t)[0]
+	if e.Type != "lineChanged" || !reflect.DeepEqual(e.Params.Changes, map[string]map[string]string{"plannedEnd": {"from": "2028-01-31", "to": ""}}) {
+		t.Fatalf("event = %+v", e)
 	}
 }
 

@@ -44,6 +44,28 @@ func (s *server) getLine(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toLineWithLogJSON(d))
 }
 
+// updateLine serves PATCH /api/applications/{key}/lines/{lineId}. Only name, note and
+// plannedEnd exist in the body type; any other field is ignored. An empty note or
+// plannedEnd clears it, an absent one leaves it.
+func (s *server) updateLine(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name       *string `json:"name"`
+		Note       *string `json:"note"`
+		PlannedEnd *string `json:"plannedEnd"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	d, err := s.svc.UpdateLine(r.Context(), actorOf(r), r.PathValue("key"), r.PathValue("lineId"), domain.UpdateLineInput{
+		Name: body.Name, Note: body.Note, PlannedEnd: body.PlannedEnd,
+	})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toLineWithLogJSON(d))
+}
+
 // setLineStatus serves PUT /api/applications/{key}/lines/{lineId}/status.
 func (s *server) setLineStatus(w http.ResponseWriter, r *http.Request) {
 	var body struct {

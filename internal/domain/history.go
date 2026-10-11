@@ -48,6 +48,10 @@ const (
 	// EventLineStatusChanged: a maintenance line moved along the state machine. Params:
 	// line = {id, isMain, name, branch}, from, to = "active" | "frozen" | "retired".
 	EventLineStatusChanged EventType = "lineStatusChanged"
+	// EventLineChanged: an Owner edited a maintenance line. Params: line = {id, isMain,
+	// name, branch} after the edit, changes = {name|note|plannedEnd: {from, to}}, only the
+	// fields that changed (plannedEnd as YYYY-MM-DD; "" means none).
+	EventLineChanged EventType = "lineChanged"
 )
 
 // event is a change-history entry that has not been written yet. Build it with
@@ -91,6 +95,10 @@ func lineForkedEvent(line Line, source Version) event {
 
 func lineStatusChangedEvent(line Line, from, to LineStatus) event {
 	return event{EventLineStatusChanged, map[string]any{"line": lineParam(line), "from": string(from), "to": string(to)}}
+}
+
+func lineChangedEvent(line Line, changes map[string]any) event {
+	return event{EventLineChanged, map[string]any{"line": lineParam(line), "changes": changes}}
 }
 
 // userParam is the params form of a reference to a user.

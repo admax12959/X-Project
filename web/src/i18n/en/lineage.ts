@@ -32,6 +32,7 @@ export default {
   'lineage.panel.fork': 'Fork',
   'lineage.panel.forkNoVersion': 'Register a version first. A line is forked from a version.',
   'lineage.panel.forkFromVersion': 'Fork from this version',
+  'lineage.field.name': 'Name',
   'lineage.field.branch': 'Git branch',
   'lineage.field.source': 'Source version',
   'lineage.field.reason': 'Fork reason',

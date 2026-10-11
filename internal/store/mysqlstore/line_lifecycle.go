@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/admax12959/X-Project/internal/domain"
 )
@@ -20,6 +21,15 @@ func (s *Store) GetLine(ctx context.Context, applicationID, lineID int64) (domai
 
 func (s *Store) SetLineStatus(ctx context.Context, lineID int64, status domain.LineStatus) error {
 	_, err := s.q.ExecContext(ctx, "UPDATE app_lines SET status = ? WHERE id = ? AND NOT is_main", string(status), lineID)
+	return err
+}
+
+func (s *Store) UpdateLineInfo(ctx context.Context, lineID int64, name string, plannedEnd *time.Time, note string) error {
+	var end any
+	if plannedEnd != nil {
+		end = *plannedEnd
+	}
+	_, err := s.q.ExecContext(ctx, "UPDATE app_lines SET name = ?, planned_end = ?, note = ? WHERE id = ? AND NOT is_main", name, end, note, lineID)
 	return err
 }
 

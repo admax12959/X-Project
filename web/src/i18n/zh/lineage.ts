@@ -32,6 +32,7 @@ export default {
   'lineage.panel.fork': '分叉',
   'lineage.panel.forkNoVersion': '请先登记版本。维护线是从某个版本分叉出来的。',
   'lineage.panel.forkFromVersion': '从此版本分叉',
+  'lineage.field.name': '名称',
   'lineage.field.branch': 'Git 分支',
   'lineage.field.source': '源版本',
   'lineage.field.reason': '分叉原因',

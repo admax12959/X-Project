@@ -9,6 +9,7 @@ export default {
   'history.event.versionRegistered': '在{line}登记版本 {number}',
   'history.event.lineForked': '从版本 {number} 分叉维护线{line}',
   'history.event.lineStatusChanged': '将{line}从{from}改为{to}',
+  'history.event.lineChanged': '修改了{line}：{fields}',
   'history.event.unknown': '未知事件（{type}）',
   'history.col.time': '时间',
   'history.col.by': '操作人',
