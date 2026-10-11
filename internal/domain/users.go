@@ -141,6 +141,52 @@ func (u UserWithIdentities) hasIdentity(kind IdentityKind) bool {
 	return false
 }
 
+func trimmed(p *string) (string, bool) {
+	if p == nil {
+		return "", false
+	}
+	return strings.TrimSpace(*p), true
+}
+
+// profileEdit is an edit of the profile fields; a nil field is left unchanged.
+type profileEdit struct {
+	DisplayName *string
+	Email       *string
+	Phone       *string
+	Department  *string
+}
+
+// applyProfileEdit applies e to u and validates the result, reporting problems on c.
+// For LDAP-bound users the directory owns display name, email and department (they are
+// synced at login), so a different value is refused with ldapManaged; sending the
+// current value is fine. Phone is always editable. Used for both the administrator's
+// edit of a user and a user's edit of themselves.
+func applyProfileEdit(c *Collector, u User, ldapBound bool, e profileEdit) User {
+	if v, ok := trimmed(e.DisplayName); ok {
+		if ldapBound && v != u.DisplayName {
+			c.Add("displayName", CodeLdapManaged, nil)
+		}
+		u.DisplayName = v
+	}
+	if v, ok := trimmed(e.Email); ok {
+		if ldapBound && v != u.Email {
+			c.Add("email", CodeLdapManaged, nil)
+		}
+		u.Email = v
+	}
+	if v, ok := trimmed(e.Phone); ok {
+		u.Phone = v
+	}
+	if v, ok := trimmed(e.Department); ok {
+		if ldapBound && v != u.Department {
+			c.Add("department", CodeLdapManaged, nil)
+		}
+		u.Department = v
+	}
+	checkProfile(c, u.DisplayName, u.Email, u.Phone, u.Department)
+	return u
+}
+
 // UpdateUser edits a user's profile and, for users without an LDAP identity,
 // the username (ADR-0004). The local login name follows the username, and
 // everything else refers to the user by ID, so a rename keeps all records.
@@ -161,12 +207,6 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 		ldapBound := cur.hasIdentity(IdentityLDAP)
 		var c Collector
 
-		trimmed := func(p *string) (string, bool) {
-			if p == nil {
-				return "", false
-			}
-			return strings.TrimSpace(*p), true
-		}
 		rename := false
 		if v, ok := trimmed(in.Username); ok && v != u.Username {
 			if ldapBound {
@@ -176,30 +216,9 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 				u.Username, rename = v, true
 			}
 		}
-		// For LDAP-bound users the directory owns display name, email and
-		// department (spec: synced at login); a different value is refused.
-		if v, ok := trimmed(in.DisplayName); ok {
-			if ldapBound && v != u.DisplayName {
-				c.Add("displayName", CodeLdapManaged, nil)
-			}
-			u.DisplayName = v
-		}
-		if v, ok := trimmed(in.Email); ok {
-			if ldapBound && v != u.Email {
-				c.Add("email", CodeLdapManaged, nil)
-			}
-			u.Email = v
-		}
-		if v, ok := trimmed(in.Phone); ok {
-			u.Phone = v
-		}
-		if v, ok := trimmed(in.Department); ok {
-			if ldapBound && v != u.Department {
-				c.Add("department", CodeLdapManaged, nil)
-			}
-			u.Department = v
-		}
-		checkProfile(&c, u.DisplayName, u.Email, u.Phone, u.Department)
+		u = applyProfileEdit(&c, u, ldapBound, profileEdit{
+			DisplayName: in.DisplayName, Email: in.Email, Phone: in.Phone, Department: in.Department,
+		})
 		if err := c.Err(); err != nil {
 			return err
 		}

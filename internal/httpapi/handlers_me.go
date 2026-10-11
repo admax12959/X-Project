@@ -24,12 +24,18 @@ func (s *server) getMe(w http.ResponseWriter, r *http.Request) {
 func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 	// Pointers distinguish "not sent" (unchanged) from "sent empty".
 	var body struct {
-		Language *string `json:"language"`
+		DisplayName *string `json:"displayName"`
+		Email       *string `json:"email"`
+		Phone       *string `json:"phone"`
+		Department  *string `json:"department"`
+		Language    *string `json:"language"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	u, err := s.svc.UpdateMe(r.Context(), actorOf(r), domain.UpdateMeInput{Language: body.Language})
+	u, err := s.svc.UpdateMe(r.Context(), actorOf(r), domain.UpdateMeInput{
+		DisplayName: body.DisplayName, Email: body.Email, Phone: body.Phone, Department: body.Department, Language: body.Language,
+	})
 	if err != nil {
 		writeError(w, r, err)
 		return

@@ -99,6 +99,73 @@ func getMe(t *testing.T, c *apitest.Client) meBody {
 	return m
 }
 
+func TestUserWithOnlyALocalIdentityEditsOwnDisplayNameEmailDepartmentAndPhone(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	createUser(t, env.AdminClient(), map[string]any{"username": "jdoe", "password": "jane-pw-123"})
+	jane := env.Client()
+	jane.LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+
+	var got meBody
+	patchMe(jane, map[string]any{
+		"displayName": "Jane D. Doe", "email": "jane.doe@example.com", "department": "Treasury", "phone": "555-0199",
+	}).ExpectStatus(http.StatusOK).JSON(&got)
+	if got.DisplayName != "Jane D. Doe" || got.Email != "jane.doe@example.com" || got.Department != "Treasury" || got.Phone != "555-0199" {
+		t.Fatalf("PATCH /api/me answered %+v", got)
+	}
+	if again := getMe(t, jane); again.DisplayName != got.DisplayName || again.Email != got.Email ||
+		again.Department != got.Department || again.Phone != got.Phone {
+		t.Fatalf("GET /api/me = %+v, want the saved values %+v", again, got)
+	}
+	// The administrator sees the same data.
+	if listed := findUser(t, listUsers(t, env.AdminClient()), "jdoe"); listed.DisplayName != "Jane D. Doe" || listed.Phone != "555-0199" {
+		t.Fatalf("admin view = %+v", listed)
+	}
+}
+
+func TestOwnProfileEditsAreValidatedLikeTheAdminsAndCannotChangeUsernameOrRole(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	createUser(t, env.AdminClient(), map[string]any{"username": "jdoe", "password": "jane-pw-123"})
+	jane := env.Client()
+	jane.LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+
+	patchMe(jane, map[string]any{"displayName": "  "}).ExpectError(http.StatusUnprocessableEntity, "displayName", "required")
+	patchMe(jane, map[string]any{"email": "not-an-address"}).ExpectError(http.StatusUnprocessableEntity, "email", "invalid")
+
+	// Username and role are not editable here: the fields are simply ignored.
+	patchMe(jane, map[string]any{"username": "someoneelse", "isAdmin": true, "phone": "555-0111"}).ExpectStatus(http.StatusOK)
+	if me := getMe(t, jane); me.Username != "jdoe" || me.IsAdmin || me.Phone != "555-0111" {
+		t.Fatalf("me = %+v, want username and role untouched and the phone saved", me)
+	}
+}
+
+func TestLDAPBoundUserCannotEditDisplayNameEmailDepartmentButCanEditPhone(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addEmma(env)
+	emma := env.Client()
+	loginLDAP(emma, "elarsen", "ldap-pw").ExpectStatus(http.StatusOK)
+
+	for _, field := range []string{"displayName", "email", "department"} {
+		patchMe(emma, map[string]any{field: "Something Else"}).ExpectError(http.StatusUnprocessableEntity, field, "ldapManaged")
+	}
+	// All three at once are all reported.
+	res := patchMe(emma, map[string]any{"displayName": "A", "email": "a@corp.example", "department": "B"})
+	res.ExpectError(http.StatusUnprocessableEntity, "displayName", "ldapManaged")
+	res.ExpectError(http.StatusUnprocessableEntity, "email", "ldapManaged")
+	res.ExpectError(http.StatusUnprocessableEntity, "department", "ldapManaged")
+
+	// Sending the directory's own values back (a form that submits every field) is fine, and so is the phone.
+	patchMe(emma, map[string]any{
+		"displayName": "Emma Larsen", "email": "emma.larsen@corp.example", "department": "Payments Platform", "phone": "555-0142",
+	}).ExpectStatus(http.StatusOK)
+	me := getMe(t, emma)
+	if me.DisplayName != "Emma Larsen" || me.Email != "emma.larsen@corp.example" || me.Department != "Payments Platform" || me.Phone != "555-0142" {
+		t.Fatalf("me = %+v", me)
+	}
+}
+
 func TestSettingsShowEachLoginIdentityWithItsTypeLoginNameBindingTimeAndSource(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
