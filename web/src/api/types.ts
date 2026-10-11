@@ -60,6 +60,15 @@ export type CreateApplicationInput = {
   pes: string[];
 };
 
+/** PATCH /api/applications/{key} (Owners only). Fields left out are unchanged; the key and the repository cannot be edited. */
+export type UpdateApplicationInput = Partial<Pick<CreateApplicationInput, 'name' | 'description' | 'mainBranch'>>;
+
+/** PUT /api/applications/{key}/members (administrators and Owners): replaces both lists, user IDs. */
+export type UpdateMembersInput = { owners: string[]; pes: string[] };
+
+/** An enabled user as offered by the Owner/PE pickers (GET /api/assignable-users). */
+export type AssignableUser = { id: string; username: string; displayName: string };
+
 /** GET /api/applications/{key}/lines. The mainline has no status and no name of its own. */
 export type Line = { id: string; isMain: boolean; name: string; branch: string };
 
