@@ -2,6 +2,10 @@
 // Placeholders are filled by web/src/history/render.ts. User input is shown verbatim.
 export default {
   'history.event.appCreated': 'Created application, Owner: {owners}',
+  'history.event.appInfoChanged': 'Changed application info: {fields}',
+  'history.event.deployInfoChanged': 'Changed deployment info',
+  'history.event.memberAdded': 'Added {role}: {user}',
+  'history.event.memberRemoved': 'Removed {role}: {user}',
   'history.event.versionRegistered': 'Registered version {number} on {line}',
   'history.event.lineForked': 'Forked maintenance line {line} from version {number}',
   'history.event.unknown': 'Unknown event ({type})',

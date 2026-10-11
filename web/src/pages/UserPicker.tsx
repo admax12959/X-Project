@@ -1,8 +1,9 @@
 // Multi-select of users for the Owner / PE fields: filter box + checkbox list.
 import { useState, type ReactNode } from 'react';
-import type { AdminUser } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
 import { Field, Input } from '../ui/controls.tsx';
+
+export type PickerUser = { id: string; username: string; displayName: string; disabled?: boolean };
 
 export function UserPicker({
   label,
@@ -14,8 +15,8 @@ export function UserPicker({
 }: {
   label: ReactNode;
   hint: ReactNode;
-  /** Already limited to enabled users by the caller. */
-  users: AdminUser[];
+  /** Enabled users, plus (when editing) people who are already selected but have been disabled: those carry `disabled`. */
+  users: PickerUser[];
   selected: string[];
   onChange: (ids: string[]) => void;
   error?: string;
@@ -43,6 +44,7 @@ export function UserPicker({
                 <input type="checkbox" checked={selected.includes(u.id)} onChange={() => toggle(u.id)} />
                 <span>{u.displayName}</span>
                 <span className="font-mono text-[12.5px] text-text-3">{u.username}</span>
+                {u.disabled && <span className="text-text-3">{t('apps.disabledSuffix')}</span>}
               </label>
             </li>
           ))}

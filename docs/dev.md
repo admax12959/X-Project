@@ -122,7 +122,7 @@ Every non-2xx body has this shape:
 
 | Domain kind | HTTP | Example codes |
 |---|---|---|
-| `KindValidation` | 422 | `required`, `invalid`, later `keyTaken`, `branchTaken`, `soleOwner`… |
+| `KindValidation` | 422 | `required`, `invalid`, `keyTaken`, `soleOwner`, later `branchTaken`… |
 | `KindUnauthenticated` | 401 | `unauthenticated`, `invalidCredentials` (failed login) |
 | `KindForbidden` | 403 | `forbidden` |
 | `KindNotFound` | 404 | `notFound` |
@@ -154,6 +154,26 @@ Codes added with applications (#6): `keyTaken` (field `key`), `userUnavailable` 
 - Search (`ListApplications(query)`) matches key, name, repository path and Owner display name / username, case-insensitively, with `%` and `_` taken literally.
 - `Service.ListLines` returns every line with its fork facts (see "Lines and lineage (#9)").
 
+### Maintaining applications (#7)
+
+Code: `internal/domain/application_maintain.go`. Permission matrix (checked in the domain, 403 `forbidden`; a plain user, a PE or an administrator who is not listed gets 403 on rows they may not use; roles add up, so an administrator who is also Owner may do the Owner rows):
+
+| Route | Who | Body |
+|---|---|---|
+| `PATCH /api/applications/{key}` | Owner | `name`, `description`, `mainBranch` (all optional). `key` and `repo` are not in the input type: sending them changes nothing. |
+| `PUT /api/applications/{key}/members` | administrator (ADR-0003) or Owner | `owners` and `pes`, both required (`pes` may be `[]`) |
+| `PUT /api/applications/{key}/deploy-info` | Owner or PE | `deployInfo` (free text, required key, may be empty, max 20000 characters) |
+| `DELETE /api/applications/{key}` | administrator | `{"confirmKey": "<key>"}`, 204. 403 is decided before 404, 404 before the 422 `confirmKey` (`required` / `invalid`). |
+| `GET /api/assignable-users` | any session | `{items: [{id, username, displayName}]}`, enabled users only: the Owner/PE pickers (Owners cannot call `/api/users`) |
+
+- Each edit runs in one `InTx` and locks the application row (`LockApplication`) before diffing, so concurrent edits do not interleave. An edit that changes nothing writes no event. A request that has any invalid field changes nothing.
+- Members: the Owner list can never be empty (`owners` `required`). Only people who are **newly added** must be existing enabled users (`userUnavailable`, params `{userId}`); someone already on the list may stay even if disabled since, and can be removed but not re-added. Duplicates are dropped, a pure reordering is stored without an event.
+- Events written (all with the real actor): `appInfoChanged` (`changes: {name|description|mainBranch: {from, to}}`), `deployInfoChanged` (no params), `memberAdded` / `memberRemoved` (`role: "owner"|"pe"`, `user: userParam`; one event per person, removals before additions). The user is its own nested value because `enrich` only expands objects that are exactly `{userId}`.
+- Sole Owner (`DisableUser`): a user cannot be disabled while some application would be left without an **enabled** Owner other than them. 422 `soleOwner`, no field, params `{applications: [{key, name}]}`. So `[U, V]` with V already disabled still blocks U. The check runs only when the status actually changes (re-disabling is harmless) and takes locks in the order user row, then the applications (by key), then shared locks on the co-Owners' user rows (`LockOwnedApplications`); if two disables race, one fails with a deadlock rather than leaving an application without an Owner.
+- Deleting is `DELETE FROM applications` and nothing else: lines, members and change events go through `ON DELETE CASCADE`. **A table that references an application or a line (versions, ...) must declare `ON DELETE CASCADE` on that foreign key** so delete keeps working.
+- Changing `mainBranch` updates the mainline row of `app_lines` only. A branch that a maintenance line already has is `422 branchTaken` on field `mainBranch` (params `{line}`), and nothing of the edit is saved.
+- Frontend: `ApplicationDialogs.tsx` holds the four dialogs; `useSetApplication()` (from `ApplicationPage`) replaces the loaded application after an edit. The disable error `soleOwner` is rendered by `UsersPage` as a list of links to the blocking applications.
+
 ### Versions (#8)
 
 - Routes: `POST /api/applications/{key}/lines/{lineId}/versions` (register on one line) and `GET /api/applications/{key}/versions` (all lines, no pagination, no server-side filters: the Versions tab filters by line and tag/commit in the browser). Registering needs an Owner of that application: administrators and PEs get 403. Any session may read. Check order: application (404), Owner (403), fields (422), line (404, also for a line of another application).
@@ -178,11 +198,19 @@ Code: `internal/domain/lines.go`, `internal/store/mysqlstore/lines.go`, `interna
 - Tests: `test/api/lineage_test.go` has `seedPaymentsCore(t)` (the prototype's payments-core: four levels, one version forked into two lines, a line without versions, irregular numbers, all three statuses) returning branch to line ID and number to version ID maps. Reuse it. **`env.SeedLineStatus(appKey, branch, status)` is test-only and bypasses the state machine** (no history event, no status time). Once #10 exists, test lifecycle behaviour through its API and keep the helper for fixtures only.
 - Frontend: the selected line is in the URL (`/apps/:key/lineage?line=<id>`). The panel sits beside the tree inside the tab, not in the shell, and the tree drops the Source version column while a line is selected, so it fits at 1280px without scrolling sideways (the prototype's known issue). `LineStatusLabel` is the one place that renders a status (icon + text, no pills). Add columns in `ApplicationLineage` (`template` grid string and the row cells).
 
+### Global versions (#13)
+
+- `GET /api/versions?app=<key>&q=<text>&page=<n>&pageSize=<n>`: any session. Versions of all applications, ordered like the per-application list (`releasedAt` desc, then registration desc, never by number). Domain: `Service.ListAllVersions` in `internal/domain/versions_global.go`; store: `internal/store/mysqlstore/versions_global.go`.
+- Response: `{items, total, page, pageSize}`. `total` counts every match, not just the page. Each item is the version JSON of #8 plus `application: {key, name}`. This is the paginated-list shape; the other collections are still plain `{items}`.
+- `app` is an exact application key; an unknown key gives an empty page (not 404). `q` is a case-insensitive substring of the version number (trimmed, `%` and `_` literal); it is the only searched field. They combine with AND.
+- `page` starts at 1 (default 1), `pageSize` is 1-100 (default 20). Anything else is `422 invalid` on `page` / `pageSize`. A page past the end is `200` with no items.
+- Frontend: `/versions` (`pages/VersionsPage.tsx`), sidebar entry for every user. Filters and page are kept in the URL (`?app=&q=&page=`). Links to an application or a line go through `ui/links.ts` (`appPath`, `linePath`); `linePath` points at the Lineage tab with the line selected (`?line=<id>`, #9).
+
 ### Change history
 
 The append-only log of key operations (`change_events`). An event is a type plus structured params. The server never produces sentences; the frontend renders them in the current UI language. User input inside params (names, reasons, branch names...) is stored and displayed verbatim.
 
-- The repository port only has `AppendChangeEvent` and `ListChangeEvents`: no update, no delete (applications deleting cascades in the DB, #9).
+- The repository port only has `AppendChangeEvent` and `ListChangeEvents`: no update, no delete (deleting an application cascades in the DB, #7).
 - Write events through `Service.recordEvent(ctx, tx, applicationID, actor, ev)` inside the same `InTx` as the change they describe. Events are built by one constructor per type in `internal/domain/history.go`.
 - A reference to a user in params is `userParam(id)` (`{"userId": "12"}`), never a name. When the history is read, every such object is expanded to `{userId, username, displayName}` with the user's current name (users are never deleted, ADR-0004), so a rename shows up in old events. Any other value is stored as given.
 - Events are listed newest first. The actor is its own column and is returned as `actor: {id, username, displayName}`.

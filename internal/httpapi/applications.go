@@ -1,6 +1,9 @@
 package httpapi
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -119,6 +122,96 @@ func (s *server) createApplication(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) getApplication(w http.ResponseWriter, r *http.Request) {
 	a, err := s.svc.GetApplication(r.Context(), actorOf(r), r.PathValue("key"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toApplicationJSON(a))
+}
+
+// updateApplication serves PATCH /api/applications/{key}: basic info, Owners only.
+// Unknown fields (key, repo...) are ignored: they have no edit path.
+func (s *server) updateApplication(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+		MainBranch  *string `json:"mainBranch"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	a, err := s.svc.UpdateApplication(r.Context(), actorOf(r), r.PathValue("key"), domain.UpdateApplicationInput{
+		Name: body.Name, Description: body.Description, MainBranch: body.MainBranch,
+	})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toApplicationJSON(a))
+}
+
+// listAssignableUsers serves GET /api/assignable-users: enabled users for the Owner/PE pickers.
+func (s *server) listAssignableUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := s.svc.ListAssignableUsers(r.Context(), actorOf(r))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	type userOption struct {
+		ID          string `json:"id"`
+		Username    string `json:"username"`
+		DisplayName string `json:"displayName"`
+	}
+	out := listJSON[userOption]{Items: make([]userOption, 0, len(users))}
+	for _, u := range users {
+		out.Items = append(out.Items, userOption{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// deleteApplication serves DELETE /api/applications/{key} with {"confirmKey": "<key>"}.
+// A missing body counts as an empty confirmation (the domain answers 403 / 404 / 422).
+func (s *server) deleteApplication(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ConfirmKey string `json:"confirmKey"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		writeCode(w, http.StatusBadRequest, domain.CodeBadRequest)
+		return
+	}
+	if err := s.svc.DeleteApplication(r.Context(), actorOf(r), r.PathValue("key"), body.ConfirmKey); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// updateMembers serves PUT /api/applications/{key}/members: administrators and Owners.
+func (s *server) updateMembers(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Owners *[]string `json:"owners"`
+		PEs    *[]string `json:"pes"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	a, err := s.svc.UpdateMembers(r.Context(), actorOf(r), r.PathValue("key"), domain.UpdateMembersInput{Owners: body.Owners, PEs: body.PEs})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toApplicationJSON(a))
+}
+
+// updateDeployInfo serves PUT /api/applications/{key}/deploy-info: Owners and PEs.
+func (s *server) updateDeployInfo(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		DeployInfo *string `json:"deployInfo"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	a, err := s.svc.UpdateDeployInfo(r.Context(), actorOf(r), r.PathValue("key"), body.DeployInfo)
 	if err != nil {
 		writeError(w, r, err)
 		return

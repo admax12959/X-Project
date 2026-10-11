@@ -129,6 +129,31 @@ func TestAGitBranchIsUniqueInTheApplicationMainlineBranchIncluded(t *testing.T) 
 	}
 }
 
+func TestRenamingTheMainlineBranchToAnExistingLineBranchIsBranchTaken(t *testing.T) {
+	t.Parallel()
+	f := newVersionFixture(t)
+	src := f.registerMain(t, "2.1.0", "2025-02-18")
+	var line lineDetailBody
+	f.fork(src.ID, nil).ExpectStatus(http.StatusCreated).JSON(&line)
+
+	e := f.elarsen.Do(http.MethodPatch, "/api/applications/payments-core", map[string]any{"mainBranch": "cust/northwind", "name": "Renamed"}).
+		ExpectError(http.StatusUnprocessableEntity, "mainBranch", "branchTaken")
+	conflict, _ := e.Params["line"].(map[string]any)
+	if conflict["id"] != line.ID || conflict["name"] != "Northwind customization" || conflict["branch"] != "cust/northwind" {
+		t.Fatalf("params = %v", e.Params)
+	}
+	// The rejected edit changed nothing, the name included.
+	var app appBody
+	f.elarsen.Get("/api/applications/payments-core").ExpectStatus(http.StatusOK).JSON(&app)
+	if app.MainBranch != "develop" || app.Name != "Payments Core" {
+		t.Fatalf("application = %+v", app)
+	}
+
+	// A free branch name still works, and the mainline's old branch name is then free for a fork.
+	f.elarsen.Do(http.MethodPatch, "/api/applications/payments-core", map[string]any{"mainBranch": "main"}).ExpectStatus(http.StatusOK)
+	f.fork(src.ID, map[string]any{"name": "Old develop", "branch": "develop"}).ExpectStatus(http.StatusCreated)
+}
+
 func TestTheSourceVersionMustBelongToTheApplication(t *testing.T) {
 	t.Parallel()
 	f := newVersionFixture(t)

@@ -64,6 +64,15 @@ export type CreateApplicationInput = {
   pes: string[];
 };
 
+/** PATCH /api/applications/{key} (Owners only). Fields left out are unchanged; the key and the repository cannot be edited. */
+export type UpdateApplicationInput = Partial<Pick<CreateApplicationInput, 'name' | 'description' | 'mainBranch'>>;
+
+/** PUT /api/applications/{key}/members (administrators and Owners): replaces both lists, user IDs. */
+export type UpdateMembersInput = { owners: string[]; pes: string[] };
+
+/** An enabled user as offered by the Owner/PE pickers (GET /api/assignable-users). */
+export type AssignableUser = { id: string; username: string; displayName: string };
+
 /** A line as referenced from other records (a version's line, a source version's line). The mainline has no name of its own. */
 export type Line = { id: string; isMain: boolean; name: string; branch: string };
 
@@ -107,6 +116,12 @@ export type Version = {
   note: string;
   createdAt: string;
 };
+
+/** GET /api/versions: a version plus the application it belongs to. */
+export type GlobalVersion = Version & { application: { key: string; name: string } };
+
+/** One page of the global version list; total counts all matches, not just this page. */
+export type VersionPage = List<GlobalVersion> & { total: number; page: number; pageSize: number };
 
 export type RegisterVersionInput = { number: string; ref: { kind: RefKind; value: string }; releasedAt: string; note: string };
 

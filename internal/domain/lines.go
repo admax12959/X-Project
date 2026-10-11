@@ -136,7 +136,7 @@ func (s *Service) ForkLine(ctx context.Context, actor Actor, appKey string, in F
 			PlannedEnd: plannedEnd, Note: note, ForkedAt: now,
 		})
 		if errors.Is(err, ErrBranchTaken) {
-			return s.branchTakenError(ctx, tx, app.ID, branch)
+			return s.branchTakenError(ctx, tx, app.ID, "branch", branch)
 		}
 		if err != nil {
 			return err
@@ -151,8 +151,9 @@ func (s *Service) ForkLine(ctx context.Context, actor Actor, appKey string, in F
 	return out, err
 }
 
-// branchTakenError is branchTaken with the line that holds the branch.
-func (s *Service) branchTakenError(ctx context.Context, tx Repository, applicationID int64, branch string) error {
+// branchTakenError is branchTaken on the given field (branch, or mainBranch when the
+// mainline is renamed) with the line that holds the branch.
+func (s *Service) branchTakenError(ctx context.Context, tx Repository, applicationID int64, field, branch string) error {
 	other, found, err := tx.FindLineByBranch(ctx, applicationID, branch)
 	if err != nil {
 		return err
@@ -161,7 +162,7 @@ func (s *Service) branchTakenError(ctx context.Context, tx Repository, applicati
 	if found {
 		params = map[string]any{"line": lineParam(other)}
 	}
-	return Validation(Invalid("branch", CodeBranchTaken, params))
+	return Validation(Invalid(field, CodeBranchTaken, params))
 }
 
 // LineageNode is one line of the lineage tree with what the tree table shows next

@@ -1,9 +1,15 @@
-// Overview tab: essentials, Owners/PEs and deployment info. #7 adds the maintenance line summary.
+// Overview tab: essentials, Owners/PEs and deployment info, with the maintenance actions the
+// current user may use (the server enforces the same rules: spec #2 permission matrix).
+// #8 adds the maintenance line summary.
+import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import type { Member } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
-import { Container, KV } from '../ui/controls.tsx';
+import { useCurrentUser } from '../session/session.tsx';
+import { Button, Container, KV } from '../ui/controls.tsx';
 import { PLATFORM_LABEL } from '../ui/labels.ts';
-import { useApplication } from './ApplicationPage.tsx';
+import { DeleteApplicationDialog, EditApplicationDialog, EditDeployInfoDialog, EditMembersDialog } from './ApplicationDialogs.tsx';
+import { useApplication, useSetApplication } from './ApplicationPage.tsx';
 
 function People({ list }: { list: Member[] }) {
   const { t } = useT();
@@ -20,13 +26,52 @@ function People({ list }: { list: Member[] }) {
   );
 }
 
+type Dialog = null | 'info' | 'members' | 'deploy' | 'delete';
+
 export function ApplicationOverview() {
   const { t } = useT();
   const app = useApplication();
+  const setApp = useSetApplication();
+  const me = useCurrentUser();
+  const navigate = useNavigate();
+  const [dialog, setDialog] = useState<Dialog>(null);
   const mono = 'font-mono text-[12.5px]';
+
+  const isOwner = app.owners.some((m) => m.id === me.id);
+  const isPe = app.pes.some((m) => m.id === me.id);
+  const canEditInfo = isOwner;
+  const canEditMembers = isOwner || me.isAdmin; // ADR-0003
+  const canEditDeploy = isOwner || isPe;
+  const canDelete = me.isAdmin;
+  const saved = (a: typeof app) => {
+    setApp(a);
+    setDialog(null);
+  };
+
   return (
     <div className="space-y-5">
-      <Container title={t('term.essentials')}>
+      <Container
+        title={t('term.essentials')}
+        actions={
+          <>
+            {canEditInfo && (
+              <Button small onClick={() => setDialog('info')}>
+                {t('apps.edit')}
+              </Button>
+            )}
+            {canEditMembers && (
+              <Button small onClick={() => setDialog('members')}>
+                {t('apps.editMembers')}
+              </Button>
+            )}
+            {canDelete && (
+              <Button small kind="danger" onClick={() => setDialog('delete')}>
+                {t('apps.delete')}
+              </Button>
+            )}
+          </>
+        }
+      >
         <KV
           rows={[
             { label: t('term.applicationKey'), value: <span className={mono}>{app.key}</span> },
@@ -47,9 +92,23 @@ export function ApplicationOverview() {
           ]}
         />
       </Container>
-      <Container title={t('term.deploymentInfo')}>
+      <Container
+        title={t('term.deploymentInfo')}
+        actions={
+          canEditDeploy && (
+            <Button small onClick={() => setDialog('deploy')}>
+              {t('apps.edit')}
+            </Button>
+          )
+        }
+      >
         {app.deployInfo ? <p className="whitespace-pre-wrap">{app.deployInfo}</p> : <p className="text-text-3">{t('apps.overview.noDeployInfo')}</p>}
       </Container>
+
+      {dialog === 'info' && <EditApplicationDialog app={app} onClose={() => setDialog(null)} onSaved={saved} />}
+      {dialog === 'members' && <EditMembersDialog app={app} onClose={() => setDialog(null)} onSaved={saved} />}
+      {dialog === 'deploy' && <EditDeployInfoDialog app={app} onClose={() => setDialog(null)} onSaved={saved} />}
+      {dialog === 'delete' && <DeleteApplicationDialog app={app} onClose={() => setDialog(null)} onDeleted={() => navigate('/')} />}
     </div>
   );
 }
