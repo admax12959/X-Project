@@ -8,8 +8,10 @@
 // version" column is dropped (the panel shows it), and the other columns shrink, so the tree
 // fits at 1280px without scrolling sideways.
 //
-// To extend the tree (the graph column of #11): add a column to COLUMNS / `template` and a cell
-// in Row; `rows` is the depth-first list of visible nodes.
+// Graph column (#11): an optional first column that draws the forks (layout in lineageGraph.ts,
+// drawing in LineageGraphCell.tsx). Off by default; the choice is kept in localStorage.
+// To extend the tree: add a column to `template` and a cell in each row; `rows` is the
+// depth-first list of visible nodes.
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../api/client.ts';
@@ -23,6 +25,30 @@ import { useApplication } from './ApplicationPage.tsx';
 import { ForkDialog } from './ForkDialog.tsx';
 import { LinePanel } from './LinePanel.tsx';
 import { RegisterVersionDialog } from './RegisterVersionDialog.tsx';
+import { graphLanes, layoutGraph } from './lineageGraph.ts';
+import { graphWidth, LineageGraphCell } from './LineageGraphCell.tsx';
+
+const GRAPH_KEY = 'xp.lineage.graph';
+
+/** The graph switch, remembered across visits. Storage may be unavailable: then it is just off. */
+function useGraphSwitch(): [boolean, (on: boolean) => void] {
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem(GRAPH_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const set = (v: boolean) => {
+    setOn(v);
+    try {
+      localStorage.setItem(GRAPH_KEY, v ? '1' : '0');
+    } catch {
+      // not remembered; the switch still works for this visit
+    }
+  };
+  return [on, set];
+}
 
 type Data = { root: LineageNode; lines: LineDetail[]; versions: Version[] };
 type Load = { status: 'loading' } | { status: 'error'; error: unknown } | ({ status: 'ok' } & Data);
@@ -51,6 +77,7 @@ export function ApplicationLineage() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [forkFrom, setForkFrom] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
+  const [showGraph, setShowGraph] = useGraphSwitch();
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const reload = useCallback(() => {
@@ -68,6 +95,7 @@ export function ApplicationLineage() {
   const isOwner = app.owners.some((o) => o.id === user.id); // display only; the server decides
   const data = load.status === 'ok' ? load : null;
   const rows = useMemo(() => (data ? visibleRows(data.root, collapsed) : []), [data, collapsed]);
+  const graph = useMemo(() => (data && showGraph ? { rows: layoutGraph(rows), lanes: graphLanes(data.root) } : null), [data, rows, showGraph]);
   const selectedId = params.get('line') ?? '';
   const selected = data?.lines.find((l) => l.id === selectedId);
 
@@ -82,9 +110,10 @@ export function ApplicationLineage() {
 
   // 5 columns; the source version is dropped while the panel is open.
   const withSource = !selected;
-  const template = withSource
+  const columns = withSource
     ? 'minmax(160px,2fr) 100px minmax(110px,1.5fr) minmax(80px,1fr) minmax(80px,1fr)'
     : 'minmax(130px,2fr) 96px minmax(100px,1.5fr) minmax(70px,1fr)';
+  const template = graph ? `${graphWidth(graph.lanes)}px ${columns}` : columns;
   const cell = 'min-w-0 truncate px-2.5';
   const headCell = `${cell} whitespace-nowrap text-[13px] font-semibold`;
 
@@ -142,6 +171,18 @@ export function ApplicationLineage() {
           <h2 className="text-base font-bold">{t('lineage.tree')}</h2>
           <span className="text-[13px] text-text-3">{t('lineage.count', { count: load.lines.length })}</span>
           <span className="flex-1" />
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showGraph}
+            onClick={() => setShowGraph(!showGraph)}
+            className="inline-flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-text-2 hover:bg-subtle"
+          >
+            <span aria-hidden className={`relative inline-block h-4 w-7 rounded-full border ${showGraph ? 'border-accent bg-accent' : 'border-text-3 bg-white'}`}>
+              <span className={`absolute top-px h-3 w-3 rounded-full ${showGraph ? 'left-[13px] bg-white' : 'left-px bg-text-3'}`} />
+            </span>
+            {t('lineage.graph')}
+          </button>
           <Button small onClick={() => setCollapsed(new Set())}>
             {t('lineage.expandAll')}
           </Button>
@@ -151,6 +192,11 @@ export function ApplicationLineage() {
         </div>
         <div role="treegrid" aria-label={t('lineage.tree')} className="text-sm">
           <div role="row" className="grid h-10 items-center border-b border-line bg-thead" style={{ gridTemplateColumns: template }}>
+            {graph && (
+              <div role="columnheader">
+                <span className="sr-only">{t('lineage.graph')}</span>
+              </div>
+            )}
             <div role="columnheader" className={headCell}>
               {t('lineage.col.name')}
             </div>
@@ -190,6 +236,11 @@ export function ApplicationLineage() {
                 className={`grid h-10 cursor-pointer items-center border-b border-sep ${isSelected ? 'bg-sel' : 'hover:bg-subtle'} ${node.status === 'retired' ? 'text-text-3' : ''}`}
                 style={{ gridTemplateColumns: template }}
               >
+                {graph && (
+                  <div role="gridcell" className="relative self-stretch">
+                    <LineageGraphCell row={graph.rows[i]} lanes={graph.lanes} selected={isSelected} />
+                  </div>
+                )}
                 <div role="gridcell" className={`${cell} flex items-center`} style={{ paddingLeft: 10 + depth * 20 }}>
                   {hasChildren ? (
                     <button

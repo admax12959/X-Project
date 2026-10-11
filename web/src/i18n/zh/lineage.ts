@@ -60,4 +60,6 @@ export default {
   'lineage.fork.saving': '分叉中…',
   'lineage.fork.cancel': '取消',
   'lineage.fork.newLine': '新的维护线状态为活跃。',
+  // Graph column (#11).
+  'lineage.graph': '图示',
 };
