@@ -8,6 +8,7 @@ import { renderEvent } from '../history/render.ts';
 import { useT } from '../i18n/index.ts';
 import { Empty } from '../ui/controls.tsx';
 import { useApplication } from './ApplicationPage.tsx';
+import { th, tdTop as td } from '../ui/table.ts';
 
 type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; items: ChangeEvent[] };
 
@@ -29,8 +30,6 @@ export function ApplicationHistory() {
 
   const items = load.status === 'ok' ? load.items : [];
   const when = new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', { dateStyle: 'medium', timeStyle: 'short' });
-  const th = 'h-10 whitespace-nowrap border-b border-line bg-thead px-3 text-left text-[13px] font-semibold';
-  const td = 'border-b border-sep px-3 py-2 align-top';
 
   return (
     <div className="overflow-x-auto rounded border border-line bg-white">

@@ -31,12 +31,15 @@ type UserRepository interface {
 	// Returns ErrUsernameTaken on a conflict.
 	RenameLocalLogin(ctx context.Context, id UserID, loginName string) error
 	SetUserStatus(ctx context.Context, id UserID, status UserStatus, at time.Time) error
+	// ReadUsersLocked reads the given users (those that exist) under a shared lock, taken
+	// in ID order, so that none of them can be disabled until the transaction ends.
+	ReadUsersLocked(ctx context.Context, ids []UserID) (map[UserID]User, error)
 }
 
 // requireAdmin is the permission check for every user-management operation.
 func requireAdmin(actor Actor) error {
 	if !actor.User.IsAdmin {
-		return newKind(KindForbidden, CodeForbidden)
+		return forbidden()
 	}
 	return nil
 }
@@ -150,34 +153,48 @@ type profileEdit struct {
 	Department  *string
 }
 
-// applyProfileEdit applies e to u and validates the result, reporting problems on c.
-// For LDAP-bound users the directory owns display name, email and department (they are
-// synced at login), so a different value is refused with ldapManaged; sending the
-// current value is fine. Phone is always editable. Used for both the administrator's
+// applyProfileEdit applies e to u and validates the fields that are being changed,
+// reporting problems on c. For LDAP-bound users the directory owns display name, email
+// and department (they are synced at login, without local validation), so a different
+// value is refused with ldapManaged and an unchanged one is neither applied nor
+// validated: a directory value that does not satisfy the local rules must not block the
+// fields the user does own. Phone is always editable. Used for both the administrator's
 // edit of a user and a user's edit of themselves.
 func applyProfileEdit(c *Collector, u User, ldapBound bool, e profileEdit) User {
 	if v, ok := trimmed(e.DisplayName); ok {
-		if ldapBound && v != u.DisplayName {
-			c.Add("displayName", CodeLdapManaged, nil)
+		if ldapBound {
+			if v != u.DisplayName {
+				c.Add("displayName", CodeLdapManaged, nil)
+			}
+		} else {
+			checkDisplayName(c, v)
+			u.DisplayName = v
 		}
-		u.DisplayName = v
 	}
 	if v, ok := trimmed(e.Email); ok {
-		if ldapBound && v != u.Email {
-			c.Add("email", CodeLdapManaged, nil)
+		if ldapBound {
+			if v != u.Email {
+				c.Add("email", CodeLdapManaged, nil)
+			}
+		} else {
+			checkEmail(c, v)
+			u.Email = v
 		}
-		u.Email = v
 	}
 	if v, ok := trimmed(e.Phone); ok {
+		checkLength(c, "phone", v, maxPhoneLength)
 		u.Phone = v
 	}
 	if v, ok := trimmed(e.Department); ok {
-		if ldapBound && v != u.Department {
-			c.Add("department", CodeLdapManaged, nil)
+		if ldapBound {
+			if v != u.Department {
+				c.Add("department", CodeLdapManaged, nil)
+			}
+		} else {
+			checkLength(c, "department", v, maxNameLength)
+			u.Department = v
 		}
-		u.Department = v
 	}
-	checkProfile(c, u.DisplayName, u.Email, u.Phone, u.Department)
 	return u
 }
 
@@ -187,6 +204,21 @@ func applyProfileEdit(c *Collector, u User, ldapBound bool, e profileEdit) User 
 func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in UpdateUserInput) (UserWithIdentities, error) {
 	if err := requireAdmin(actor); err != nil {
 		return UserWithIdentities{}, err
+	}
+	// ADR-0004: a new local login name must not exist in the directory. Like at creation,
+	// the directory is asked before the transaction (a network call) and an unreachable
+	// directory fails the rename; the check is never skipped. The transaction below
+	// re-reads the user under its lock and makes the final decision about the rename.
+	if v, ok := trimmed(in.Username); ok && usernamePattern.MatchString(v) {
+		pre, found, err := s.repo.GetUserWithIdentities(ctx, id)
+		if err != nil {
+			return UserWithIdentities{}, err
+		}
+		if found && v != pre.User.Username && !pre.hasIdentity(IdentityLDAP) {
+			if err := s.CheckUsernameFreeInDirectory(ctx, "username", v); err != nil {
+				return UserWithIdentities{}, err
+			}
+		}
 	}
 	var result UserWithIdentities
 	err := s.repo.InTx(ctx, func(tx Repository) error {
@@ -333,21 +365,31 @@ func checkLength(c *Collector, field, value string, max int) {
 	}
 }
 
-// checkProfile validates display name (required), email (optional, shaped like
-// an address), phone and department. Values are already trimmed.
-func checkProfile(c *Collector, displayName, email, phone, department string) {
+func checkDisplayName(c *Collector, displayName string) {
 	if displayName == "" {
 		c.Add("displayName", CodeRequired, nil)
 	} else {
 		checkLength(c, "displayName", displayName, maxNameLength)
 	}
-	if email != "" {
-		if !emailPattern.MatchString(email) {
-			c.Add("email", CodeInvalid, nil)
-		} else {
-			checkLength(c, "email", email, maxEmailLength)
-		}
+}
+
+// checkEmail: optional, shaped like an address.
+func checkEmail(c *Collector, email string) {
+	if email == "" {
+		return
 	}
+	if !emailPattern.MatchString(email) {
+		c.Add("email", CodeInvalid, nil)
+	} else {
+		checkLength(c, "email", email, maxEmailLength)
+	}
+}
+
+// checkProfile validates a whole profile at creation: display name (required), email
+// (optional, shaped like an address), phone and department. Values are already trimmed.
+func checkProfile(c *Collector, displayName, email, phone, department string) {
+	checkDisplayName(c, displayName)
+	checkEmail(c, email)
 	checkLength(c, "phone", phone, maxPhoneLength)
 	checkLength(c, "department", department, maxNameLength)
 }

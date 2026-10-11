@@ -150,9 +150,15 @@ func (c *Client) Do(method, path string, body any) *Response {
 	return &Response{t: c.t, Status: res.StatusCode, Header: res.Header, Cookies: res.Cookies(), Body: b}
 }
 
-func (c *Client) Get(path string) *Response            { c.t.Helper(); return c.Do(http.MethodGet, path, nil) }
-func (c *Client) Post(path string, body any) *Response { c.t.Helper(); return c.Do(http.MethodPost, path, body) }
-func (c *Client) Delete(path string) *Response         { c.t.Helper(); return c.Do(http.MethodDelete, path, nil) }
+func (c *Client) Get(path string) *Response { c.t.Helper(); return c.Do(http.MethodGet, path, nil) }
+func (c *Client) Post(path string, body any) *Response {
+	c.t.Helper()
+	return c.Do(http.MethodPost, path, body)
+}
+func (c *Client) Delete(path string) *Response {
+	c.t.Helper()
+	return c.Do(http.MethodDelete, path, nil)
+}
 
 // LoginLocal logs in with a local identity.
 func (c *Client) LoginLocal(username, password string) *Response {

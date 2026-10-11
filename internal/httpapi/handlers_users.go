@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/admax12959/X-Project/internal/domain"
 )
@@ -24,10 +23,10 @@ type adminUserJSON struct {
 }
 
 type identityJSON struct {
-	Kind      string    `json:"kind"`
-	LoginName string    `json:"loginName"`
-	BoundAt   time.Time `json:"boundAt"`
-	BoundVia  string    `json:"boundVia"`
+	Kind      string `json:"kind"`
+	LoginName string `json:"loginName"`
+	BoundAt   string `json:"boundAt"`
+	BoundVia  string `json:"boundVia"`
 }
 
 func toAdminUserJSON(v domain.UserWithIdentities) adminUserJSON {
@@ -39,7 +38,7 @@ func toAdminUserJSON(v domain.UserWithIdentities) adminUserJSON {
 	}
 	for _, i := range v.Identities {
 		out.Identities = append(out.Identities, identityJSON{
-			Kind: string(i.Kind), LoginName: i.LoginName, BoundAt: i.BoundAt, BoundVia: string(i.BoundVia),
+			Kind: string(i.Kind), LoginName: i.LoginName, BoundAt: formatTime(i.BoundAt), BoundVia: string(i.BoundVia),
 		})
 	}
 	return out

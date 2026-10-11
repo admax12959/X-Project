@@ -14,6 +14,7 @@ import { repoLabel } from '../ui/labels.ts';
 import { appPath } from '../ui/links.ts';
 import { CreateApplicationDialog } from './CreateApplicationDialog.tsx';
 import { RecentActivity } from './RecentActivity.tsx';
+import { th, td } from '../ui/table.ts';
 
 // Errors are kept raw and rendered at render time, so they follow a language switch.
 type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; items: ApplicationListItem[] };
@@ -61,8 +62,6 @@ export function ApplicationsPage() {
   }, [query, mine]);
 
   const items = load.status === 'ok' ? load.items : [];
-  const th = 'h-10 whitespace-nowrap border-b border-line bg-thead px-3 text-left text-[13px] font-semibold';
-  const td = 'h-10 border-b border-sep px-3';
 
   return (
     <>
@@ -112,7 +111,7 @@ export function ApplicationsPage() {
           </thead>
           <tbody>
             {items.map((a) => (
-              <tr key={a.key} className="hover:bg-[#fafbfc]">
+              <tr key={a.key} className="hover:bg-hover">
                 <td className={td}>
                   <Link to={appPath(a.key)} className="font-semibold text-accent hover:underline">
                     {a.name}

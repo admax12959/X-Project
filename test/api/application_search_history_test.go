@@ -25,7 +25,7 @@ func TestApplicationListSearch(t *testing.T) {
 	other("rate-b", "Rate 1000 done a_b", "misc/rates")
 	other("rate-c", "Rate 1000 done axb", "misc/rates")
 
-	reader := f.env.SeedUserClient("reader", "reader-password-1")
+	reader := plainUserClient(t, f.env, "reader")
 	search := func(q string) []string {
 		t.Helper()
 		var list appListBody
@@ -72,6 +72,11 @@ type historyEventBody struct {
 			Username    string `json:"username"`
 			DisplayName string `json:"displayName"`
 		} `json:"owners"`
+		PEs []struct {
+			UserID      string `json:"userId"`
+			Username    string `json:"username"`
+			DisplayName string `json:"displayName"`
+		} `json:"pes"`
 	} `json:"params"`
 }
 
@@ -86,7 +91,7 @@ func TestChangeHistoryStartsWithTheCreationEventAndKeepsUserInputVerbatim(t *tes
 	f.post(map[string]any{"owners": []string{f.owner.ID, odd.ID}}).ExpectStatus(http.StatusCreated)
 
 	var h historyBody
-	f.env.SeedUserClient("reader", "reader-password-1").Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
+	plainUserClient(t, f.env, "reader").Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
 	if len(h.Items) != 1 {
 		t.Fatalf("history = %+v", h.Items)
 	}
@@ -107,6 +112,27 @@ func TestChangeHistoryStartsWithTheCreationEventAndKeepsUserInputVerbatim(t *tes
 	}
 }
 
+func TestCreationEventRecordsThePEsAsWellAsTheOwners(t *testing.T) {
+	t.Parallel()
+	f := newAppFixture(t)
+	pe1 := createUser(t, f.admin, map[string]any{"username": "praman", "displayName": "Priya Raman"})
+	pe2 := createUser(t, f.admin, map[string]any{"username": "bob", "displayName": "Bob Plain"})
+	f.post(map[string]any{"pes": []string{pe1.ID, pe2.ID}}).ExpectStatus(http.StatusCreated)
+
+	var h historyBody
+	f.admin.Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
+	if len(h.Items) != 1 || h.Items[0].Type != "appCreated" {
+		t.Fatalf("history = %+v", h.Items)
+	}
+	pes := h.Items[0].Params.PEs
+	if len(pes) != 2 || pes[0].UserID != pe1.ID || pes[0].DisplayName != "Priya Raman" || pes[1].UserID != pe2.ID || pes[1].Username != "bob" {
+		t.Fatalf("pes = %+v, want Priya Raman then Bob Plain", pes)
+	}
+	if owners := h.Items[0].Params.Owners; len(owners) != 1 || owners[0].UserID != f.owner.ID {
+		t.Fatalf("owners = %+v", owners)
+	}
+}
+
 func TestChangeHistoryCannotBeChangedThroughTheAPI(t *testing.T) {
 	t.Parallel()
 	f := newAppFixture(t)
@@ -116,9 +142,8 @@ func TestChangeHistoryCannotBeChangedThroughTheAPI(t *testing.T) {
 
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		for _, path := range []string{"/api/applications/payments-core/history", "/api/applications/payments-core/history/" + h.Items[0].ID} {
-			if res := f.admin.Do(method, path, map[string]any{"type": "x"}); res.Status < 400 {
-				t.Fatalf("%s %s = %d, want an error", method, path, res.Status)
-			}
+			// There is no such route: the answer is "not found", whoever asks.
+			f.admin.Do(method, path, map[string]any{"type": "x"}).ExpectError(http.StatusNotFound, "", "notFound")
 		}
 	}
 	var after historyBody

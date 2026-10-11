@@ -1,7 +1,8 @@
 // Change-history events: one "history.event.<type>" per backend EventType (internal/domain/history.go).
 // Placeholders are filled by web/src/history/render.ts. User input is shown verbatim.
 export default {
-  'history.event.appCreated': 'Created application, Owner: {owners}',
+  'history.event.appCreated': 'Created application, Owner: {owners}{pes}',
+  'history.appCreated.pes': ', PE: {pes}',
   'history.event.appInfoChanged': 'Changed application info: {fields}',
   'history.event.deployInfoChanged': 'Changed deployment info',
   'history.event.memberAdded': 'Added {role}: {user}',

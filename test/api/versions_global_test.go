@@ -104,7 +104,7 @@ func TestGlobalVersionListShowsEveryApplicationsVersionsNewestReleaseFirst(t *te
 	f.register(t, "order-service", "x2", "2026-05-01")
 	f.register(t, "order-service", "v3.4", "2026-02-10")
 
-	l := f.list(t, f.env.SeedUserClient("bob", "bob-password-1"), "")
+	l := f.list(t, plainUserClient(t, f.env, "bob"), "")
 	if want := []string{"10.0", "x2", "x1", "v3.4", "9.0"}; !equalStrings(numbersOf(l.Items), want) {
 		t.Fatalf("order = %v, want %v", numbersOf(l.Items), want)
 	}

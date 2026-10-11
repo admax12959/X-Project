@@ -3,7 +3,6 @@ package httpapi
 import (
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/admax12959/X-Project/internal/domain"
 )
@@ -20,7 +19,7 @@ type codePlatformJSON struct {
 func toCodePlatformJSON(p domain.CodePlatform) codePlatformJSON {
 	return codePlatformJSON{
 		ID: strconv.FormatInt(p.ID, 10), Kind: string(p.Kind), BaseURL: p.BaseURL,
-		TokenTail: p.TokenTail, CreatedAt: p.CreatedAt.UTC().Format(time.RFC3339Nano),
+		TokenTail: p.TokenTail, CreatedAt: formatTime(p.CreatedAt),
 	}
 }
 

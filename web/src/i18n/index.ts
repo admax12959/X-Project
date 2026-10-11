@@ -4,11 +4,12 @@
 import { useSyncExternalStore } from 'react';
 import { en, type MessageKey } from './en/index.ts';
 import { zh } from './zh/index.ts';
+import { interpolate, missingParams, type Params } from './interpolate.ts';
 
 export type { MessageKey };
 export type Locale = 'en' | 'zh';
 export const LOCALES: Locale[] = ['zh', 'en'];
-export type Params = Record<string, string | number>;
+export type { Params };
 
 const dictionaries: Record<Locale, Record<MessageKey, string>> = { en, zh };
 const STORAGE_KEY = 'xp.locale';
@@ -43,8 +44,12 @@ export function hasKey(key: string): key is MessageKey {
 }
 
 export function translate(key: MessageKey, params?: Params): string {
-  const raw = dictionaries[current][key] ?? key;
-  return raw.replace(/\{(\w+)\}/g, (m, name: string) => (params && name in params ? String(params[name]) : m));
+  return interpolate(dictionaries[current][key] ?? key, params);
+}
+
+/** Placeholders of the message that params has no value for. */
+export function missingMessageParams(key: MessageKey, params?: Params): string[] {
+  return missingParams(dictionaries[current][key] ?? key, params);
 }
 
 /** Hook: re-renders on locale change. */

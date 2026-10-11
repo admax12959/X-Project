@@ -13,8 +13,8 @@ import (
 // with the application (applications.go); maintenance lines are forked here.
 
 // LineStatus is a maintenance line's lifecycle state. The mainline has none (empty).
-// Stored and sent lowercase. The state machine (active <-> frozen -> retired) is the
-// lifecycle ticket's (#10); forking only ever creates active lines.
+// Stored and sent lowercase. The state machine (active <-> frozen -> retired)
+// is in line_lifecycle.go (#10); forking only ever creates active lines.
 type LineStatus string
 
 const (
@@ -23,9 +23,9 @@ const (
 	LineRetired LineStatus = "retired"
 )
 
-// SourceVersion is the version a maintenance line was forked from: a fact of the
-// fork, never changed. It can sit on any line, including a retired one. Line is the
-// line that holds the version (short form: no fork facts).
+// SourceVersion is the version a maintenance line was forked from: a fact fixed
+// when the line is forked, never changed. It can sit on any line, including a retired one. Line is the
+// line that holds the version (short form: ID, IsMain, Name and Branch only).
 type SourceVersion struct {
 	ID         int64
 	Number     string
@@ -48,7 +48,7 @@ type NewLine struct {
 // ErrBranchTaken is returned by the Repository when the branch exists in the application.
 var ErrBranchTaken = errors.New("branch already taken")
 
-// LineRepository is the fork part of Repository.
+// LineRepository is the maintenance-line part of Repository.
 type LineRepository interface {
 	// GetVersion reads one version of the application (with its line, short form).
 	GetVersion(ctx context.Context, applicationID, versionID int64) (Version, bool, error)
@@ -76,7 +76,7 @@ const (
 
 // ForkLine forks a maintenance line from any version of the application, including
 // a version on a retired line. Owners only (administrators and PEs cannot). The new
-// line is active and the server records the fork time. Branch names are unique in
+// line is active and the server records the time of forking. Branch names are unique in
 // the application, the mainline's included (branchTaken, with the conflicting line).
 //
 // Check order: application exists, actor is an Owner, fields, source version.
@@ -85,8 +85,8 @@ func (s *Service) ForkLine(ctx context.Context, actor Actor, appKey string, in F
 	if err != nil {
 		return Line{}, err
 	}
-	if !actorOwns(app, actor) {
-		return Line{}, newKind(KindForbidden, CodeForbidden)
+	if !isOwner(actor, app) {
+		return Line{}, forbidden()
 	}
 	var c Collector
 	name, branch := strings.TrimSpace(in.Name), strings.TrimSpace(in.Branch)
@@ -111,7 +111,7 @@ func (s *Service) ForkLine(ctx context.Context, actor Actor, appKey string, in F
 	checkLength(&c, "note", note, maxLineTextLength)
 	var plannedEnd *time.Time
 	if raw := strings.TrimSpace(in.PlannedEnd); raw != "" {
-		if d, perr := time.Parse(dateLayout, raw); perr != nil {
+		if d, perr := time.Parse(DateLayout, raw); perr != nil {
 			c.Add("plannedEnd", CodeInvalid, nil)
 		} else {
 			plannedEnd = &d

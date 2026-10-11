@@ -22,7 +22,7 @@ func (f versionFixture) history(t *testing.T) []lineEventBody {
 	var h struct {
 		Items []lineEventBody `json:"items"`
 	}
-	f.env.SeedUserClient("bob", "bob-password-1").Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
+	plainUserClient(t, f.env, "bob").Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
 	return h.Items
 }
 

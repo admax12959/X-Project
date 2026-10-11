@@ -3,7 +3,6 @@ package httpapi
 import (
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/admax12959/X-Project/internal/domain"
 )
@@ -16,7 +15,7 @@ type sourceVersionJSON struct {
 	Line       lineJSON `json:"line"`
 }
 
-// lineDetailJSON is a line with its fork facts. Fields that do not apply are
+// lineDetailJSON is a line with its maintenance-line fields. Fields that do not apply are
 // omitted: the mainline has no status, sourceVersion, reason, plannedEnd, note or
 // forkedAt. status is "active", "frozen" or "retired". plannedEnd is a date.
 type lineDetailJSON struct {
@@ -43,14 +42,14 @@ func toLineDetailJSON(l domain.Line) lineDetailJSON {
 	}
 	if sv := l.SourceVersion; sv != nil {
 		out.SourceVersion = &sourceVersionJSON{
-			ID: strconv.FormatInt(sv.ID, 10), Number: sv.Number, ReleasedAt: sv.ReleasedAt.Format("2006-01-02"), Line: shortLineJSON(sv.Line),
+			ID: strconv.FormatInt(sv.ID, 10), Number: sv.Number, ReleasedAt: formatDate(sv.ReleasedAt), Line: shortLineJSON(sv.Line),
 		}
 	}
 	if l.PlannedEnd != nil {
-		out.PlannedEnd = l.PlannedEnd.Format("2006-01-02")
+		out.PlannedEnd = formatDate(*l.PlannedEnd)
 	}
 	if l.ForkedAt != nil {
-		out.ForkedAt = l.ForkedAt.UTC().Format(time.RFC3339Nano)
+		out.ForkedAt = formatTime(*l.ForkedAt)
 	}
 	return out
 }
@@ -62,7 +61,7 @@ type latestVersionJSON struct {
 	ReleasedAt string `json:"releasedAt"`
 }
 
-// lineageNodeJSON is one line of the lineage tree: the line (with its fork facts)
+// lineageNodeJSON is one line of the lineage tree: the line (with its maintenance-line fields)
 // plus what the tree table shows. children is never null; latestVersion is null for
 // a line without versions. Later tickets add fields here (for example the graph column).
 type lineageNodeJSON struct {
@@ -75,7 +74,7 @@ type lineageNodeJSON struct {
 func toLineageNodeJSON(n *domain.LineageNode) lineageNodeJSON {
 	out := lineageNodeJSON{lineDetailJSON: toLineDetailJSON(n.Line), VersionCount: n.VersionCount, Children: make([]lineageNodeJSON, 0, len(n.Children))}
 	if v := n.Latest; v != nil {
-		out.LatestVersion = &latestVersionJSON{ID: strconv.FormatInt(v.ID, 10), Number: v.Number, ReleasedAt: v.ReleasedAt.Format("2006-01-02")}
+		out.LatestVersion = &latestVersionJSON{ID: strconv.FormatInt(v.ID, 10), Number: v.Number, ReleasedAt: formatDate(v.ReleasedAt)}
 	}
 	for _, c := range n.Children {
 		out.Children = append(out.Children, toLineageNodeJSON(c))

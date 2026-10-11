@@ -9,6 +9,7 @@ import { useCurrentUser } from '../session/session.tsx';
 import { Button, Empty } from '../ui/controls.tsx';
 import { BindIdentityDialog } from './BindIdentityDialog.tsx';
 import { UserDialog } from './UserDialog.tsx';
+import { th, td } from '../ui/table.ts';
 
 /** The applications blocking a disable (422 soleOwner), or undefined for any other error. */
 function soleOwnerApps(err: unknown): { key: string; name: string }[] | undefined {
@@ -65,8 +66,6 @@ export function UsersPage() {
     }
   };
 
-  const th = 'h-10 whitespace-nowrap border-b border-line bg-thead px-3 text-left text-[13px] font-semibold';
-  const td = 'h-10 border-b border-sep px-3';
 
   return (
     <>
@@ -118,7 +117,7 @@ export function UsersPage() {
           </thead>
           <tbody>
             {items.map((u) => (
-              <tr key={u.id} className="hover:bg-[#fafbfc]">
+              <tr key={u.id} className="hover:bg-hover">
                 <td className={`${td} font-mono text-[12.5px]`}>{u.username}</td>
                 <td className={td}>
                   {u.displayName}

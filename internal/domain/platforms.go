@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 )
@@ -59,11 +60,11 @@ func normalizeBaseURL(raw string) (string, bool) {
 
 // CreateCodePlatform registers a code platform. Administrators only.
 func (s *Service) CreateCodePlatform(ctx context.Context, actor Actor, in CodePlatformInput) (CodePlatform, error) {
-	if !actor.User.IsAdmin {
-		return CodePlatform{}, newKind(KindForbidden, CodeForbidden)
+	if err := requireAdmin(actor); err != nil {
+		return CodePlatform{}, err
 	}
 	var c Collector
-	if c.Required("kind", in.Kind) && !oneOfStrings(in.Kind, platformKinds) {
+	if c.Required("kind", in.Kind) && !slices.Contains(platformKinds, in.Kind) {
 		c.Add("kind", CodeInvalid, map[string]any{"allowed": platformKinds})
 	}
 	base := ""
@@ -94,17 +95,8 @@ func (s *Service) CreateCodePlatform(ctx context.Context, actor Actor, in CodePl
 
 // ListCodePlatforms returns every registered code platform, oldest first. Administrators only.
 func (s *Service) ListCodePlatforms(ctx context.Context, actor Actor) ([]CodePlatform, error) {
-	if !actor.User.IsAdmin {
-		return nil, newKind(KindForbidden, CodeForbidden)
+	if err := requireAdmin(actor); err != nil {
+		return nil, err
 	}
 	return s.repo.ListCodePlatforms(ctx)
-}
-
-func oneOfStrings(v string, allowed []string) bool {
-	for _, a := range allowed {
-		if v == a {
-			return true
-		}
-	}
-	return false
 }

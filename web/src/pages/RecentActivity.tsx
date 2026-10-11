@@ -9,6 +9,7 @@ import { renderEvent } from '../history/render.ts';
 import { useT } from '../i18n/index.ts';
 import { Empty } from '../ui/controls.tsx';
 import { appPath } from '../ui/links.ts';
+import { th, tdTop as td } from '../ui/table.ts';
 
 type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; items: Activity[] };
 
@@ -29,8 +30,6 @@ export function RecentActivity() {
 
   const items = load.status === 'ok' ? load.items : [];
   const when = new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', { dateStyle: 'medium', timeStyle: 'short' });
-  const th = 'h-10 whitespace-nowrap border-b border-line bg-thead px-3 text-left text-[13px] font-semibold';
-  const td = 'border-b border-sep px-3 py-2 align-top';
 
   return (
     <section aria-labelledby="recent-activity" className="space-y-2">

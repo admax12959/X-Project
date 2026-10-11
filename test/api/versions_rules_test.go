@@ -84,7 +84,7 @@ func TestOnlyAnOwnerOfTheApplicationCanRegisterVersions(t *testing.T) {
 	other := f.secondApp(t, dbrooks.ID, map[string]any{"pes": []string{f.owner.ID}})
 
 	path := versionsPath("payments-core", f.mainline.ID)
-	bob := f.env.SeedUserClient("bob", "bob-password-1")
+	bob := plainUserClient(t, f.env, "bob")
 	forbidden := http.StatusForbidden
 	f.admin.Post(path, newVersion(nil)).ExpectError(forbidden, "", "forbidden") // an administrator who is not an Owner
 	f.login("praman").Post(path, newVersion(nil)).ExpectError(forbidden, "", "forbidden")
@@ -184,7 +184,7 @@ func TestRegisteringAVersionIsRecordedInTheChangeHistory(t *testing.T) {
 			} `json:"params"`
 		} `json:"items"`
 	}
-	f.env.SeedUserClient("bob", "bob-password-1").Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
+	plainUserClient(t, f.env, "bob").Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
 	if len(h.Items) != 2 {
 		t.Fatalf("history = %+v", h.Items)
 	}

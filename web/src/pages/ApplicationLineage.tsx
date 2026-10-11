@@ -30,6 +30,7 @@ import { LineStatusDialog } from './LineStatusDialog.tsx';
 import { RegisterVersionDialog } from './RegisterVersionDialog.tsx';
 import { graphLanes, layoutGraph } from './lineageGraph.ts';
 import { graphWidth, LineageGraphCell, ROW_H } from './LineageGraphCell.tsx';
+import { isOwnerOf } from '../ui/roles.ts';
 
 const GRAPH_KEY = 'xp.lineage.graph';
 
@@ -100,7 +101,7 @@ export function ApplicationLineage() {
   }, [app.key]);
   useEffect(() => reload(), [reload]);
 
-  const isOwner = app.owners.some((o) => o.id === user.id); // display only; the server decides
+  const isOwner = isOwnerOf(app, user.id); // display only; the server decides
   const data = load.status === 'ok' ? load : null;
   const rows = useMemo(() => (data ? visibleRows(data.root, collapsed) : []), [data, collapsed]);
   const graph = useMemo(() => (data && showGraph ? { rows: layoutGraph(rows), lanes: graphLanes(data.root) } : null), [data, rows, showGraph]);

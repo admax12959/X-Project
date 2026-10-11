@@ -10,6 +10,7 @@ import { useT, type MessageKey } from '../i18n/index.ts';
 import { Button } from '../ui/controls.tsx';
 import { LineStatusLabel } from '../ui/LineStatusLabel.tsx';
 import { lineRules } from './lineLifecycle.ts';
+import { refKindKey } from '../ui/labels.ts';
 
 const HINT: Record<NonNullable<LineDetail['status']>, MessageKey> = {
   active: 'lineage.status.active.hint',
@@ -183,7 +184,7 @@ export function LinePanel({
                   <span className="text-text-3">{v.releasedAt}</span>
                 </div>
                 <div className="text-text-3">
-                  {t(v.ref.kind === 'tag' ? 'versions.ref.tag' : 'versions.ref.commit')} <span className="font-mono text-[12.5px]">{v.ref.value}</span>
+                  {t(refKindKey(v.ref.kind))} <span className="font-mono text-[12.5px]">{v.ref.value}</span>
                 </div>
                 {isOwner && (
                   <button type="button" className="mt-0.5 text-accent hover:underline" onClick={() => onFork(v.id)}>

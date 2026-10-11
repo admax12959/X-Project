@@ -159,7 +159,7 @@ func TestOnlyAnOwnerOfTheApplicationCanChangeALinesStatus(t *testing.T) {
 	forbidden := http.StatusForbidden
 	body := map[string]any{"status": "frozen"}
 	// An administrator who is not an Owner, a PE, the Owner of another application, a plain user.
-	for _, c := range []*apitest.Client{f.admin, f.login("praman"), f.login("dbrooks"), f.env.SeedUserClient("bob", "bob-password-1")} {
+	for _, c := range []*apitest.Client{f.admin, f.login("praman"), f.login("dbrooks"), plainUserClient(t, f.env, "bob")} {
 		c.Do(http.MethodPut, f.path()+"/status", body).ExpectError(forbidden, "", "forbidden")
 		c.Do(http.MethodPut, f.path()+"/status", map[string]any{}).ExpectError(forbidden, "", "forbidden") // before the fields
 	}
@@ -316,7 +316,7 @@ func TestEveryStatusChangeIsRecordedWithTimeAndActorAndShownInTheLineDetail(t *t
 	f.admin.Do(http.MethodPut, "/api/applications/payments-core/members", map[string]any{
 		"owners": []string{f.owner.ID, praman.ID}, "pes": []string{},
 	}).ExpectStatus(http.StatusOK)
-	bob := f.env.SeedUserClient("bob", "bob-password-1")
+	bob := plainUserClient(t, f.env, "bob")
 
 	if l := f.detail(t, bob); len(l.StatusChanges) != 0 || l.Status != "active" || l.ForkedAt == "" {
 		t.Fatalf("a new line has no status changes yet: %+v", l)
@@ -521,7 +521,7 @@ func TestOnlyAnOwnerOfTheApplicationCanEditALine(t *testing.T) {
 	f.secondApp(t, dbrooks.ID, nil)
 	before := f.current(t)
 
-	for _, c := range []*apitest.Client{f.admin, f.login("praman"), f.login("dbrooks"), f.env.SeedUserClient("bob", "bob-password-1")} {
+	for _, c := range []*apitest.Client{f.admin, f.login("praman"), f.login("dbrooks"), plainUserClient(t, f.env, "bob")} {
 		c.Do(http.MethodPatch, f.path(), map[string]any{"name": "Mine now"}).ExpectError(http.StatusForbidden, "", "forbidden")
 		c.Do(http.MethodPatch, f.path(), map[string]any{"name": ""}).ExpectError(http.StatusForbidden, "", "forbidden") // before the fields
 	}
@@ -578,15 +578,14 @@ func TestALineCannotBeDeleted(t *testing.T) {
 	f.moveTo(t, "retired")
 
 	// There is no delete route at all: not for an Owner, not for an administrator, not for a retired line.
+	before := f.listLines(f.elarsen)
 	for _, c := range []*apitest.Client{f.elarsen, f.admin} {
-		if res := c.Delete(f.path()); res.Status < 400 {
-			t.Fatalf("DELETE a line = %d: %s", res.Status, res.Body)
-		}
+		c.Delete(f.path()).ExpectError(http.StatusNotFound, "", "notFound")
 	}
-	if got := f.listLines(f.elarsen); len(got) != 2 {
-		t.Fatalf("lines = %+v", got)
+	if got := f.listLines(f.elarsen); !reflect.DeepEqual(got, before) {
+		t.Fatalf("lines changed: %+v -> %+v", before, got)
 	}
-	if l := f.current(t); l.Status != "retired" {
+	if l := f.current(t); l.Status != "retired" || l.ID != f.line.ID {
 		t.Fatalf("line = %+v", l)
 	}
 }
@@ -625,5 +624,3 @@ func TestEditingALineIsRecordedInTheChangeHistoryOnlyWhenSomethingChanged(t *tes
 		t.Fatalf("event = %+v", e)
 	}
 }
-
-// -- tests below are appended as the lifecycle grows --

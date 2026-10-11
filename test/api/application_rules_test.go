@@ -151,7 +151,7 @@ func TestOnlyAdministratorsCreateApplications(t *testing.T) {
 	f := newAppFixture(t)
 	body := newApp(f.pid, []string{f.owner.ID}, nil)
 
-	f.env.SeedUserClient("alice", "alice-password").Post("/api/applications", body).ExpectError(http.StatusForbidden, "", "forbidden")
+	plainUserClient(t, f.env, "alice").Post("/api/applications", body).ExpectError(http.StatusForbidden, "", "forbidden")
 	f.env.Client().Post("/api/applications", body).ExpectError(http.StatusUnauthorized, "", "unauthenticated")
 	// An Owner is not an administrator either.
 	f.admin.Post("/api/applications", body).ExpectStatus(http.StatusCreated)

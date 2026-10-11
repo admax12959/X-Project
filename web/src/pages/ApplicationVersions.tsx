@@ -12,6 +12,9 @@ import { Button, Empty, Select } from '../ui/controls.tsx';
 import { useApplication } from './ApplicationPage.tsx';
 import { ForkDialog } from './ForkDialog.tsx';
 import { RegisterVersionDialog } from './RegisterVersionDialog.tsx';
+import { th, tdTop as td } from '../ui/table.ts';
+import { isOwnerOf } from '../ui/roles.ts';
+import { refKindKey } from '../ui/labels.ts';
 
 type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; versions: Version[]; lines: LineDetail[] };
 
@@ -39,14 +42,12 @@ export function ApplicationVersions() {
   useEffect(() => reload(), [reload]);
 
   // Whether to offer the button is decided here only for display; the server decides.
-  const isOwner = app.owners.some((o) => o.id === user.id);
+  const isOwner = isOwnerOf(app, user.id);
   const versions = load.status === 'ok' ? load.versions : [];
   const lines = load.status === 'ok' ? load.lines : [];
   const shown = versions.filter((v) => (!lineId || v.lineId === lineId) && (!refKind || v.ref.kind === refKind));
   const target = lines.find((l) => l.isMain);
   const filtered = lineId !== '' || refKind !== '';
-  const th = 'h-10 whitespace-nowrap border-b border-line bg-thead px-3 text-left text-[13px] font-semibold';
-  const td = 'border-b border-sep px-3 py-2 align-top';
   const lineName = (l: Pick<LineDetail, 'isMain' | 'name'>) => (l.isMain ? t('term.mainline') : l.name);
 
   return (
@@ -107,7 +108,7 @@ export function ApplicationVersions() {
                   {lineName(v.line)} <span className="font-mono text-[12.5px] text-text-3">{v.line.branch}</span>
                 </td>
                 <td className={`${td} whitespace-nowrap`}>
-                  <span className="text-text-3">{t(v.ref.kind === 'tag' ? 'versions.ref.tag' : 'versions.ref.commit')}</span>{' '}
+                  <span className="text-text-3">{t(refKindKey(v.ref.kind))}</span>{' '}
                   <span className="font-mono text-[12.5px]">{v.ref.value}</span>
                 </td>
                 <td className={`${td} whitespace-nowrap`}>{v.releasedAt}</td>

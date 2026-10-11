@@ -10,6 +10,7 @@ import { Button, Container, KV } from '../ui/controls.tsx';
 import { PLATFORM_LABEL } from '../ui/labels.ts';
 import { DeleteApplicationDialog, EditApplicationDialog, EditDeployInfoDialog, EditMembersDialog } from './ApplicationDialogs.tsx';
 import { useApplication, useSetApplication } from './ApplicationPage.tsx';
+import { isOwnerOf } from '../ui/roles.ts';
 
 function People({ list }: { list: Member[] }) {
   const { t } = useT();
@@ -37,7 +38,7 @@ export function ApplicationOverview() {
   const [dialog, setDialog] = useState<Dialog>(null);
   const mono = 'font-mono text-[12.5px]';
 
-  const isOwner = app.owners.some((m) => m.id === me.id);
+  const isOwner = isOwnerOf(app, me.id);
   const isPe = app.pes.some((m) => m.id === me.id);
   const canEditInfo = isOwner;
   const canEditMembers = isOwner || me.isAdmin; // ADR-0003

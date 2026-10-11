@@ -8,6 +8,7 @@ import type { CodePlatform, PlatformKind } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
 import { useCurrentUser } from '../session/session.tsx';
 import { Button, Empty, Field, Input, Segmented } from '../ui/controls.tsx';
+import { th, td } from '../ui/table.ts';
 
 // Errors are kept raw and rendered at render time, so they follow a language switch.
 type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; items: CodePlatform[] };
@@ -35,8 +36,6 @@ function Platforms() {
   useEffect(reload, [reload]);
 
   const items = load.status === 'ok' ? load.items : [];
-  const th = 'h-10 whitespace-nowrap border-b border-line bg-thead px-3 text-left text-[13px] font-semibold';
-  const td = 'h-10 border-b border-sep px-3';
   const registered = new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', { dateStyle: 'medium', timeStyle: 'short' });
 
   return (
@@ -63,7 +62,7 @@ function Platforms() {
           </thead>
           <tbody>
             {items.map((p) => (
-              <tr key={p.id} className="hover:bg-[#fafbfc]">
+              <tr key={p.id} className="hover:bg-hover">
                 <td className={td}>{KIND_LABEL[p.kind] ?? p.kind}</td>
                 <td className={`${td} font-mono text-[12.5px]`}>{p.baseUrl}</td>
                 <td className={`${td} font-mono text-[12.5px]`}>{`••••••••${p.tokenTail}`}</td>

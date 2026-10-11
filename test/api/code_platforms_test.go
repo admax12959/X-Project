@@ -125,7 +125,7 @@ func TestOnlyAdministratorsCanUseCodePlatformAPIs(t *testing.T) {
 	env := apitest.New(t)
 	body := map[string]string{"kind": "gitlab", "baseUrl": "https://gitlab.example.com", "token": "glpat-abcdefghij1234567890"}
 
-	user := env.SeedUserClient("alice", "alice-password")
+	user := plainUserClient(t, env, "alice")
 	user.Get("/api/code-platforms").ExpectError(http.StatusForbidden, "", "forbidden")
 	user.Post("/api/code-platforms", body).ExpectError(http.StatusForbidden, "", "forbidden")
 

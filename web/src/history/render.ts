@@ -39,7 +39,11 @@ function statusName(status: unknown): string {
 
 /** One entry per backend EventType (internal/domain/history.go): maps params to message placeholders. */
 const renderers: Record<string, Renderer> = {
-  appCreated: (p, locale) => ({ owners: users(p.owners, locale) }),
+  appCreated: (p, locale) => ({
+    owners: users(p.owners, locale),
+    // Events written before PEs were recorded have none; the part is left out then.
+    pes: Array.isArray(p.pes) && p.pes.length > 0 ? translate('history.appCreated.pes', { pes: users(p.pes, locale) }) : '',
+  }),
   deployInfoChanged: () => ({}),
   memberAdded: (p) => ({ role: roleName(p.role), user: userName(p.user) }),
   memberRemoved: (p) => ({ role: roleName(p.role), user: userName(p.user) }),

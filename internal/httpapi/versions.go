@@ -3,7 +3,6 @@ package httpapi
 import (
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/admax12959/X-Project/internal/domain"
 )
@@ -27,9 +26,9 @@ type versionJSON struct {
 func toVersionJSON(v domain.Version) versionJSON {
 	out := versionJSON{
 		ID: strconv.FormatInt(v.ID, 10), LineID: strconv.FormatInt(v.LineID, 10),
-		Line:   lineJSON{ID: strconv.FormatInt(v.Line.ID, 10), IsMain: v.Line.IsMain, Name: v.Line.Name, Branch: v.Line.Branch},
-		Number: v.Number, ReleasedAt: v.ReleasedAt.Format("2006-01-02"), Note: v.Note,
-		CreatedAt: v.CreatedAt.UTC().Format(time.RFC3339Nano),
+		Line:   shortLineJSON(v.Line),
+		Number: v.Number, ReleasedAt: formatDate(v.ReleasedAt), Note: v.Note,
+		CreatedAt: formatTime(v.CreatedAt),
 	}
 	out.Ref.Kind, out.Ref.Value = string(v.RefKind), v.RefValue
 	return out

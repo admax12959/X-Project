@@ -390,7 +390,7 @@ func TestAdministratorBindRules(t *testing.T) {
 	emma := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw"))
 
 	// Only administrators.
-	plain := env.SeedUserClient("plain", "plain-pw-123")
+	plain := plainUserClient(t, env, "plain")
 	adminBind(plain, jane.ID, map[string]any{"kind": "ldap", "loginName": "elarsen"}).ExpectError(http.StatusForbidden, "", "forbidden")
 	adminBind(env.Client(), jane.ID, map[string]any{"kind": "ldap", "loginName": "elarsen"}).ExpectError(http.StatusUnauthorized, "", "unauthenticated")
 

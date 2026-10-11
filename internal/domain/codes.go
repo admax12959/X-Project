@@ -36,7 +36,8 @@ const (
 	CodeKeyTaken        = "keyTaken"        // another application already has this key
 	CodeUserUnavailable = "userUnavailable" // Owner/PE is not an existing enabled user; params {userId}
 
-	CodeSoleOwner       = "soleOwner"       // disabling the only (enabled) Owner of applications; params {applications: [{key, name}]}
+	CodeSoleOwner      = "soleOwner"      // disabling the only (enabled) Owner of applications; params {applications: [{key, name}]}
+	CodeNoEnabledOwner = "noEnabledOwner" // field "owners"; the new Owner list would have no enabled user
 
 	// versions
 	CodeNumberTaken = "numberTaken" // field "number"; params {line: {id,isMain,name,branch}, releasedAt: "YYYY-MM-DD"} of the version that has it

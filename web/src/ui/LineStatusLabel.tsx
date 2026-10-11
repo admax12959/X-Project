@@ -5,7 +5,7 @@ import { useT, type MessageKey } from '../i18n/index.ts';
 
 const STATUS: Record<LineStatus, { label: MessageKey; color: string }> = {
   active: { label: 'lineage.status.active', color: 'text-ok' },
-  frozen: { label: 'lineage.status.frozen', color: 'text-[#0972d3]' },
+  frozen: { label: 'lineage.status.frozen', color: 'text-info' },
   retired: { label: 'lineage.status.retired', color: 'text-text-3' },
 };
 

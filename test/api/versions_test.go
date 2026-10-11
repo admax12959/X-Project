@@ -86,7 +86,7 @@ func TestOwnerRegistersAVersionOnTheMainlineAndEveryoneSeesItInTheVersionList(t 
 		t.Fatalf("registered = %+v", v)
 	}
 
-	items := f.list(f.env.SeedUserClient("bob", "bob-password-1"))
+	items := f.list(plainUserClient(t, f.env, "bob"))
 	if len(items) != 1 || items[0] != v {
 		t.Fatalf("list = %+v, want [%+v]", items, v)
 	}

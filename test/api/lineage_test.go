@@ -8,8 +8,8 @@ import (
 
 // The payments-core lineage scenario from the prototype seed (docs: seed scenarios
 // of spec #2): four levels of nesting, one version forked into two lines, a line
-// without versions, irregular version numbers, all three statuses. Later tickets
-// (lifecycle #10, graph column #11) reuse seedPaymentsCore.
+// without versions, irregular version numbers, all three statuses. The lifecycle (#10)
+// and graph column (#11) tests reuse seedPaymentsCore.
 
 type paymentsCore struct {
 	versionFixture
@@ -64,7 +64,7 @@ func (p *paymentsCore) forkFrom(t *testing.T, number, name, branch, reason strin
 // that differs from the display order (the LTS line before Northwind), versions are
 // registered out of release order on the LTS line, and the two lines forked from 2.1.0
 // are created Northwind first. Retired and Frozen are applied last with the test-only
-// SeedLineStatus (the lifecycle API is a later ticket).
+// SeedLineStatus (a fixture shortcut; the lifecycle API exists and is tested separately).
 func seedPaymentsCore(t *testing.T) *paymentsCore {
 	t.Helper()
 	p := &paymentsCore{versionFixture: newMainlineFixture(t), line: map[string]string{"main": ""}, version: map[string]string{}}
@@ -145,7 +145,7 @@ type lineageNodeBody struct {
 func (p *paymentsCore) lineage(t *testing.T) lineageNodeBody {
 	t.Helper()
 	var root lineageNodeBody
-	p.env.SeedUserClient("bob", "bob-password-1").Get("/api/applications/payments-core/lineage").ExpectStatus(http.StatusOK).JSON(&root)
+	plainUserClient(t, p.env, "bob").Get("/api/applications/payments-core/lineage").ExpectStatus(http.StatusOK).JSON(&root)
 	return root
 }
 

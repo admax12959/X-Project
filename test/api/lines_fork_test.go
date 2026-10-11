@@ -9,7 +9,7 @@ import (
 
 // Seam (spec #2, Testing Decisions): the HTTP API against a real MySQL. No SQL, no
 // internal calls; the one exception is apitest.SeedLineStatus (test-only, see there), used only by
-// the seedPaymentsCore fixture. Lifecycle behaviour is tested through the status API.
+// the seedPaymentsCore fixture. Lifecycle behaviour is tested through the status API (lines_lifecycle_test.go).
 
 // sourceVersionBody is the source version of a line: where it was forked from.
 type sourceVersionBody struct {
@@ -85,7 +85,7 @@ func TestOwnerForksAMaintenanceLineFromAMainlineVersion(t *testing.T) {
 	var list struct {
 		Items []lineDetailBody `json:"items"`
 	}
-	f.env.SeedUserClient("bob", "bob-password-1").Get(linesPath("payments-core")).ExpectStatus(http.StatusOK).JSON(&list)
+	plainUserClient(t, f.env, "bob").Get(linesPath("payments-core")).ExpectStatus(http.StatusOK).JSON(&list)
 	if len(list.Items) != 2 || !list.Items[0].IsMain || list.Items[0].Status != "" || list.Items[0].SourceVersion != nil {
 		t.Fatalf("lines = %+v", list.Items)
 	}
