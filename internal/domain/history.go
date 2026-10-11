@@ -24,7 +24,8 @@ import (
 type EventType string
 
 const (
-	// EventAppCreated: application created. Params: owners = [userParam].
+	// EventAppCreated: application created. Params: owners = [userParam], pes = [userParam] (always present,
+	// possibly empty; events written before PEs were recorded have none).
 	EventAppCreated EventType = "appCreated"
 	// EventAppInfoChanged: name, description or main branch edited. Params:
 	// changes = {name|description|mainBranch: {from, to}}, only the fields that changed.
@@ -61,12 +62,16 @@ type event struct {
 	params map[string]any
 }
 
-func appCreatedEvent(owners []UserID) event {
-	refs := make([]any, len(owners))
-	for i, id := range owners {
+func appCreatedEvent(owners, pes []UserID) event {
+	return event{EventAppCreated, map[string]any{"owners": userParams(owners), "pes": userParams(pes)}}
+}
+
+func userParams(ids []UserID) []any {
+	refs := make([]any, len(ids))
+	for i, id := range ids {
 		refs[i] = userParam(id)
 	}
-	return event{EventAppCreated, map[string]any{"owners": refs}}
+	return refs
 }
 
 func appInfoChangedEvent(changes map[string]any) event {

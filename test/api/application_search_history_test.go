@@ -72,6 +72,11 @@ type historyEventBody struct {
 			Username    string `json:"username"`
 			DisplayName string `json:"displayName"`
 		} `json:"owners"`
+		PEs []struct {
+			UserID      string `json:"userId"`
+			Username    string `json:"username"`
+			DisplayName string `json:"displayName"`
+		} `json:"pes"`
 	} `json:"params"`
 }
 
@@ -104,6 +109,27 @@ func TestChangeHistoryStartsWithTheCreationEventAndKeepsUserInputVerbatim(t *tes
 	f.admin.Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
 	if h.Items[0].Params.Owners[0].DisplayName != "Emma Larsen-Berg" {
 		t.Fatalf("owners = %+v", h.Items[0].Params.Owners)
+	}
+}
+
+func TestCreationEventRecordsThePEsAsWellAsTheOwners(t *testing.T) {
+	t.Parallel()
+	f := newAppFixture(t)
+	pe1 := createUser(t, f.admin, map[string]any{"username": "praman", "displayName": "Priya Raman"})
+	pe2 := createUser(t, f.admin, map[string]any{"username": "bob", "displayName": "Bob Plain"})
+	f.post(map[string]any{"pes": []string{pe1.ID, pe2.ID}}).ExpectStatus(http.StatusCreated)
+
+	var h historyBody
+	f.admin.Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
+	if len(h.Items) != 1 || h.Items[0].Type != "appCreated" {
+		t.Fatalf("history = %+v", h.Items)
+	}
+	pes := h.Items[0].Params.PEs
+	if len(pes) != 2 || pes[0].UserID != pe1.ID || pes[0].DisplayName != "Priya Raman" || pes[1].UserID != pe2.ID || pes[1].Username != "bob" {
+		t.Fatalf("pes = %+v, want Priya Raman then Bob Plain", pes)
+	}
+	if owners := h.Items[0].Params.Owners; len(owners) != 1 || owners[0].UserID != f.owner.ID {
+		t.Fatalf("owners = %+v", owners)
 	}
 }
 

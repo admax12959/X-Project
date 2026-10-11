@@ -202,7 +202,7 @@ func (s *Service) CreateApplication(ctx context.Context, actor Actor, in CreateA
 		if err := tx.SetMembers(ctx, id, RolePE, pes); err != nil {
 			return err
 		}
-		if err := s.recordEvent(ctx, tx, id, actor, appCreatedEvent(owners)); err != nil {
+		if err := s.recordEvent(ctx, tx, id, actor, appCreatedEvent(owners, pes)); err != nil {
 			return err
 		}
 		var found bool
