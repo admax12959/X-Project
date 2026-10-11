@@ -167,7 +167,23 @@ Applied files are recorded by name in `schema_migrations`. A file merged later w
 - The directory is asked on every login. Not found, disabled or wrong password all give `401 invalidCredentials`; unreachable gives `503 ldapUnreachable`. Nothing is deleted when the directory refuses: the user and the LDAP identity stay and work again when the account comes back.
 - A known LDAP identity logs in to its user (whoever bound it) and overwrites display name, email and department. An unknown one creates a user (username = login name, binding source `firstLogin`) only if the username is free; otherwise `422 usernameTakenByLocal` on field `username` and nothing is stored. Never merged by email or username.
 - `Service.CheckUsernameFreeInDirectory(ctx, field, username)` is the admin-side check, already called by `CreateLocalUser`: `422 usernameExistsInLdap` (a disabled directory account counts too) or `503 ldapUnreachable` when the directory cannot be queried; it never skips the check. With no directory configured it passes. Any other code path that creates a local user must call it too.
-- Binding an LDAP identity to an existing user (ticket #15) needs no change to login: a known LDAP identity signs in to whichever user holds it and the directory overwrites display name, email and department.
+- Binding an LDAP identity to an existing user needs no change to login: a known LDAP identity signs in to whichever user holds it and the directory overwrites display name, email and department (see "Personal settings and login identities").
+
+### Personal settings and login identities (ADR-0002)
+
+Routes in `internal/httpapi/handlers_me.go`, rules in `internal/domain/me.go` and `identities.go`. The user view returned by all of them is the administrator shape (`id, username, displayName, email, phone, department, language, status, isAdmin, identities[{kind, loginName, boundAt, boundVia}]`).
+
+| Route | Meaning |
+|---|---|
+| `GET /api/me` | Own profile with identities. |
+| `PATCH /api/me` | Body fields are all optional: `displayName`, `email`, `department` (only for users without an LDAP identity, otherwise `422 ldapManaged` on a changed value; sending the current value is fine), `phone` (everyone), `language` (`zh` or `en`, else `422 invalid`). `username` and `isAdmin` are ignored. |
+| `POST /api/me/identities` | Bind for yourself, `201`. `{"kind":"ldap","loginName":...,"password":...}`: the directory authenticates the pair first; any failure is `422 invalidCredentials` on `password` (never 401, which would log the SPA out), unreachable is `503 ldapUnreachable`. `{"kind":"local","password":...}`: the login name is the username, the password follows the create rules; there is no existing credential to authenticate with, the logged-in session is the proof. Binding source `self`. |
+| `DELETE /api/me/identities/{kind}` | Unbind. `422 lastIdentity` (field `kind`) on the only identity, `404` when the user has none of that kind. |
+| `POST /api/users/{id}/identities` | Administrator bind, same body but no LDAP password: the directory is only asked if the login name exists (`422 ldapAccountNotFound` on `loginName`, `503 ldapUnreachable`; a disabled directory account counts as existing and can be bound). Binding source `admin`. |
+
+- Both bind routes: `422 identityKindBound` (field `kind`, one identity per kind) and `422 identityTaken` (field `loginName`, held by another user). The check runs under the user row lock; the unique-key race maps to `identityTaken` too.
+- Binding an LDAP identity (self or admin) syncs display name, email and department from the directory at once when the directory returns the entry; every later LDAP login syncs again. The username stays and is locked from then on (ADR-0004).
+- `language` is stored on the user (`users.language`, empty = never chosen) and is part of the `user` object of `POST/GET /api/session`. The SPA applies it after login and when it loads the session; the language switch in the top bar and the settings page save it with `PATCH /api/me`, the one on the login page stays local.
 
 ### i18n
 

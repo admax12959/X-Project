@@ -14,8 +14,12 @@ export type User = {
   displayName: string;
   email: string;
   department: string;
+  /** Saved interface language; '' = never chosen. */
+  language: Language | '';
   isAdmin: boolean;
 };
+
+export type Language = 'zh' | 'en';
 
 export type SessionInfo = { user: User };
 
@@ -37,10 +41,27 @@ export type AdminUser = {
   email: string;
   phone: string;
   department: string;
+  language: Language | '';
   status: 'enabled' | 'disabled';
   isAdmin: boolean;
-  identities: { kind: 'local' | 'ldap'; loginName: string; boundAt: string; boundVia: string }[];
+  identities: LoginIdentity[];
 };
+
+export type IdentityKind = 'local' | 'ldap';
+
+/** How an identity got attached to its user. */
+export type BoundVia = 'firstLogin' | 'self' | 'admin' | 'bootstrap';
+
+export type LoginIdentity = { kind: IdentityKind; loginName: string; boundAt: string; boundVia: BoundVia };
+
+/**
+ * Bind a login identity. ldap: loginName (+ password when binding your own: you
+ * authenticate with it once). local: password only; the login name is the username.
+ */
+export type BindIdentityInput = { kind: IdentityKind; loginName?: string; password?: string };
+
+/** What a user may change about themselves (GET/PATCH /api/me answers with the AdminUser shape). */
+export type UpdateMeInput = Partial<Pick<AdminUser, 'displayName' | 'email' | 'phone' | 'department' | 'language'>>;
 
 export type CreateUserInput = {
   username: string;

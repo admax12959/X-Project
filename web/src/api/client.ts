@@ -3,13 +3,16 @@ import type {
   AdminUser,
   ApiFieldError,
   ApplicationSummary,
+  BindIdentityInput,
   CodePlatform,
   CodePlatformInput,
   CreateUserInput,
+  IdentityKind,
   List,
   LoginInput,
   LoginMethod,
   SessionInfo,
+  UpdateMeInput,
   UpdateUserInput,
 } from './types.ts';
 
@@ -82,5 +85,17 @@ export const api = {
     update: (id: string, input: UpdateUserInput) => request<AdminUser>('PATCH', `/api/users/${id}`, { body: input }),
     disable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/disable`),
     enable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/enable`),
+    /** 422 field errors (identityKindBound, identityTaken, ldapAccountNotFound, password rules); 503 ldapUnreachable. */
+    bindIdentity: (id: string, input: BindIdentityInput) => request<AdminUser>('POST', `/api/users/${id}/identities`, { body: input }),
+  },
+  /** The logged-in user's own settings. */
+  me: {
+    get: () => request<AdminUser>('GET', '/api/me'),
+    /** 422 ldapManaged on displayName / email / department for LDAP-bound users. */
+    update: (input: UpdateMeInput) => request<AdminUser>('PATCH', '/api/me', { body: input }),
+    /** 422 on password when the authentication fails (never 401), identityKindBound, identityTaken; 503 ldapUnreachable. */
+    bindIdentity: (input: BindIdentityInput) => request<AdminUser>('POST', '/api/me/identities', { body: input }),
+    /** 422 lastIdentity on the only identity. */
+    unbindIdentity: (kind: IdentityKind) => request<AdminUser>('DELETE', `/api/me/identities/${kind}`),
   },
 };
