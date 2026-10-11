@@ -25,7 +25,7 @@ func TestApplicationListSearch(t *testing.T) {
 	other("rate-b", "Rate 1000 done a_b", "misc/rates")
 	other("rate-c", "Rate 1000 done axb", "misc/rates")
 
-	reader := f.env.SeedUserClient("reader", "reader-password-1")
+	reader := plainUserClient(t, f.env, "reader")
 	search := func(q string) []string {
 		t.Helper()
 		var list appListBody
@@ -91,7 +91,7 @@ func TestChangeHistoryStartsWithTheCreationEventAndKeepsUserInputVerbatim(t *tes
 	f.post(map[string]any{"owners": []string{f.owner.ID, odd.ID}}).ExpectStatus(http.StatusCreated)
 
 	var h historyBody
-	f.env.SeedUserClient("reader", "reader-password-1").Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
+	plainUserClient(t, f.env, "reader").Get("/api/applications/payments-core/history").ExpectStatus(http.StatusOK).JSON(&h)
 	if len(h.Items) != 1 {
 		t.Fatalf("history = %+v", h.Items)
 	}

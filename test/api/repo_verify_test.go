@@ -74,7 +74,7 @@ func TestOnlyAdministratorsCanVerifyRepositories(t *testing.T) {
 	pid := registerPlatform(t, env.AdminClient(), "gitlab", glURL)
 	env.CodePlatforms.AddRepo(glURL, "a/b", "1")
 
-	env.SeedUserClient("alice", "alice-password").Post("/api/repo-verifications", verifyBody(pid, "a/b")).
+	plainUserClient(t, env, "alice").Post("/api/repo-verifications", verifyBody(pid, "a/b")).
 		ExpectError(http.StatusForbidden, "", "forbidden")
 	env.Client().Post("/api/repo-verifications", verifyBody(pid, "a/b")).
 		ExpectError(http.StatusUnauthorized, "", "unauthenticated")

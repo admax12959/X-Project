@@ -96,7 +96,7 @@ func TestAdminCreatesAnApplicationAndEveryoneSeesItInTheList(t *testing.T) {
 
 	// Any logged-in user sees it in the list.
 	var list appListBody
-	env.SeedUserClient("bob", "bob-password-1").Get("/api/applications").ExpectStatus(http.StatusOK).JSON(&list)
+	plainUserClient(t, env, "bob").Get("/api/applications").ExpectStatus(http.StatusOK).JSON(&list)
 	if len(list.Items) != 1 {
 		t.Fatalf("list = %+v", list.Items)
 	}

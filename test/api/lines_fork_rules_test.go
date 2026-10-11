@@ -63,7 +63,7 @@ func TestOnlyAnOwnerOfTheApplicationCanFork(t *testing.T) {
 	f.secondApp(t, dbrooks.ID, map[string]any{"pes": []string{f.owner.ID}})
 
 	forbidden := http.StatusForbidden
-	bob := f.env.SeedUserClient("bob", "bob-password-1")
+	bob := plainUserClient(t, f.env, "bob")
 	body := newFork(src.ID, nil)
 	path := linesPath("payments-core")
 	f.admin.Post(path, body).ExpectError(forbidden, "", "forbidden") // an administrator who is not an Owner

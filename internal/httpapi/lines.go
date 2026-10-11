@@ -16,7 +16,7 @@ type sourceVersionJSON struct {
 	Line       lineJSON `json:"line"`
 }
 
-// lineDetailJSON is a line with its fork facts. Fields that do not apply are
+// lineDetailJSON is a line with its maintenance-line fields. Fields that do not apply are
 // omitted: the mainline has no status, sourceVersion, reason, plannedEnd, note or
 // forkedAt. status is "active", "frozen" or "retired". plannedEnd is a date.
 type lineDetailJSON struct {
@@ -62,7 +62,7 @@ type latestVersionJSON struct {
 	ReleasedAt string `json:"releasedAt"`
 }
 
-// lineageNodeJSON is one line of the lineage tree: the line (with its fork facts)
+// lineageNodeJSON is one line of the lineage tree: the line (with its maintenance-line fields)
 // plus what the tree table shows. children is never null; latestVersion is null for
 // a line without versions. Later tickets add fields here (for example the graph column).
 type lineageNodeJSON struct {

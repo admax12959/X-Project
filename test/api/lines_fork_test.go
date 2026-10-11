@@ -85,7 +85,7 @@ func TestOwnerForksAMaintenanceLineFromAMainlineVersion(t *testing.T) {
 	var list struct {
 		Items []lineDetailBody `json:"items"`
 	}
-	f.env.SeedUserClient("bob", "bob-password-1").Get(linesPath("payments-core")).ExpectStatus(http.StatusOK).JSON(&list)
+	plainUserClient(t, f.env, "bob").Get(linesPath("payments-core")).ExpectStatus(http.StatusOK).JSON(&list)
 	if len(list.Items) != 2 || !list.Items[0].IsMain || list.Items[0].Status != "" || list.Items[0].SourceVersion != nil {
 		t.Fatalf("lines = %+v", list.Items)
 	}

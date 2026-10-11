@@ -23,9 +23,9 @@ const (
 	LineRetired LineStatus = "retired"
 )
 
-// SourceVersion is the version a maintenance line was forked from: a fact of the
-// fork, never changed. It can sit on any line, including a retired one. Line is the
-// line that holds the version (short form: no fork facts).
+// SourceVersion is the version a maintenance line was forked from: a fact fixed
+// when the line is forked, never changed. It can sit on any line, including a retired one. Line is the
+// line that holds the version (short form: ID, IsMain, Name and Branch only).
 type SourceVersion struct {
 	ID         int64
 	Number     string
@@ -48,7 +48,7 @@ type NewLine struct {
 // ErrBranchTaken is returned by the Repository when the branch exists in the application.
 var ErrBranchTaken = errors.New("branch already taken")
 
-// LineRepository is the fork part of Repository.
+// LineRepository is the maintenance-line part of Repository.
 type LineRepository interface {
 	// GetVersion reads one version of the application (with its line, short form).
 	GetVersion(ctx context.Context, applicationID, versionID int64) (Version, bool, error)
@@ -76,7 +76,7 @@ const (
 
 // ForkLine forks a maintenance line from any version of the application, including
 // a version on a retired line. Owners only (administrators and PEs cannot). The new
-// line is active and the server records the fork time. Branch names are unique in
+// line is active and the server records the time of forking. Branch names are unique in
 // the application, the mainline's included (branchTaken, with the conflicting line).
 //
 // Check order: application exists, actor is an Owner, fields, source version.

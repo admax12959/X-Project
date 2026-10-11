@@ -10,7 +10,7 @@ import (
 
 var _ domain.LineRepository = (*Store)(nil)
 
-// lineSelect reads a line with its fork facts and its source version (and the line
+// lineSelect reads a line with its source version, reason and status (and the line
 // that holds it, short form). Locking reads on it must say FOR UPDATE OF l so the
 // source version's rows are not locked.
 const lineSelect = `SELECT l.id, l.is_main, l.name, l.branch, l.created_at, l.status, l.reason, l.planned_end, l.note, l.forked_at,

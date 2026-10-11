@@ -53,8 +53,8 @@ type ApplicationSummary struct {
 }
 
 // Line is the mainline or a maintenance line (GLOSSARY: 线). The mainline has no
-// name of its own and none of the fork facts below: no status, source version,
-// reason, planned end or fork time. Lines read for a Version (Version.Line) carry
+// name of its own and none of the maintenance-line fields below: no status, source version,
+// reason, planned end or time of forking. Lines read for a Version (Version.Line) carry
 // only ID, IsMain, Name and Branch.
 type Line struct {
 	ID            int64

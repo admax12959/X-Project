@@ -124,8 +124,8 @@ func (s *Service) lineDetail(ctx context.Context, repo Repository, line Line) (L
 
 // UpdateLineInput is the Owner's edit of a maintenance line. A nil field is left
 // unchanged; an empty Note or PlannedEnd clears it. The Git branch, the source
-// version, the fork reason and the fork time are not part of this type on purpose:
-// they describe the fork as it happened and have no edit path.
+// version, the fork reason and the time of forking are not part of this type on purpose:
+// they describe how the line was forked and have no edit path.
 type UpdateLineInput struct {
 	Name       *string
 	Note       *string

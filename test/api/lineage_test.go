@@ -145,7 +145,7 @@ type lineageNodeBody struct {
 func (p *paymentsCore) lineage(t *testing.T) lineageNodeBody {
 	t.Helper()
 	var root lineageNodeBody
-	p.env.SeedUserClient("bob", "bob-password-1").Get("/api/applications/payments-core/lineage").ExpectStatus(http.StatusOK).JSON(&root)
+	plainUserClient(t, p.env, "bob").Get("/api/applications/payments-core/lineage").ExpectStatus(http.StatusOK).JSON(&root)
 	return root
 }
 

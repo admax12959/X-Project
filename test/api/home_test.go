@@ -31,7 +31,7 @@ type homeListBody struct {
 func (p *paymentsCore) homeApp(t *testing.T, path string) homeAppBody {
 	t.Helper()
 	var l homeListBody
-	p.env.SeedUserClient("bob", "bob-password-1").Get(path).ExpectStatus(http.StatusOK).JSON(&l)
+	plainUserClient(t, p.env, "bob").Get(path).ExpectStatus(http.StatusOK).JSON(&l)
 	for _, a := range l.Items {
 		if a.Key == "payments-core" {
 			return a
@@ -54,7 +54,7 @@ func TestApplicationWithoutForksHasNoMaintenanceLinesAndNoLatestVersion(t *testi
 	f := newAppFixture(t)
 	f.post(nil).ExpectStatus(http.StatusCreated)
 	var l homeListBody
-	f.env.SeedUserClient("bob", "bob-password-1").Get("/api/applications").ExpectStatus(http.StatusOK).JSON(&l)
+	plainUserClient(t, f.env, "bob").Get("/api/applications").ExpectStatus(http.StatusOK).JSON(&l)
 	if len(l.Items) != 1 || l.Items[0].LineCount != 0 || l.Items[0].LatestVersion != nil {
 		t.Fatalf("list = %+v", l.Items)
 	}
@@ -63,7 +63,7 @@ func TestApplicationWithoutForksHasNoMaintenanceLinesAndNoLatestVersion(t *testi
 func TestApplicationListShowsTheVersionReleasedLastNotTheHighestNumber(t *testing.T) {
 	t.Parallel()
 	f := newVersionFixture(t)
-	bob := f.env.SeedUserClient("bob", "bob-password-1")
+	bob := plainUserClient(t, f.env, "bob")
 	latest := func() homeAppBody {
 		t.Helper()
 		var l homeListBody
@@ -178,7 +178,7 @@ func activity(t *testing.T, c *apitest.Client, path string) []activityBody {
 func TestRecentActivityMergesEveryApplicationsHistoryNewestFirstForEveryUser(t *testing.T) {
 	t.Parallel()
 	f := newAppFixture(t)
-	reader := f.env.SeedUserClient("reader", "reader-password-1") // not an Owner or PE of anything
+	reader := plainUserClient(t, f.env, "reader") // not an Owner or PE of anything
 	if got := activity(t, reader, "/api/recent-activity"); len(got) != 0 {
 		t.Fatalf("activity of an empty tool = %v", got)
 	}

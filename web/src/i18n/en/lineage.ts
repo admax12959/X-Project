@@ -83,7 +83,7 @@ export default {
   'lineage.statusDialog.effect.active.2': 'You can freeze the line again at any time.',
   'lineage.statusDialog.meaning.retired': 'A Retired line is kept only as a read-only record.',
   'lineage.statusDialog.effect.retired.1': 'No new versions can be registered, and the name, note and planned end date can no longer be changed. The line cannot be deleted.',
-  'lineage.statusDialog.effect.retired.2': 'Its versions stay on record and can still be used as the source of a new fork.',
+  'lineage.statusDialog.effect.retired.2': 'Its versions stay on record and can still be used as the source version of a new maintenance line.',
   'lineage.statusDialog.final': 'Retiring is final. It cannot be undone.',
   'lineage.statusDialog.cancel': 'Cancel',
   'lineage.statusDialog.saving': 'Saving…',

@@ -42,7 +42,7 @@ func TestAnyLoggedInUserOpensTheApplicationOverview(t *testing.T) {
 	f.post(map[string]any{"pes": []string{pe.ID}, "mainBranch": "develop"}).ExpectStatus(http.StatusCreated)
 
 	var a appBody
-	f.env.SeedUserClient("bob", "bob-password-1").Get("/api/applications/payments-core").ExpectStatus(http.StatusOK).JSON(&a)
+	plainUserClient(t, f.env, "bob").Get("/api/applications/payments-core").ExpectStatus(http.StatusOK).JSON(&a)
 	if a.Key != "payments-core" || a.Name != "Payments Core" || a.Description != "Card and ledger services" ||
 		a.MainBranch != "develop" || a.DeployInfo != "" || a.Repo.ProjectID != "1182" || a.Repo.Path != "payments/payments-core" ||
 		len(a.Owners) != 1 || a.Owners[0].DisplayName != "Emma Larsen" || len(a.PEs) != 1 || a.PEs[0].DisplayName != "Priya Raman" {
