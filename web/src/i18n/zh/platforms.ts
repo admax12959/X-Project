@@ -1,0 +1,21 @@
+// 管理后台：代码平台（#4）。GitLab、GitHub 是产品名，不翻译。
+export default {
+  'platforms.navGroup': '管理',
+  'platforms.title': '代码平台',
+  'platforms.register': '登记代码平台',
+  'platforms.col.kind': '类型',
+  'platforms.col.baseUrl': '实例地址',
+  'platforms.col.token': '令牌',
+  'platforms.col.createdAt': '登记时间',
+  'platforms.field.kind': '类型',
+  'platforms.field.baseUrl': '实例地址',
+  'platforms.field.token': '服务账号令牌',
+  'platforms.hint.baseUrl': '例如 https://gitlab.example.com',
+  'platforms.hint.token': '只读服务账号的令牌。加密存储，登记后只显示末尾 4 位。',
+  'platforms.cancel': '取消',
+  'platforms.save': '登记',
+  'platforms.saving': '登记中…',
+  'platforms.empty.title': '还没有代码平台',
+  'platforms.empty.body': '登记应用存放代码的 GitLab 或 GitHub 实例。',
+  'platforms.loadFailed': '代码平台列表加载失败。',
+};
