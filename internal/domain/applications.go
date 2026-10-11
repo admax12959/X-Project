@@ -45,14 +45,22 @@ type ApplicationSummary struct {
 	Owners      []UserRef
 }
 
-// Line is the mainline or a maintenance line (GLOSSARY: 线). For now only the
-// mainline exists: it has no name of its own and no status.
+// Line is the mainline or a maintenance line (GLOSSARY: 线). The mainline has no
+// name of its own and none of the fork facts below: no status, source version,
+// reason, planned end or fork time. Lines read for a Version (Version.Line) carry
+// only ID, IsMain, Name and Branch.
 type Line struct {
-	ID        int64
-	IsMain    bool
-	Name      string
-	Branch    string
-	CreatedAt time.Time
+	ID            int64
+	IsMain        bool
+	Name          string
+	Branch        string
+	CreatedAt     time.Time
+	Status        LineStatus     // maintenance lines only
+	SourceVersion *SourceVersion // maintenance lines only; fixed at fork time
+	Reason        string         // fork reason, fixed at fork time
+	PlannedEnd    *time.Time     // optional, informational only
+	Note          string
+	ForkedAt      *time.Time // set by the server when forked
 }
 
 // MemberRole is a user's role on one application.

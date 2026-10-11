@@ -11,10 +11,8 @@ import (
 var _ domain.VersionRepository = (*Store)(nil)
 
 func (s *Store) LockLine(ctx context.Context, applicationID, lineID int64) (domain.Line, bool, error) {
-	var l domain.Line
-	err := s.q.QueryRowContext(ctx,
-		"SELECT id, is_main, name, branch, created_at FROM app_lines WHERE application_id = ? AND id = ? FOR UPDATE",
-		applicationID, lineID).Scan(&l.ID, &l.IsMain, &l.Name, &l.Branch, &l.CreatedAt)
+	// The whole line, status included: the lifecycle rules (checkLineAcceptsVersion) read it.
+	l, err := scanLine(s.q.QueryRowContext(ctx, lineSelect+" WHERE l.application_id = ? AND l.id = ? FOR UPDATE OF l", applicationID, lineID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Line{}, false, nil
 	}

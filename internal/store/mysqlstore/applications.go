@@ -46,16 +46,15 @@ func (s *Store) CreateMainline(ctx context.Context, applicationID int64, branch 
 }
 
 func (s *Store) ListLines(ctx context.Context, applicationID int64) ([]domain.Line, error) {
-	rows, err := s.q.QueryContext(ctx,
-		"SELECT id, is_main, name, branch, created_at FROM app_lines WHERE application_id = ? ORDER BY is_main DESC, id", applicationID)
+	rows, err := s.q.QueryContext(ctx, lineSelect+" WHERE l.application_id = ? ORDER BY l.is_main DESC, l.id", applicationID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []domain.Line{}
 	for rows.Next() {
-		var l domain.Line
-		if err := rows.Scan(&l.ID, &l.IsMain, &l.Name, &l.Branch, &l.CreatedAt); err != nil {
+		l, err := scanLine(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, l)

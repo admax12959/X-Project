@@ -140,9 +140,9 @@ func (s *server) listLines(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out := listJSON[lineJSON]{Items: make([]lineJSON, 0, len(lines))}
+	out := listJSON[lineDetailJSON]{Items: make([]lineDetailJSON, 0, len(lines))}
 	for _, l := range lines {
-		out.Items = append(out.Items, lineJSON{ID: strconv.FormatInt(l.ID, 10), IsMain: l.IsMain, Name: l.Name, Branch: l.Branch})
+		out.Items = append(out.Items, toLineDetailJSON(l))
 	}
 	writeJSON(w, http.StatusOK, out)
 }

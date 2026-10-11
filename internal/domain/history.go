@@ -29,6 +29,10 @@ const (
 	// EventVersionRegistered: version registered on a line. Params: number,
 	// line = {id, isMain, name, branch} as the line was when it happened.
 	EventVersionRegistered EventType = "versionRegistered"
+	// EventLineForked: a maintenance line was forked. Params: line = the new line
+	// {id, isMain, name, branch}, number = the source version's number, sourceLine =
+	// the line that holds the source version {id, isMain, name, branch}.
+	EventLineForked EventType = "lineForked"
 )
 
 // event is a change-history entry that has not been written yet. Build it with
@@ -48,6 +52,10 @@ func appCreatedEvent(owners []UserID) event {
 
 func versionRegisteredEvent(number string, line Line) event {
 	return event{EventVersionRegistered, map[string]any{"number": number, "line": lineParam(line)}}
+}
+
+func lineForkedEvent(line Line, source Version) event {
+	return event{EventLineForked, map[string]any{"line": lineParam(line), "number": source.Number, "sourceLine": lineParam(source.Line)}}
 }
 
 // userParam is the params form of a reference to a user.

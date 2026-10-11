@@ -33,6 +33,7 @@ function lineLabel(line: unknown): string {
 const renderers: Record<string, Renderer> = {
   appCreated: (p, locale) => ({ owners: users(p.owners, locale) }),
   versionRegistered: (p) => ({ number: String(p.number), line: lineLabel(p.line) }),
+  lineForked: (p) => ({ number: String(p.number), line: lineLabel(p.line) }),
 };
 
 export function renderEvent(e: ChangeEvent, locale: Locale): string {
