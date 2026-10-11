@@ -15,6 +15,8 @@ export default {
   'error.usernameTaken': '该用户名已被占用。',
   'error.usernameLocked': '已绑定 LDAP 登录身份的用户不能修改用户名。',
   'error.ldapManaged': '该字段由 LDAP 管理，不能在此修改。',
+  'error.keyTaken': '该应用标识已被使用。',
+  'error.userUnavailable': '该用户不存在或已被禁用，请选择已启用的用户。',
   'error.repoNotFound': '代码平台上找不到这个仓库，请检查仓库路径。',
   'error.repoForbidden': '代码平台的令牌无权访问这个仓库。',
   'error.platformUnreachable': '无法连接代码平台，请稍后再试。',

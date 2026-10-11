@@ -114,15 +114,31 @@ func (s *Service) CreateApplication(ctx context.Context, actor Actor, in CreateA
 	if branch == "" {
 		branch = DefaultMainBranch
 	}
+	if c.Required("key", key) && !applicationKeyPattern.MatchString(key) {
+		c.Add("key", CodeInvalid, nil)
+	}
+	if c.Required("name", name) {
+		checkLength(&c, "name", name, maxNameLength)
+	}
+	checkLength(&c, "description", description, maxDescriptionLength)
+	if !validBranchName(branch) {
+		c.Add("mainBranch", CodeInvalid, nil)
+	}
 	platformID, path := checkRepoInput(&c, "repo", in.Repo)
 	owners := parseUserIDs(&c, "owners", in.Owners)
 	pes := parseUserIDs(&c, "pes", in.PEs)
+	if len(in.Owners) == 0 {
+		c.Add("owners", CodeRequired, nil)
+	}
 	if err := c.Err(); err != nil {
 		return Application{}, err
 	}
 
 	var created Application
 	err := s.repo.InTx(ctx, func(tx Repository) error {
+		if err := s.checkMembers(ctx, tx, "owners", owners, "pes", pes); err != nil {
+			return err
+		}
 		binding, err := s.resolveRepo(ctx, tx, "repo", platformID, path)
 		if err != nil {
 			return err
@@ -132,6 +148,9 @@ func (s *Service) CreateApplication(ctx context.Context, actor Actor, in CreateA
 			Key: key, Name: name, Description: description, PlatformID: binding.Platform.ID,
 			RepoPath: binding.Path, ProjectID: binding.ProjectID, At: now,
 		})
+		if errors.Is(err, ErrKeyTaken) {
+			return Validation(Invalid("key", CodeKeyTaken, nil))
+		}
 		if err != nil {
 			return err
 		}
@@ -155,6 +174,29 @@ func (s *Service) CreateApplication(ctx context.Context, actor Actor, in CreateA
 		return err
 	})
 	return created, err
+}
+
+const maxDescriptionLength = 4000
+
+// checkMembers requires every Owner/PE to be an existing, enabled user (spec:
+// Owner/PE can only be chosen from enabled users; an LDAP user must log in once first).
+func (s *Service) checkMembers(ctx context.Context, tx Repository, ownersField string, owners []UserID, pesField string, pes []UserID) error {
+	var c Collector
+	for _, list := range []struct {
+		field string
+		ids   []UserID
+	}{{ownersField, owners}, {pesField, pes}} {
+		for _, id := range list.ids {
+			u, found, err := tx.GetUser(ctx, id)
+			if err != nil {
+				return err
+			}
+			if !found || u.Status != UserEnabled {
+				c.Add(list.field, CodeUserUnavailable, map[string]any{"userId": strconv.FormatInt(int64(id), 10)})
+			}
+		}
+	}
+	return c.Err()
 }
 
 // parseUserIDs parses client-supplied user IDs, dropping duplicates.
