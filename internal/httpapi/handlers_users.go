@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -46,6 +47,62 @@ func toAdminUserJSON(v domain.UserWithIdentities) adminUserJSON {
 func (s *server) userRoutes() {
 	s.route("GET /api/users", s.listUsers)
 	s.route("POST /api/users", s.createUser)
+	s.route("PATCH /api/users/{id}", s.updateUser)
+	s.route("POST /api/users/{id}/disable", s.statusHandler(s.svc.DisableUser))
+	s.route("POST /api/users/{id}/enable", s.statusHandler(s.svc.EnableUser))
+	// Deliberately no DELETE: users can only be disabled.
+}
+
+func (s *server) statusHandler(change func(context.Context, domain.Actor, domain.UserID) (domain.UserWithIdentities, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := userIDParam(w, r)
+		if !ok {
+			return
+		}
+		u, err := change(r.Context(), actorOf(r), id)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toAdminUserJSON(u))
+	}
+}
+
+// userIDParam reads {id}; a malformed id is a user that does not exist.
+func userIDParam(w http.ResponseWriter, r *http.Request) (domain.UserID, bool) {
+	n, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || n <= 0 {
+		writeCode(w, http.StatusNotFound, domain.CodeNotFound)
+		return 0, false
+	}
+	return domain.UserID(n), true
+}
+
+func (s *server) updateUser(w http.ResponseWriter, r *http.Request) {
+	id, ok := userIDParam(w, r)
+	if !ok {
+		return
+	}
+	// Pointers distinguish "not sent" (unchanged) from "sent empty" (cleared).
+	var body struct {
+		Username    *string `json:"username"`
+		DisplayName *string `json:"displayName"`
+		Email       *string `json:"email"`
+		Phone       *string `json:"phone"`
+		Department  *string `json:"department"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	u, err := s.svc.UpdateUser(r.Context(), actorOf(r), id, domain.UpdateUserInput{
+		Username: body.Username, DisplayName: body.DisplayName, Email: body.Email,
+		Phone: body.Phone, Department: body.Department,
+	})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAdminUserJSON(u))
 }
 
 func (s *server) listUsers(w http.ResponseWriter, r *http.Request) {

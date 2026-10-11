@@ -26,5 +26,30 @@ export type ApplicationSummary = {
   description: string;
 };
 
+/** Administrator view of a user (GET /api/users). */
+export type AdminUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  email: string;
+  phone: string;
+  department: string;
+  status: 'enabled' | 'disabled';
+  isAdmin: boolean;
+  identities: { kind: 'local' | 'ldap'; loginName: string; boundAt: string; boundVia: string }[];
+};
+
+export type CreateUserInput = {
+  username: string;
+  displayName: string;
+  email: string;
+  phone: string;
+  department: string;
+  password: string;
+};
+
+/** Fields left out are unchanged. */
+export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displayName' | 'email' | 'phone' | 'department'>>;
+
 /** Every collection endpoint returns {items: [...]}. */
 export type List<T> = { items: T[] };

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -18,6 +19,16 @@ type UserWithIdentities struct {
 type UserRepository interface {
 	// ListUsers returns every user (oldest first) with its login identities.
 	ListUsers(ctx context.Context) ([]UserWithIdentities, error)
+	// LockUserWithIdentities reads one user and its identities, locking the user
+	// row for the rest of the transaction (call inside InTx).
+	LockUserWithIdentities(ctx context.Context, id UserID) (UserWithIdentities, bool, error)
+	// UpdateUser overwrites the editable columns (username, display name, email,
+	// phone, department). Returns ErrUsernameTaken on a username conflict.
+	UpdateUser(ctx context.Context, u User, at time.Time) error
+	// RenameLocalLogin changes the login name of the user's local identity.
+	// Returns ErrUsernameTaken on a conflict.
+	RenameLocalLogin(ctx context.Context, id UserID, loginName string) error
+	SetUserStatus(ctx context.Context, id UserID, status UserStatus, at time.Time) error
 }
 
 // requireAdmin is the permission check for every user-management operation.
@@ -102,6 +113,151 @@ func (s *Service) CreateLocalUser(ctx context.Context, actor Actor, in CreateLoc
 		return err
 	})
 	return created, err
+}
+
+// UpdateUserInput is an administrator's edit of a user. A nil field is left
+// unchanged; a non-nil field is validated like it is at creation.
+type UpdateUserInput struct {
+	Username    *string
+	DisplayName *string
+	Email       *string
+	Phone       *string
+	Department  *string
+}
+
+func (u UserWithIdentities) hasIdentity(kind IdentityKind) bool {
+	for _, i := range u.Identities {
+		if i.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// UpdateUser edits a user's profile and, for users without an LDAP identity,
+// the username (ADR-0004). The local login name follows the username, and
+// everything else refers to the user by ID, so a rename keeps all records.
+func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in UpdateUserInput) (UserWithIdentities, error) {
+	if err := requireAdmin(actor); err != nil {
+		return UserWithIdentities{}, err
+	}
+	var result UserWithIdentities
+	err := s.repo.InTx(ctx, func(tx Repository) error {
+		cur, found, err := tx.LockUserWithIdentities(ctx, id)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return newKind(KindNotFound, CodeNotFound)
+		}
+		u := cur.User
+		ldapBound := cur.hasIdentity(IdentityLDAP)
+		var c Collector
+
+		trimmed := func(p *string) (string, bool) {
+			if p == nil {
+				return "", false
+			}
+			return strings.TrimSpace(*p), true
+		}
+		rename := false
+		if v, ok := trimmed(in.Username); ok && v != u.Username {
+			if ldapBound {
+				c.Add("username", CodeUsernameLocked, nil)
+			} else {
+				checkUsername(&c, v)
+				u.Username, rename = v, true
+			}
+		}
+		// For LDAP-bound users the directory owns display name, email and
+		// department (spec: synced at login); a different value is refused.
+		if v, ok := trimmed(in.DisplayName); ok {
+			if ldapBound && v != u.DisplayName {
+				c.Add("displayName", CodeLdapManaged, nil)
+			}
+			u.DisplayName = v
+		}
+		if v, ok := trimmed(in.Email); ok {
+			if ldapBound && v != u.Email {
+				c.Add("email", CodeLdapManaged, nil)
+			}
+			u.Email = v
+		}
+		if v, ok := trimmed(in.Phone); ok {
+			u.Phone = v
+		}
+		if v, ok := trimmed(in.Department); ok {
+			if ldapBound && v != u.Department {
+				c.Add("department", CodeLdapManaged, nil)
+			}
+			u.Department = v
+		}
+		checkProfile(&c, u.DisplayName, u.Email, u.Phone, u.Department)
+		if err := c.Err(); err != nil {
+			return err
+		}
+
+		if err := tx.UpdateUser(ctx, u, s.nowUTC()); err != nil {
+			return mapUsernameTaken(err)
+		}
+		if rename {
+			if err := tx.RenameLocalLogin(ctx, id, u.Username); err != nil {
+				return mapUsernameTaken(err)
+			}
+			for i := range cur.Identities {
+				if cur.Identities[i].Kind == IdentityLocal {
+					cur.Identities[i].LoginName = u.Username
+				}
+			}
+		}
+		result = UserWithIdentities{User: u, Identities: cur.Identities}
+		return nil
+	})
+	return result, err
+}
+
+// DisableUser blocks a user from logging in; open sessions stop working too
+// (Authenticate rejects disabled users). Users are never deleted. Idempotent.
+// Protection for an application's only Owner is added by the Owner/PE ticket.
+func (s *Service) DisableUser(ctx context.Context, actor Actor, id UserID) (UserWithIdentities, error) {
+	return s.setUserStatus(ctx, actor, id, UserDisabled)
+}
+
+// EnableUser lets a disabled user log in again. Idempotent.
+func (s *Service) EnableUser(ctx context.Context, actor Actor, id UserID) (UserWithIdentities, error) {
+	return s.setUserStatus(ctx, actor, id, UserEnabled)
+}
+
+func (s *Service) setUserStatus(ctx context.Context, actor Actor, id UserID, status UserStatus) (UserWithIdentities, error) {
+	if err := requireAdmin(actor); err != nil {
+		return UserWithIdentities{}, err
+	}
+	var result UserWithIdentities
+	err := s.repo.InTx(ctx, func(tx Repository) error {
+		cur, found, err := tx.LockUserWithIdentities(ctx, id)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return newKind(KindNotFound, CodeNotFound)
+		}
+		if cur.User.Status != status {
+			if err := tx.SetUserStatus(ctx, id, status, s.nowUTC()); err != nil {
+				return err
+			}
+			cur.User.Status = status
+		}
+		result = cur
+		return nil
+	})
+	return result, err
+}
+
+func mapUsernameTaken(err error) error {
+	if errors.Is(err, ErrUsernameTaken) {
+		return usernameTaken()
+	}
+	return err
 }
 
 // Field limits, matching the users table.

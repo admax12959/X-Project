@@ -2,8 +2,10 @@ package mysqlstore
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 
@@ -18,6 +20,50 @@ func mapUsernameConflict(err error) error {
 		(strings.Contains(me.Message, "uq_users_username") || strings.Contains(me.Message, "uq_identity_login")) {
 		return domain.ErrUsernameTaken
 	}
+	return err
+}
+
+func (s *Store) LockUserWithIdentities(ctx context.Context, id domain.UserID) (domain.UserWithIdentities, bool, error) {
+	u, err := scanUser(s.q.QueryRowContext(ctx, "SELECT "+userCols+" FROM users WHERE id = ? FOR UPDATE", id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.UserWithIdentities{}, false, nil
+	}
+	if err != nil {
+		return domain.UserWithIdentities{}, false, err
+	}
+	out := domain.UserWithIdentities{User: u, Identities: []domain.LoginIdentity{}}
+	rows, err := s.q.QueryContext(ctx, "SELECT user_id, kind, login_name, bound_at, bound_via FROM login_identities WHERE user_id = ? ORDER BY id", id)
+	if err != nil {
+		return out, false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var i domain.LoginIdentity
+		var kind, via string
+		if err := rows.Scan(&i.UserID, &kind, &i.LoginName, &i.BoundAt, &via); err != nil {
+			return out, false, err
+		}
+		i.Kind, i.BoundVia = domain.IdentityKind(kind), domain.BoundVia(via)
+		out.Identities = append(out.Identities, i)
+	}
+	return out, true, rows.Err()
+}
+
+func (s *Store) UpdateUser(ctx context.Context, u domain.User, at time.Time) error {
+	_, err := s.q.ExecContext(ctx,
+		"UPDATE users SET username = ?, display_name = ?, email = ?, phone = ?, department = ?, updated_at = ? WHERE id = ?",
+		u.Username, u.DisplayName, u.Email, u.Phone, u.Department, at, u.ID)
+	return mapUsernameConflict(err)
+}
+
+func (s *Store) RenameLocalLogin(ctx context.Context, id domain.UserID, loginName string) error {
+	_, err := s.q.ExecContext(ctx, "UPDATE login_identities SET login_name = ? WHERE user_id = ? AND kind = ?",
+		loginName, id, string(domain.IdentityLocal))
+	return mapUsernameConflict(err)
+}
+
+func (s *Store) SetUserStatus(ctx context.Context, id domain.UserID, status domain.UserStatus, at time.Time) error {
+	_, err := s.q.ExecContext(ctx, "UPDATE users SET status = ?, updated_at = ? WHERE id = ?", string(status), at, id)
 	return err
 }
 

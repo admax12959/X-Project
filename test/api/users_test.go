@@ -236,3 +236,194 @@ func TestOnlyAdministratorsMayManageUsers(t *testing.T) {
 		t.Fatalf("a forbidden create changed the user list: %d users", got)
 	}
 }
+
+// patchUser sends PATCH /api/users/{id}; only the given fields change.
+func patchUser(c *apitest.Client, id string, fields map[string]any) *apitest.Response {
+	return c.Do(http.MethodPatch, "/api/users/"+id, fields)
+}
+
+func TestAdminEditsDisplayNameEmailDepartmentAndPhone(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+	jane := createUser(t, admin, nil)
+
+	var edited userBody
+	patchUser(admin, jane.ID, map[string]any{
+		"displayName": " Jane Q. Doe ", "email": "jq@example.com", "department": "Treasury", "phone": "555-0100",
+	}).ExpectStatus(http.StatusOK).JSON(&edited)
+	if edited.ID != jane.ID || edited.DisplayName != "Jane Q. Doe" || edited.Email != "jq@example.com" ||
+		edited.Department != "Treasury" || edited.Phone != "555-0100" || edited.Username != "jdoe" {
+		t.Fatalf("edited = %+v", edited)
+	}
+	if got := findUser(t, listUsers(t, admin), "jdoe"); got.DisplayName != "Jane Q. Doe" || got.Phone != "555-0100" {
+		t.Fatalf("list after edit = %+v", got)
+	}
+
+	// Fields that are left out stay as they were; optional fields can be cleared.
+	patchUser(admin, jane.ID, map[string]any{"email": "", "department": ""}).ExpectStatus(http.StatusOK).JSON(&edited)
+	if edited.DisplayName != "Jane Q. Doe" || edited.Phone != "555-0100" || edited.Email != "" || edited.Department != "" {
+		t.Fatalf("after partial edit = %+v", edited)
+	}
+}
+
+func TestEditingAUserUsesTheSameFieldRulesAsCreating(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+	jane := createUser(t, admin, nil)
+
+	res := patchUser(admin, jane.ID, map[string]any{
+		"displayName": " ", "email": "not-an-email", "phone": strings.Repeat("9", 65),
+	})
+	res.ExpectError(http.StatusUnprocessableEntity, "displayName", "required")
+	res.ExpectError(http.StatusUnprocessableEntity, "email", "invalid")
+	res.ExpectError(http.StatusUnprocessableEntity, "phone", "tooLong")
+
+	if got := findUser(t, listUsers(t, admin), "jdoe"); got.DisplayName != "Jane Doe" || got.Email != "jane@example.com" {
+		t.Fatalf("a rejected edit changed the user: %+v", got)
+	}
+}
+
+func TestRenamingALocalUserKeepsTheSameUserAndMovesTheLoginName(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+	jane := createUser(t, admin, nil)
+
+	// A session opened before the rename keeps working: it refers to the user ID.
+	open := env.Client()
+	open.LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+
+	var renamed userBody
+	patchUser(admin, jane.ID, map[string]any{"username": " jane.doe "}).ExpectStatus(http.StatusOK).JSON(&renamed)
+	if renamed.ID != jane.ID || renamed.Username != "jane.doe" || renamed.DisplayName != "Jane Doe" {
+		t.Fatalf("renamed = %+v", renamed)
+	}
+
+	var me struct {
+		User userBody `json:"user"`
+	}
+	open.Get("/api/session").ExpectStatus(http.StatusOK).JSON(&me)
+	if me.User.ID != jane.ID || me.User.Username != "jane.doe" {
+		t.Fatalf("existing session now sees %+v", me.User)
+	}
+
+	// The login identity follows the user; the old name stops working and is free again.
+	env.Client().LoginLocal("jane.doe", "initial-pw-1").ExpectStatus(http.StatusOK)
+	env.Client().LoginLocal("jdoe", "initial-pw-1").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	users := listUsers(t, admin)
+	if got := findUser(t, users, "jane.doe"); got.ID != jane.ID || len(got.Identities) != 1 || got.Identities[0].Kind != "local" {
+		t.Fatalf("list after rename = %+v", got)
+	}
+	other := createUser(t, admin, map[string]any{"username": "jdoe", "displayName": "John Doe"})
+	if other.ID == jane.ID {
+		t.Fatal("a new user reusing the old name must be a different user")
+	}
+	env.Client().LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+}
+
+func TestRenameFollowsTheSameRulesAsCreation(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+	jane := createUser(t, admin, nil)
+	createUser(t, admin, map[string]any{"username": "taken"})
+
+	patchUser(admin, jane.ID, map[string]any{"username": "Bad Name"}).ExpectError(http.StatusUnprocessableEntity, "username", "invalid")
+	patchUser(admin, jane.ID, map[string]any{"username": " "}).ExpectError(http.StatusUnprocessableEntity, "username", "required")
+	patchUser(admin, jane.ID, map[string]any{"username": "taken"}).ExpectError(http.StatusUnprocessableEntity, "username", "usernameTaken")
+	patchUser(admin, jane.ID, map[string]any{"username": apitest.AdminUsername}).ExpectError(http.StatusUnprocessableEntity, "username", "usernameTaken")
+
+	// Nothing changed, and sending the current username is not a rename.
+	env.Client().LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+	patchUser(admin, jane.ID, map[string]any{"username": "jdoe", "department": "Ops"}).ExpectStatus(http.StatusOK)
+}
+
+func TestOnlyAdministratorsMayEditOrDisableUsers(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+	jane := createUser(t, admin, nil)
+	bob := createUser(t, admin, map[string]any{"username": "bob", "displayName": "Bob"})
+
+	janeClient := env.Client()
+	janeClient.LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+	for _, id := range []string{jane.ID, bob.ID} {
+		patchUser(janeClient, id, map[string]any{"displayName": "Hacked"}).ExpectError(http.StatusForbidden, "", "forbidden")
+		janeClient.Post("/api/users/"+id+"/disable", nil).ExpectError(http.StatusForbidden, "", "forbidden")
+		janeClient.Post("/api/users/"+id+"/enable", nil).ExpectError(http.StatusForbidden, "", "forbidden")
+	}
+
+	for _, u := range listUsers(t, admin) {
+		if u.DisplayName == "Hacked" || u.Status != "enabled" {
+			t.Fatalf("a forbidden request changed %+v", u)
+		}
+	}
+}
+
+func TestDisabledUserCannotLogInUntilEnabledAgain(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+	jane := createUser(t, admin, nil)
+
+	// An already open session ends as soon as the user is disabled.
+	open := env.Client()
+	open.LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+
+	var disabled userBody
+	admin.Post("/api/users/"+jane.ID+"/disable", nil).ExpectStatus(http.StatusOK).JSON(&disabled)
+	if disabled.Status != "disabled" || disabled.ID != jane.ID {
+		t.Fatalf("disabled = %+v", disabled)
+	}
+	if got := findUser(t, listUsers(t, admin), "jdoe").Status; got != "disabled" {
+		t.Fatalf("list status = %q", got)
+	}
+	env.Client().LoginLocal("jdoe", "initial-pw-1").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	open.Get("/api/session").ExpectError(http.StatusUnauthorized, "", "unauthenticated")
+
+	// Disabling twice is harmless, and a disabled user can still be edited.
+	admin.Post("/api/users/"+jane.ID+"/disable", nil).ExpectStatus(http.StatusOK)
+	patchUser(admin, jane.ID, map[string]any{"displayName": "Jane D."}).ExpectStatus(http.StatusOK)
+
+	var enabled userBody
+	admin.Post("/api/users/"+jane.ID+"/enable", nil).ExpectStatus(http.StatusOK).JSON(&enabled)
+	if enabled.Status != "enabled" {
+		t.Fatalf("enabled = %+v", enabled)
+	}
+	env.Client().LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+}
+
+func TestDisablingOrEnablingAnUnknownUserIsNotFound(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+
+	admin.Post("/api/users/99999/disable", nil).ExpectError(http.StatusNotFound, "", "notFound")
+	admin.Post("/api/users/99999/enable", nil).ExpectError(http.StatusNotFound, "", "notFound")
+}
+
+func TestThereIsNoWayToDeleteAUser(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+	jane := createUser(t, admin, nil)
+
+	// DELETE is not routed (404 for the administrator, 401 when logged out)...
+	admin.Delete("/api/users/"+jane.ID).ExpectError(http.StatusNotFound, "", "notFound")
+	env.Client().Delete("/api/users/"+jane.ID).ExpectError(http.StatusUnauthorized, "", "unauthenticated")
+	// ...and the user is untouched.
+	if got := findUser(t, listUsers(t, admin), "jdoe"); got.ID != jane.ID {
+		t.Fatalf("user changed: %+v", got)
+	}
+}
+
+func TestEditingAnUnknownUserIsNotFound(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+
+	patchUser(admin, "99999", map[string]any{"displayName": "x"}).ExpectError(http.StatusNotFound, "", "notFound")
+	patchUser(admin, "abc", map[string]any{"displayName": "x"}).ExpectError(http.StatusNotFound, "", "notFound")
+}
