@@ -260,6 +260,23 @@ func TestTheLineageCarriesStatusForkFactsAndVersionSummaries(t *testing.T) {
 	}
 }
 
+// A line references a version (its source) and a version references its line, with no key from
+// the line back to the version. Deleting the application must still remove all of it.
+func TestDeletingAnApplicationRemovesItsWholeLineage(t *testing.T) {
+	t.Parallel()
+	p := seedPaymentsCore(t)
+	p.admin.Do(http.MethodDelete, "/api/applications/payments-core", map[string]any{"confirmKey": "payments-core"}).ExpectStatus(http.StatusNoContent)
+	p.admin.Get("/api/applications/payments-core/lineage").ExpectError(http.StatusNotFound, "", "notFound")
+	p.admin.Get("/api/applications/payments-core/lines").ExpectError(http.StatusNotFound, "", "notFound")
+
+	// The key is free again and the new application starts with a mainline only.
+	p.env.CodePlatforms.AddRepo(glURL, "payments/payments-core", "1182")
+	p.post(nil).ExpectStatus(http.StatusCreated)
+	if got := p.listLines(p.admin); len(got) != 1 || !got[0].IsMain {
+		t.Fatalf("lines of the new application = %+v", got)
+	}
+}
+
 func TestTheLineageOfAnApplicationWithoutMaintenanceLinesIsJustTheMainline(t *testing.T) {
 	t.Parallel()
 	f := newMainlineFixture(t)
