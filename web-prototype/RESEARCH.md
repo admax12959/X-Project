@@ -1,5 +1,7 @@
 # 设计调研（PROTOTYPE 分支文档）
 
+> 结论：已选定**方案 A · Console**，方案 B 已删除（代码在 `7e61f08`）。决策记录见 issue #1。下面保留调研过程。
+
 起因：第一轮三套方案被否——整体风格像 AI 生成、过度强调"到期"、演示数据偏亚太。本轮先看真实产品，再重做。
 
 截图在 `/tmp/proto-refs/`（第三方页面，不入库）。完整逐项记录：`/tmp/proto-refs/cloud-consoles.md`、`/tmp/proto-refs/dev-tools.md`。

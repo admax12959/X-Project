@@ -12,9 +12,8 @@ import { PrototypeBar, useDirectionKey, type Direction } from './prototype';
 // Lazy per direction: a half-written direction cannot break the others.
 const LOADERS: Record<string, () => Promise<{ direction: Direction }>> = {
   console: () => import('./directions/console'),
-  catalog: () => import('./directions/catalog'),
 };
-const NAMES: Record<string, string> = { console: 'A · Console', catalog: 'B · Catalog' };
+const NAMES: Record<string, string> = { console: 'A · Console' };
 const cache = new Map<string, Promise<Direction>>();
 function load(key: string) {
   if (!cache.has(key)) cache.set(key, LOADERS[key]().then((m) => m.direction));

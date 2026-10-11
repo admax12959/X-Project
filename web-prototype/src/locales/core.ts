@@ -1,5 +1,5 @@
 // Shared vocabulary: GLOSSARY.md terms and system messages. Both design directions use these so the wording is identical.
-// Directions add their own page strings under their own prefix (`console.`, `catalog.`) via registerMessages().
+// Directions add their own page strings under their own prefix (`console.`) via registerMessages().
 //
 // English rules from GLOSSARY "Avoid": Version (never Release), User (never Account), Retired (never Archived/Deprecated),
 // Maintenance line (never fork/branch for the line itself), Fork is a verb only.
