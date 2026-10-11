@@ -15,6 +15,7 @@ import (
 //	KindUnauthenticated → 401 (includes failed login: code invalidCredentials)
 //	KindForbidden       → 403
 //	KindNotFound        → 404
+//	KindUnavailable     → 503
 //	malformed request   → 400 badRequest
 //	anything else       → 500 internal (details only in the server log)
 var kindStatus = map[domain.ErrorKind]int{
@@ -22,6 +23,7 @@ var kindStatus = map[domain.ErrorKind]int{
 	domain.KindUnauthenticated: http.StatusUnauthorized,
 	domain.KindForbidden:       http.StatusForbidden,
 	domain.KindNotFound:        http.StatusNotFound,
+	domain.KindUnavailable:     http.StatusServiceUnavailable,
 }
 
 type errorEnvelope struct {

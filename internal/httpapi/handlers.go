@@ -16,11 +16,12 @@ type userJSON struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
+	Department  string `json:"department"`
 	IsAdmin     bool   `json:"isAdmin"`
 }
 
 func toUserJSON(u domain.User) userJSON {
-	return userJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, IsAdmin: u.IsAdmin}
+	return userJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, Department: u.Department, IsAdmin: u.IsAdmin}
 }
 
 type sessionJSON struct {

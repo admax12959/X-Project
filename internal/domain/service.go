@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -127,8 +128,12 @@ func invalidCredentials() error { return newKind(KindUnauthenticated, CodeInvali
 // and disabled users all yield the same invalidCredentials error.
 func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error) {
 	var c Collector
-	if in.Method != string(IdentityLocal) {
-		c.Add("method", CodeInvalid, map[string]any{"allowed": []string{string(IdentityLocal)}})
+	allowed := []string{string(IdentityLocal)}
+	if s.directory != nil {
+		allowed = append(allowed, string(IdentityLDAP))
+	}
+	if !slices.Contains(allowed, in.Method) {
+		c.Add("method", CodeInvalid, map[string]any{"allowed": allowed})
 	}
 	c.Required("username", in.Username)
 	if in.Password == "" {
@@ -136,6 +141,9 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	}
 	if err := c.Err(); err != nil {
 		return LoginResult{}, err
+	}
+	if in.Method == string(IdentityLDAP) {
+		return s.loginLDAP(ctx, in)
 	}
 
 	ident, found, err := s.repo.FindIdentity(ctx, IdentityLocal, strings.TrimSpace(in.Username))

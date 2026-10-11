@@ -14,6 +14,7 @@ const (
 	KindUnauthenticated                      // 401: no valid session, or login failed
 	KindForbidden                            // 403: authenticated but not allowed
 	KindNotFound                             // 404
+	KindUnavailable                          // 503: a required external system (directory, code platform) cannot be reached
 )
 
 // FieldError is one entry of the error envelope {"errors":[{field, code, params}]}.

@@ -14,4 +14,9 @@ const (
 
 	// sessions
 	CodeInvalidCredentials = "invalidCredentials" // wrong username or password (deliberately uniform)
+
+	// LDAP (ADR-0002, ADR-0004)
+	CodeUsernameTakenByLocal = "usernameTakenByLocal" // first LDAP login, but a user already owns the username
+	CodeUsernameExistsInLdap = "usernameExistsInLdap" // creating a local user whose username is a directory login name
+	CodeLdapUnreachable      = "ldapUnreachable"      // directory could not be queried (HTTP 503); never "not found"
 )
