@@ -144,4 +144,82 @@ func TestAStatusChangeNeedsAKnownTargetStatus(t *testing.T) {
 	}
 }
 
+func TestOnlyAnOwnerOfTheApplicationCanChangeALinesStatus(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	praman := createUser(t, f.admin, map[string]any{"username": "praman", "displayName": "Priya Raman"})
+	dbrooks := createUser(t, f.admin, map[string]any{"username": "dbrooks", "displayName": "Daniel Brooks"})
+	f.admin.Do(http.MethodPut, "/api/applications/payments-core/members", map[string]any{
+		"owners": []string{f.owner.ID}, "pes": []string{praman.ID},
+	}).ExpectStatus(http.StatusOK)
+	f.secondApp(t, dbrooks.ID, nil) // dbrooks owns another application
+
+	forbidden := http.StatusForbidden
+	body := map[string]any{"status": "frozen"}
+	// An administrator who is not an Owner, a PE, the Owner of another application, a plain user.
+	for _, c := range []*apitest.Client{f.admin, f.login("praman"), f.login("dbrooks"), f.env.SeedUserClient("bob", "bob-password-1")} {
+		c.Do(http.MethodPut, f.path()+"/status", body).ExpectError(forbidden, "", "forbidden")
+		c.Do(http.MethodPut, f.path()+"/status", map[string]any{}).ExpectError(forbidden, "", "forbidden") // before the fields
+	}
+	f.env.Client().Do(http.MethodPut, f.path()+"/status", body).ExpectError(http.StatusUnauthorized, "", "unauthenticated")
+	if got := f.statusOf(t, f.line.ID); got != "active" {
+		t.Fatalf("a forbidden request changed the status to %q", got)
+	}
+}
+
+func (f lineFixture) adminID(t *testing.T) string {
+	t.Helper()
+	var me struct {
+		User struct {
+			ID string `json:"id"`
+		} `json:"user"`
+	}
+	f.admin.Get("/api/session").ExpectStatus(http.StatusOK).JSON(&me)
+	return me.User.ID
+}
+
+func TestAnAdministratorWhoIsAlsoAnOwnerMayChangeALinesStatus(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	f.admin.Do(http.MethodPut, "/api/applications/payments-core/members", map[string]any{
+		"owners": []string{f.owner.ID, f.adminID(t)}, "pes": []string{},
+	}).ExpectStatus(http.StatusOK)
+
+	f.admin.Do(http.MethodPut, f.path()+"/status", map[string]any{"status": "frozen"}).ExpectStatus(http.StatusOK)
+}
+
+func TestTheMainlineHasNoStatusAndNoStatusOperation(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	mainPath := linesPath("payments-core") + "/" + f.mainline.ID
+
+	for _, status := range []string{"active", "frozen", "retired"} {
+		f.elarsen.Do(http.MethodPut, mainPath+"/status", map[string]any{"status": status}).
+			ExpectError(http.StatusUnprocessableEntity, "", "lineIsMainline")
+	}
+	for _, l := range f.listLines(f.elarsen) {
+		if l.IsMain && l.Status != "" {
+			t.Fatalf("the mainline got a status: %+v", l)
+		}
+	}
+}
+
+func TestChangingTheStatusOfAnUnknownLineOrApplicationIsNotFound(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	notFound := http.StatusNotFound
+	body := map[string]any{"status": "frozen"}
+	put := func(path string) *apitest.Response { return f.elarsen.Do(http.MethodPut, path, body) }
+
+	put("/api/applications/nope/lines/"+f.line.ID+"/status").ExpectError(notFound, "", "notFound")
+	put(linesPath("payments-core")+"/999999/status").ExpectError(notFound, "", "notFound")
+	put(linesPath("payments-core")+"/main/status").ExpectError(notFound, "", "notFound")
+	// A line of another application is not a line of this one.
+	other := f.secondApp(t, f.owner.ID, nil)
+	put(linesPath("payments-core")+"/"+other.ID+"/status").ExpectError(notFound, "", "notFound")
+	if got := f.statusOf(t, f.line.ID); got != "active" {
+		t.Fatalf("status = %q", got)
+	}
+}
+
 // -- tests below are appended as the lifecycle grows --

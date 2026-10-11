@@ -61,6 +61,9 @@ func (s *Service) SetLineStatus(ctx context.Context, actor Actor, appKey, lineID
 		if !found {
 			return newKind(KindNotFound, CodeNotFound)
 		}
+		if line.IsMain {
+			return Validation(Invalid("", CodeLineIsMainline, nil))
+		}
 		if !slices.Contains(lineTransitions[line.Status], to) {
 			return Validation(Invalid("status", CodeInvalidTransition, map[string]any{"from": string(line.Status), "to": string(to)}))
 		}
