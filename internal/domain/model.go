@@ -24,6 +24,7 @@ type User struct {
 	Email       string
 	Phone       string
 	Department  string
+	Language    string // LanguageZh, LanguageEn, or empty when never chosen
 	Status      UserStatus
 	IsAdmin     bool
 	CreatedAt   time.Time

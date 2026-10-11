@@ -9,6 +9,7 @@ import { ApplicationPage } from './pages/ApplicationPage.tsx';
 import { ApplicationsPage } from './pages/ApplicationsPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { PlatformsPage } from './pages/PlatformsPage.tsx';
+import { SettingsPage } from './pages/SettingsPage.tsx';
 import { UsersPage } from './pages/UsersPage.tsx';
 import { RequireSession, SessionProvider } from './session/session.tsx';
 import { Shell } from './shell/Shell.tsx';
@@ -42,6 +43,7 @@ function App() {
           <Route index element={<ApplicationOverview />} />
           <Route path="history" element={<ApplicationHistory />} />
         </Route>
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="admin/platforms" element={<PlatformsPage />} />
         <Route path="admin/users" element={<UsersPage />} />
         <Route path="*" element={<NotFound />} />

@@ -5,11 +5,12 @@ import errors from './errors.ts';
 import history from './history.ts';
 import login from './login.ts';
 import platforms from './platforms.ts';
+import settings from './settings.ts';
 import terms from './terms.ts';
 import users from './users.ts';
 
-export const sections = { applications, common, errors, history, login, platforms, terms, users };
+export const sections = { applications, common, errors, history, login, platforms, settings, terms, users };
 
-export const en = { ...applications, ...common, ...errors, ...history, ...login, ...platforms, ...terms, ...users };
+export const en = { ...applications, ...common, ...errors, ...history, ...login, ...platforms, ...settings, ...terms, ...users };
 
 export type MessageKey = keyof typeof en;

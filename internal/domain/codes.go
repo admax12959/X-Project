@@ -26,6 +26,12 @@ const (
 	CodeUsernameLocked = "usernameLocked" // LDAP-bound users keep their username (ADR-0004)
 	CodeLdapManaged    = "ldapManaged"    // field is owned by the directory for LDAP-bound users
 
+	// login identities (ADR-0002)
+	CodeLastIdentity      = "lastIdentity"      // unbinding the user's only login identity
+	CodeIdentityKindBound = "identityKindBound" // the user already has an identity of this kind
+	CodeIdentityTaken     = "identityTaken"     // another user already holds this login identity
+	CodeLdapLoginNotFound = "ldapLoginNotFound" // administrator binding: the directory has no such login name
+
 	// applications
 	CodeKeyTaken        = "keyTaken"        // another application already has this key
 	CodeUserUnavailable = "userUnavailable" // Owner/PE is not an existing enabled user; params {userId}

@@ -24,7 +24,15 @@ func mapUsernameConflict(err error) error {
 }
 
 func (s *Store) LockUserWithIdentities(ctx context.Context, id domain.UserID) (domain.UserWithIdentities, bool, error) {
-	u, err := scanUser(s.q.QueryRowContext(ctx, "SELECT "+userCols+" FROM users WHERE id = ? FOR UPDATE", id))
+	return s.userWithIdentities(ctx, id, " FOR UPDATE")
+}
+
+func (s *Store) GetUserWithIdentities(ctx context.Context, id domain.UserID) (domain.UserWithIdentities, bool, error) {
+	return s.userWithIdentities(ctx, id, "")
+}
+
+func (s *Store) userWithIdentities(ctx context.Context, id domain.UserID, lock string) (domain.UserWithIdentities, bool, error) {
+	u, err := scanUser(s.q.QueryRowContext(ctx, "SELECT "+userCols+" FROM users WHERE id = ?"+lock, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.UserWithIdentities{}, false, nil
 	}
@@ -51,9 +59,14 @@ func (s *Store) LockUserWithIdentities(ctx context.Context, id domain.UserID) (d
 
 func (s *Store) UpdateUser(ctx context.Context, u domain.User, at time.Time) error {
 	_, err := s.q.ExecContext(ctx,
-		"UPDATE users SET username = ?, display_name = ?, email = ?, phone = ?, department = ?, updated_at = ? WHERE id = ?",
-		u.Username, u.DisplayName, u.Email, u.Phone, u.Department, at, u.ID)
+		"UPDATE users SET username = ?, display_name = ?, email = ?, phone = ?, department = ?, language = ?, updated_at = ? WHERE id = ?",
+		u.Username, u.DisplayName, u.Email, u.Phone, u.Department, u.Language, at, u.ID)
 	return mapUsernameConflict(err)
+}
+
+func (s *Store) DeleteIdentity(ctx context.Context, id domain.UserID, kind domain.IdentityKind) error {
+	_, err := s.q.ExecContext(ctx, "DELETE FROM login_identities WHERE user_id = ? AND kind = ?", id, string(kind))
+	return err
 }
 
 func (s *Store) RenameLocalLogin(ctx context.Context, id domain.UserID, loginName string) error {

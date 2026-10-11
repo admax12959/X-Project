@@ -5,7 +5,12 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { Navigate, useLocation } from 'react-router';
 import { api, ApiError, onUnauthenticated } from '../api/client.ts';
 import type { LoginInput, User } from '../api/types.ts';
-import { useT } from '../i18n/index.ts';
+import { setLocale, useT } from '../i18n/index.ts';
+
+/** The language saved on the user wins over this browser's choice, so it follows them across devices. */
+function applySavedLanguage(user: User) {
+  if (user.language === 'zh' || user.language === 'en') setLocale(user.language);
+}
 
 type State = { status: 'loading' } | { status: 'anonymous' } | { status: 'error' } | { status: 'authenticated'; user: User };
 
@@ -14,6 +19,8 @@ type SessionApi = {
   login: (input: LoginInput) => Promise<void>;
   logout: () => Promise<void>;
   reload: () => void;
+  /** Replace the cached session user after the user's own settings changed. */
+  setUser: (user: User) => void;
 };
 
 const Ctx = createContext<SessionApi | null>(null);
@@ -24,7 +31,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const reload = useCallback(() => {
     setState({ status: 'loading' });
     api.session.get().then(
-      (s) => setState({ status: 'authenticated', user: s.user }),
+      (s) => {
+        applySavedLanguage(s.user);
+        setState({ status: 'authenticated', user: s.user });
+      },
       (e: unknown) => setState(e instanceof ApiError && e.status === 401 ? { status: 'anonymous' } : { status: 'error' }),
     );
   }, []);
@@ -36,15 +46,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (input: LoginInput) => {
     const s = await api.session.login(input);
+    applySavedLanguage(s.user);
     setState({ status: 'authenticated', user: s.user });
   }, []);
+
+  const setUser = useCallback((user: User) => setState({ status: 'authenticated', user }), []);
 
   const logout = useCallback(async () => {
     await api.session.logout().catch(() => undefined);
     setState({ status: 'anonymous' });
   }, []);
 
-  return <Ctx.Provider value={{ state, login, logout, reload }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ state, login, logout, reload, setUser }}>{children}</Ctx.Provider>;
 }
 
 export function useSession(): SessionApi {

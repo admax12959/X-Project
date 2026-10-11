@@ -62,6 +62,7 @@ func (s *server) routes() {
 	s.route("GET /api/code-platforms", s.listCodePlatforms)
 	s.route("POST /api/code-platforms", s.createCodePlatform)
 	s.userRoutes()
+	s.meRoutes()
 }
 
 func (s *server) route(pattern string, h http.HandlerFunc) { s.mux.HandleFunc(pattern, h) }
