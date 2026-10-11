@@ -1,5 +1,5 @@
 // Plan A · Console frame: narrow top bar + left navigation. Pages render inside <Outlet/>.
-// Later tickets add nav entries here (Versions #13, Settings #15, Administration #4/#5).
+// Nav entries live here (Applications, Versions, Settings, and the admin group).
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { api } from '../api/client.ts';
 import { useCurrentUser, useSession } from '../session/session.tsx';
@@ -66,7 +66,8 @@ export function Shell() {
       <div className="flex min-h-0 flex-1">
         <nav aria-label={t('shell.nav')} className="w-60 flex-none overflow-y-auto border-r border-line bg-white pb-20 pt-3">
           <NavItem to="/" end label="term.applications" />
-          <NavItem to="/settings" label="settings.title" />
+          <NavItem to="/versions" label="term.versions" />
+          <NavItem to="/settings"label="settings.title" />
           {user.isAdmin && (
             <>
               <div className="px-5 pb-1 pt-4 text-[13px] font-semibold text-text-3">{t('platforms.navGroup')}</div>
