@@ -91,5 +91,6 @@ type Repository interface {
 	DeleteSession(ctx context.Context, tokenHash string) error
 
 	ApplicationRepository
+	VersionRepository
 	HistoryRepository
 }

@@ -1,5 +1,6 @@
 // Render backend error codes in the current language via "error.<code>" keys.
 import { hasKey, translate, type Params } from '../i18n/index.ts';
+import { isLineRef, lineInSentence } from '../i18n/lines.ts';
 import { ApiError } from './client.ts';
 import type { ApiFieldError } from './types.ts';
 
@@ -7,6 +8,9 @@ function flatParams(p: ApiFieldError['params']): Params {
   const out: Params = {};
   for (const [k, v] of Object.entries(p ?? {})) {
     if (typeof v === 'string' || typeof v === 'number') out[k] = v;
+    // A conflicting line {id, isMain, name, branch} (numberTaken, later branchTaken) becomes
+    // its in-sentence label, so messages can say "{line}". Other nested params are dropped.
+    else if (isLineRef(v)) out[k] = lineInSentence(v);
   }
   return out;
 }
