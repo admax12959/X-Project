@@ -78,6 +78,7 @@ type applicationSummaryJSON struct {
 	Description string       `json:"description"`
 	Repo        repoJSON     `json:"repo"`
 	Owners      []memberJSON `json:"owners"`
+	LineCount   int          `json:"lineCount"`
 }
 
 // listApplications serves GET /api/applications?q=<search>.
@@ -91,6 +92,7 @@ func (s *server) listApplications(w http.ResponseWriter, r *http.Request) {
 	for _, a := range apps {
 		out.Items = append(out.Items, applicationSummaryJSON{
 			Key: a.Key, Name: a.Name, Description: a.Description, Repo: toRepoJSON(a.Repo), Owners: toMembersJSON(a.Owners),
+			LineCount: a.LineCount,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

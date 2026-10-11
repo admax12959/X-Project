@@ -43,6 +43,8 @@ type ApplicationSummary struct {
 	Description string
 	Repo        RepoBinding
 	Owners      []UserRef
+	// LineCount is the number of maintenance lines in any status; the mainline is not counted.
+	LineCount int
 }
 
 // Line is the mainline or a maintenance line (GLOSSARY: 线). The mainline has no

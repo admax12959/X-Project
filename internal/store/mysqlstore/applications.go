@@ -185,10 +185,15 @@ func (s *Store) ListApplications(ctx context.Context, query string) ([]domain.Ap
 	if err != nil {
 		return nil, err
 	}
+	counts, err := s.lineCounts(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]domain.ApplicationSummary, 0, len(apps))
 	for _, a := range apps {
 		out = append(out, domain.ApplicationSummary{
 			Key: a.Key, Name: a.Name, Description: a.Description, Repo: a.Repo, Owners: members[a.ID][domain.RoleOwner],
+			LineCount: counts[a.ID],
 		})
 	}
 	return out, nil
