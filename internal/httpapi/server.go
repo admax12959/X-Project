@@ -62,11 +62,14 @@ func (s *server) routes() {
 	s.route("PUT /api/applications/{key}/deploy-info", s.updateDeployInfo)
 	s.route("GET /api/applications/{key}/lines", s.listLines)
 	s.route("GET /api/applications/{key}/history", s.listHistory)
+	s.route("GET /api/applications/{key}/versions", s.listVersions)
+	s.route("POST /api/applications/{key}/lines/{lineId}/versions", s.registerVersion)
 	s.route("POST /api/repo-verifications", s.verifyRepo)
 
 	s.route("GET /api/code-platforms", s.listCodePlatforms)
 	s.route("POST /api/code-platforms", s.createCodePlatform)
 	s.userRoutes()
+	s.meRoutes()
 }
 
 func (s *server) route(pattern string, h http.HandlerFunc) { s.mux.HandleFunc(pattern, h) }

@@ -5,21 +5,26 @@ import type {
   Application,
   ApplicationSummary,
   AssignableUser,
+  BindIdentityInput,
   ChangeEvent,
   CodePlatform,
   CodePlatformInput,
   CreateApplicationInput,
   CreateUserInput,
+  IdentityKind,
   Line,
   List,
   LoginInput,
   LoginMethod,
   Repo,
+  RegisterVersionInput,
   RepoInput,
   SessionInfo,
   UpdateApplicationInput,
   UpdateMembersInput,
+  UpdateMeInput,
   UpdateUserInput,
+  Version,
 } from './types.ts';
 
 /** Thrown for every non-2xx response (and network failures, status 0, code "network"). */
@@ -81,6 +86,14 @@ export const api = {
     /** 404 notFound for an unknown key. */
     get: (key: string) => request<Application>('GET', `/api/applications/${encodeURIComponent(key)}`),
     lines: (key: string) => request<List<Line>>('GET', `/api/applications/${encodeURIComponent(key)}/lines`),
+    /** Versions on all lines, latest release date first. */
+    versions: (key: string) => request<List<Version>>('GET', `/api/applications/${encodeURIComponent(key)}/versions`),
+    /**
+     * Owners only (403 otherwise). 422 field errors: number (required, tooLong, numberTaken with params
+     * {line, releasedAt}), ref.kind, ref.value, releasedAt, note.
+     */
+    registerVersion: (key: string, lineId: string, input: RegisterVersionInput) =>
+      request<Version>('POST', `/api/applications/${encodeURIComponent(key)}/lines/${encodeURIComponent(lineId)}/versions`, { body: input }),
     /** Newest first. */
     history: (key: string) => request<List<ChangeEvent>>('GET', `/api/applications/${encodeURIComponent(key)}/history`),
     /** Administrators only. 422 field errors: key, name, mainBranch, owners, pes, repo.platformId, repo.path. */
@@ -116,5 +129,17 @@ export const api = {
     update: (id: string, input: UpdateUserInput) => request<AdminUser>('PATCH', `/api/users/${id}`, { body: input }),
     disable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/disable`),
     enable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/enable`),
+    /** 422 field errors (identityKindBound, identityTaken, ldapLoginNotFound, password rules); 503 ldapUnreachable. */
+    bindIdentity: (id: string, input: BindIdentityInput) => request<AdminUser>('POST', `/api/users/${id}/identities`, { body: input }),
+  },
+  /** The logged-in user's own settings. */
+  me: {
+    get: () => request<AdminUser>('GET', '/api/me'),
+    /** 422 ldapManaged on displayName / email / department for LDAP-bound users. */
+    update: (input: UpdateMeInput) => request<AdminUser>('PATCH', '/api/me', { body: input }),
+    /** 422 on password when the authentication fails (never 401), identityKindBound, identityTaken; 503 ldapUnreachable. */
+    bindIdentity: (input: BindIdentityInput) => request<AdminUser>('POST', '/api/me/identities', { body: input }),
+    /** 422 lastIdentity on the only identity. */
+    unbindIdentity: (kind: IdentityKind) => request<AdminUser>('DELETE', `/api/me/identities/${kind}`),
   },
 };

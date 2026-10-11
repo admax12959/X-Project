@@ -37,4 +37,13 @@ export default {
   'users.soleOwner.intro': '{name} cannot be disabled: they are the only Owner of these applications.',
   'users.soleOwner.hint': 'Hand each application over first: open it and use Edit Owners and PEs to add another Owner.',
   'users.forbidden': 'Only Administrators can manage users.',
+  'users.bindIdentity': 'Bind identity',
+  'users.bindTitle': 'Bind a login identity to {username}',
+  'users.bind.kind': 'Type',
+  'users.bind.ldapHint': 'The LDAP directory is asked whether this login name exists. Display name, email and department then follow LDAP.',
+  'users.bind.localHint': 'The user signs in with their username and this password.',
+  'users.bind.loginName': 'LDAP login name',
+  'users.bind.password': 'Password',
+  'users.bind.submit': 'Bind',
+  'users.bind.submitting': 'Binding…',
 };

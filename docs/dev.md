@@ -174,6 +174,16 @@ Code: `internal/domain/application_maintain.go`. Permission matrix (checked in t
 - Changing `mainBranch` updates the mainline row of `app_lines` only. A duplicate with another line cannot happen yet (no fork lines); the fork ticket must map a unique-key violation there to `branchTaken` on field `mainBranch`.
 - Frontend: `ApplicationDialogs.tsx` holds the four dialogs; `useSetApplication()` (from `ApplicationPage`) replaces the loaded application after an edit. The disable error `soleOwner` is rendered by `UsersPage` as a list of links to the blocking applications.
 
+### Versions (#8)
+
+- Routes: `POST /api/applications/{key}/lines/{lineId}/versions` (register on one line) and `GET /api/applications/{key}/versions` (all lines, no pagination, no server-side filters: the Versions tab filters by line and tag/commit in the browser). Registering needs an Owner of that application: administrators and PEs get 403. Any session may read. Check order: application (404), Owner (403), fields (422), line (404, also for a line of another application).
+- Body: `{number, ref: {kind: "tag"|"commit", value}, releasedAt: "YYYY-MM-DD", note}`. Errors: `number`, `ref.kind`, `ref.value`, `releasedAt` are `required` (kind also `invalid`, date `invalid`), `tooLong` on `number` (100), `ref.value` (255), `note` (2000). `releasedAt` has no server default; the dialog defaults to the browser's local date. The tag or commit is stored as typed and never checked (ADR-0001); registering makes no code platform call.
+- A version JSON is `{id, lineId, line: {id,isMain,name,branch}, number, ref, releasedAt, note, createdAt}`. The list is ordered by `releasedAt` desc, then registration desc, never by number. "Latest version of a line" and "previous version" in the dialog mean the first list item of that line.
+- `numberTaken` (field `number`) has params `{line: {id,isMain,name,branch}, releasedAt}` of the version that holds the number. Numbers are unique per application and compared exactly (`utf8mb4_bin`: `V1` and `v1` are different); the value is trimmed before the check. Table `app_versions`.
+- **Line objects in params** (error params and event params) are always `{id, isMain, name, branch}` (`lineParam` in `internal/domain/versions.go`). The mainline has an empty `name`. Other tickets that report a conflicting or affected line (`branchTaken`, fork and status events) reuse it. On the frontend, `flatParams` in `api/errors.ts` turns any such object into its in-sentence label (`common.line.mainline` / `common.line.named`), so an error message can say `{line}`; other nested params are dropped.
+- **Registering on other lines.** `Service.RegisterVersion` takes the line from the URL, locks its row (`LockLine`, `FOR UPDATE`, scoped to the application) inside the transaction and calls `registerVersionOnLine`, which applies the line rules in `checkLineAcceptsVersion` and then inserts. That function is empty today because only the mainline exists. The lifecycle ticket fills it in: Frozen requires a note (`noteRequiredOnFrozen`, field `note`), Retired refuses (`lineRetired`, request-level: no field, because the line is in the URL; the dialog shows it in its alert). Status changes must take the same line lock. The dialog (`RegisterVersionDialog`) already takes the line as a prop; the Versions tab passes the mainline until the Lineage panel (#9) can pick another line.
+- Event `versionRegistered` (params `number`, `line`): "Registered version X on the mainline" or "on “name”".
+
 ### Change history
 
 The append-only log of key operations (`change_events`). An event is a type plus structured params. The server never produces sentences; the frontend renders them in the current UI language. User input inside params (names, reasons, branch names...) is stored and displayed verbatim.
@@ -222,7 +232,23 @@ Real adapter details worth knowing: GitLab gets `GET {base}/api/v4/projects/{pat
 - The directory is asked on every login. Not found, disabled or wrong password all give `401 invalidCredentials`; unreachable gives `503 ldapUnreachable`. Nothing is deleted when the directory refuses: the user and the LDAP identity stay and work again when the account comes back.
 - A known LDAP identity logs in to its user (whoever bound it) and overwrites display name, email and department. An unknown one creates a user (username = login name, binding source `firstLogin`) only if the username is free; otherwise `422 usernameTakenByLocal` on field `username` and nothing is stored. Never merged by email or username.
 - `Service.CheckUsernameFreeInDirectory(ctx, field, username)` is the admin-side check, already called by `CreateLocalUser`: `422 usernameExistsInLdap` (a disabled directory account counts too) or `503 ldapUnreachable` when the directory cannot be queried; it never skips the check. With no directory configured it passes. Any other code path that creates a local user must call it too.
-- Binding an LDAP identity to an existing user (ticket #15) needs no change to login: a known LDAP identity signs in to whichever user holds it and the directory overwrites display name, email and department.
+- Binding an LDAP identity to an existing user needs no change to login: a known LDAP identity signs in to whichever user holds it and the directory overwrites display name, email and department (see "Personal settings and login identities").
+
+### Personal settings and login identities (ADR-0002)
+
+Routes in `internal/httpapi/handlers_me.go`, rules in `internal/domain/me.go` and `identities.go`. The user view returned by all of them is the administrator shape (`id, username, displayName, email, phone, department, language, status, isAdmin, identities[{kind, loginName, boundAt, boundVia}]`).
+
+| Route | Meaning |
+|---|---|
+| `GET /api/me` | Own profile with identities. |
+| `PATCH /api/me` | Body fields are all optional: `displayName`, `email`, `department` (only for users without an LDAP identity, otherwise `422 ldapManaged` on a changed value; sending the current value is fine), `phone` (everyone), `language` (`zh` or `en`, else `422 invalid`). `username` and `isAdmin` are ignored. |
+| `POST /api/me/identities` | Bind for yourself, `201`. `{"kind":"ldap","loginName":...,"password":...}`: the directory authenticates the pair first; any failure is `422 invalidCredentials` on `password` (never 401, which would log the SPA out), unreachable is `503 ldapUnreachable`. `{"kind":"local","password":...}`: the login name is the username, the password follows the create rules; there is no existing credential to authenticate with, the logged-in session is the proof. Binding source `self`. |
+| `DELETE /api/me/identities/{kind}` | Unbind. `422 lastIdentity` (field `kind`) on the only identity, `404` when the user has none of that kind. |
+| `POST /api/users/{id}/identities` | Administrator bind, same body but no LDAP password: the directory is only asked if the login name exists (`422 ldapLoginNotFound` on `loginName`, `503 ldapUnreachable`; a disabled directory account counts as existing and can be bound). Binding source `admin`. |
+
+- Both bind routes: `422 identityKindBound` (field `kind`, one identity per kind) and `422 identityTaken` (field `loginName`, held by another user). The check runs under the user row lock; the unique-key race maps to `identityTaken` too.
+- Binding an LDAP identity (self or admin) syncs display name, email and department from the directory at once when the directory returns the entry; every later LDAP login syncs again. The username stays and is locked from then on (ADR-0004).
+- `language` is stored on the user (`users.language`, empty = never chosen) and is part of the `user` object of `POST/GET /api/session`. The SPA applies it after login and when it loads the session; the language switch in the top bar and the settings page save it with `PATCH /api/me`, the one on the login page stays local.
 
 ### i18n
 

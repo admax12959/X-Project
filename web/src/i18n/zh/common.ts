@@ -5,6 +5,8 @@ export default {
   'common.language': '语言',
   'lang.en': 'English',
   'lang.zh': '中文',
+  'common.line.mainline': '主线',
+  'common.line.named': '「{name}」',
   'shell.nav': '主导航',
   'shell.signOut': '退出登录',
   'notFound.title': '页面不存在',

@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api, ApiError } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
-import type { AdminUser } from '../api/types.ts';
+import type { AdminUser, LoginMethod } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
 import { useCurrentUser } from '../session/session.tsx';
 import { Button, Empty } from '../ui/controls.tsx';
+import { BindIdentityDialog } from './BindIdentityDialog.tsx';
 import { UserDialog } from './UserDialog.tsx';
 
 /** The applications blocking a disable (422 soleOwner), or undefined for any other error. */
@@ -16,7 +17,7 @@ function soleOwnerApps(err: unknown): { key: string; name: string }[] | undefine
   return e ? (e.params?.applications as { key: string; name: string }[] | undefined) : undefined;
 }
 
-type Load ={ status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; items: AdminUser[] };
+type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; items: AdminUser[] };
 // null = closed, 'create' = new local user, otherwise the user being edited.
 type Dialog = null | 'create' | AdminUser;
 
@@ -27,10 +28,18 @@ export function UsersPage() {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [actionError, setActionError] = useState<unknown>(null);
   const [actionUser, setActionUser] = useState<AdminUser | null>(null);
+  const [bindFor, setBindFor] = useState<AdminUser | null>(null);
+  // Login identity kinds the server offers (ldap only when a directory is configured).
+  const [methods, setMethods] = useState<LoginMethod[]>(['local']);
+  const missingKinds = (u: AdminUser): LoginMethod[] => methods.filter((m) => !u.identities.some((i) => i.kind === m));
 
   useEffect(() => {
     if (!me.isAdmin) return;
     let live = true;
+    api.session.methods().then(
+      (r) => live && setMethods(r.items),
+      () => undefined,
+    );
     api.users.list().then(
       (r) => live && setLoad({ status: 'ok', items: r.items }),
       (error: unknown) => live && setLoad({ status: 'error', error }),
@@ -124,6 +133,11 @@ export function UsersPage() {
                     <Button small onClick={() => setDialog(u)}>
                       {t('users.edit')}
                     </Button>
+                    {missingKinds(u).length > 0 && (
+                      <Button small onClick={() => setBindFor(u)}>
+                        {t('users.bindIdentity')}
+                      </Button>
+                    )}
                     <Button small onClick={() => changeStatus(u)}>
                       {u.status === 'enabled' ? t('users.disable') : t('users.enable')}
                     </Button>
@@ -137,6 +151,20 @@ export function UsersPage() {
         {load.status === 'error' && <Empty title={errorsByField(load.error)[''] ?? t('users.loadFailed')} />}
         {load.status === 'ok' && items.length === 0 && <Empty title={t('users.empty')} />}
       </div>
+
+      {bindFor !== null && (
+        <BindIdentityDialog
+          audience="admin"
+          username={bindFor.username}
+          kinds={missingKinds(bindFor)}
+          bind={(input) => api.users.bindIdentity(bindFor.id, input)}
+          onClose={() => setBindFor(null)}
+          onBound={(u) => {
+            replace(u);
+            setBindFor(null);
+          }}
+        />
+      )}
 
       {dialog !== null && (
         <UserDialog

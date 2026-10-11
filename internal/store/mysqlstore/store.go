@@ -106,12 +106,12 @@ func (s *Store) MarkBootstrapped(ctx context.Context, at time.Time) error {
 
 // ---------------------------------------------------------------- users
 
-const userCols = "id, username, display_name, email, phone, department, status, is_admin, created_at"
+const userCols = "id, username, display_name, email, phone, department, language, status, is_admin, created_at"
 
 func scanUser(row interface{ Scan(...any) error }) (domain.User, error) {
 	var u domain.User
 	var status string
-	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Phone, &u.Department, &status, &u.IsAdmin, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Phone, &u.Department, &u.Language, &status, &u.IsAdmin, &u.CreatedAt)
 	u.Status = domain.UserStatus(status)
 	return u, err
 }

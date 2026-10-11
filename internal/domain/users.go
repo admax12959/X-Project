@@ -22,8 +22,10 @@ type UserRepository interface {
 	// LockUserWithIdentities reads one user and its identities, locking the user
 	// row for the rest of the transaction (call inside InTx).
 	LockUserWithIdentities(ctx context.Context, id UserID) (UserWithIdentities, bool, error)
+	// GetUserWithIdentities reads one user and its identities without locking.
+	GetUserWithIdentities(ctx context.Context, id UserID) (UserWithIdentities, bool, error)
 	// UpdateUser overwrites the editable columns (username, display name, email,
-	// phone, department). Returns ErrUsernameTaken on a username conflict.
+	// phone, department, language). Returns ErrUsernameTaken on a username conflict.
 	UpdateUser(ctx context.Context, u User, at time.Time) error
 	// RenameLocalLogin changes the login name of the user's local identity.
 	// Returns ErrUsernameTaken on a conflict.
@@ -71,13 +73,7 @@ func (s *Service) CreateLocalUser(ctx context.Context, actor Actor, in CreateLoc
 	in.Department = strings.TrimSpace(in.Department)
 	checkUsername(&c, in.Username)
 	checkProfile(&c, in.DisplayName, in.Email, in.Phone, in.Department)
-	if in.Password == "" {
-		c.Add("password", CodeRequired, nil)
-	} else if utf8.RuneCountInString(in.Password) < minPasswordLength {
-		c.Add("password", CodeTooShort, map[string]any{"min": minPasswordLength})
-	} else if len(in.Password) > maxPasswordBytes {
-		c.Add("password", CodeTooLong, map[string]any{"max": maxPasswordBytes})
-	}
+	checkNewPassword(&c, in.Password)
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
 	}
@@ -139,6 +135,52 @@ func (u UserWithIdentities) hasIdentity(kind IdentityKind) bool {
 	return false
 }
 
+func trimmed(p *string) (string, bool) {
+	if p == nil {
+		return "", false
+	}
+	return strings.TrimSpace(*p), true
+}
+
+// profileEdit is an edit of the profile fields; a nil field is left unchanged.
+type profileEdit struct {
+	DisplayName *string
+	Email       *string
+	Phone       *string
+	Department  *string
+}
+
+// applyProfileEdit applies e to u and validates the result, reporting problems on c.
+// For LDAP-bound users the directory owns display name, email and department (they are
+// synced at login), so a different value is refused with ldapManaged; sending the
+// current value is fine. Phone is always editable. Used for both the administrator's
+// edit of a user and a user's edit of themselves.
+func applyProfileEdit(c *Collector, u User, ldapBound bool, e profileEdit) User {
+	if v, ok := trimmed(e.DisplayName); ok {
+		if ldapBound && v != u.DisplayName {
+			c.Add("displayName", CodeLdapManaged, nil)
+		}
+		u.DisplayName = v
+	}
+	if v, ok := trimmed(e.Email); ok {
+		if ldapBound && v != u.Email {
+			c.Add("email", CodeLdapManaged, nil)
+		}
+		u.Email = v
+	}
+	if v, ok := trimmed(e.Phone); ok {
+		u.Phone = v
+	}
+	if v, ok := trimmed(e.Department); ok {
+		if ldapBound && v != u.Department {
+			c.Add("department", CodeLdapManaged, nil)
+		}
+		u.Department = v
+	}
+	checkProfile(c, u.DisplayName, u.Email, u.Phone, u.Department)
+	return u
+}
+
 // UpdateUser edits a user's profile and, for users without an LDAP identity,
 // the username (ADR-0004). The local login name follows the username, and
 // everything else refers to the user by ID, so a rename keeps all records.
@@ -159,12 +201,6 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 		ldapBound := cur.hasIdentity(IdentityLDAP)
 		var c Collector
 
-		trimmed := func(p *string) (string, bool) {
-			if p == nil {
-				return "", false
-			}
-			return strings.TrimSpace(*p), true
-		}
 		rename := false
 		if v, ok := trimmed(in.Username); ok && v != u.Username {
 			if ldapBound {
@@ -174,30 +210,9 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 				u.Username, rename = v, true
 			}
 		}
-		// For LDAP-bound users the directory owns display name, email and
-		// department (spec: synced at login); a different value is refused.
-		if v, ok := trimmed(in.DisplayName); ok {
-			if ldapBound && v != u.DisplayName {
-				c.Add("displayName", CodeLdapManaged, nil)
-			}
-			u.DisplayName = v
-		}
-		if v, ok := trimmed(in.Email); ok {
-			if ldapBound && v != u.Email {
-				c.Add("email", CodeLdapManaged, nil)
-			}
-			u.Email = v
-		}
-		if v, ok := trimmed(in.Phone); ok {
-			u.Phone = v
-		}
-		if v, ok := trimmed(in.Department); ok {
-			if ldapBound && v != u.Department {
-				c.Add("department", CodeLdapManaged, nil)
-			}
-			u.Department = v
-		}
-		checkProfile(&c, u.DisplayName, u.Email, u.Phone, u.Department)
+		u = applyProfileEdit(&c, u, ldapBound, profileEdit{
+			DisplayName: in.DisplayName, Email: in.Email, Phone: in.Phone, Department: in.Department,
+		})
 		if err := c.Err(); err != nil {
 			return err
 		}
@@ -298,6 +313,17 @@ func checkUsername(c *Collector, username string) {
 		c.Add("username", CodeRequired, nil)
 	} else if !usernamePattern.MatchString(username) {
 		c.Add("username", CodeInvalid, nil)
+	}
+}
+
+// checkNewPassword validates a password being set for a local identity.
+func checkNewPassword(c *Collector, password string) {
+	if password == "" {
+		c.Add("password", CodeRequired, nil)
+	} else if utf8.RuneCountInString(password) < minPasswordLength {
+		c.Add("password", CodeTooShort, map[string]any{"min": minPasswordLength})
+	} else if len(password) > maxPasswordBytes {
+		c.Add("password", CodeTooLong, map[string]any{"max": maxPasswordBytes})
 	}
 }
 

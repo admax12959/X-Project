@@ -38,6 +38,9 @@ const (
 	// nested value so that history reads can expand it.
 	EventMemberAdded   EventType = "memberAdded"
 	EventMemberRemoved EventType = "memberRemoved"
+	// EventVersionRegistered: version registered on a line. Params: number,
+	// line = {id, isMain, name, branch} as the line was when it happened.
+	EventVersionRegistered EventType = "versionRegistered"
 )
 
 // event is a change-history entry that has not been written yet. Build it with
@@ -69,6 +72,10 @@ func memberRemovedEvent(role MemberRole, id UserID) event {
 
 func deployInfoChangedEvent() event {
 	return event{EventDeployInfoChanged, map[string]any{}}
+}
+
+func versionRegisteredEvent(number string, line Line) event {
+	return event{EventVersionRegistered, map[string]any{"number": number, "line": lineParam(line)}}
 }
 
 // userParam is the params form of a reference to a user.

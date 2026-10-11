@@ -363,6 +363,30 @@ func TestOnlyAnAdministratorWhoTypesTheKeyDeletesAnApplicationAndItsLinesAndHist
 	findUser(t, listUsers(t, f.admin), "praman")
 }
 
+func TestDeletingAnApplicationAlsoDeletesItsVersions(t *testing.T) {
+	t.Parallel()
+	f := newMaintFixture(t)
+	var lines struct {
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	f.admin.Get(f.appPath + "/lines").ExpectStatus(http.StatusOK).JSON(&lines)
+	f.ownerC.Post(versionsPath("payments-core", lines.Items[0].ID), newVersion(nil)).ExpectStatus(http.StatusCreated)
+
+	f.admin.Do(http.MethodDelete, f.appPath, map[string]any{"confirmKey": "payments-core"}).ExpectStatus(http.StatusNoContent)
+	f.post(nil).ExpectStatus(http.StatusCreated)
+
+	var versions versionListBody
+	f.admin.Get(f.appPath + "/versions").ExpectStatus(http.StatusOK).JSON(&versions)
+	if len(versions.Items) != 0 {
+		t.Fatalf("versions = %+v", versions.Items)
+	}
+	// The number 1.0.0 is free again in the new application.
+	f.admin.Get(f.appPath + "/lines").ExpectStatus(http.StatusOK).JSON(&lines)
+	f.ownerC.Post(versionsPath("payments-core", lines.Items[0].ID), newVersion(nil)).ExpectStatus(http.StatusCreated)
+}
+
 // Owners are not administrators, so the Owner/PE picker cannot read /api/users.
 func TestEveryoneCanListTheEnabledUsersForTheOwnerAndPePickers(t *testing.T) {
 	t.Parallel()

@@ -14,8 +14,12 @@ export type User = {
   displayName: string;
   email: string;
   department: string;
+  /** Saved interface language; '' = never chosen. */
+  language: Language | '';
   isAdmin: boolean;
 };
+
+export type Language = 'zh' | 'en';
 
 export type SessionInfo = { user: User };
 
@@ -72,6 +76,22 @@ export type AssignableUser = { id: string; username: string; displayName: string
 /** GET /api/applications/{key}/lines. The mainline has no status and no name of its own. */
 export type Line = { id: string; isMain: boolean; name: string; branch: string };
 
+export type RefKind = 'tag' | 'commit';
+
+/** GET /api/applications/{key}/versions. ref is the tag or commit as typed (never verified); releasedAt is a date "YYYY-MM-DD". */
+export type Version = {
+  id: string;
+  lineId: string;
+  line: Line;
+  number: string;
+  ref: { kind: RefKind; value: string };
+  releasedAt: string;
+  note: string;
+  createdAt: string;
+};
+
+export type RegisterVersionInput = { number: string; ref: { kind: RefKind; value: string }; releasedAt: string; note: string };
+
 /**
  * One change-history entry: a type plus structured params. The frontend renders the
  * sentence (src/history/render.ts). User references inside params are
@@ -93,10 +113,27 @@ export type AdminUser = {
   email: string;
   phone: string;
   department: string;
+  language: Language | '';
   status: 'enabled' | 'disabled';
   isAdmin: boolean;
-  identities: { kind: 'local' | 'ldap'; loginName: string; boundAt: string; boundVia: string }[];
+  identities: LoginIdentity[];
 };
+
+export type IdentityKind = 'local' | 'ldap';
+
+/** How an identity got attached to its user. */
+export type BoundVia = 'firstLogin' | 'self' | 'admin' | 'bootstrap';
+
+export type LoginIdentity = { kind: IdentityKind; loginName: string; boundAt: string; boundVia: BoundVia };
+
+/**
+ * Bind a login identity. ldap: loginName (+ password when binding your own: you
+ * authenticate with it once). local: password only; the login name is the username.
+ */
+export type BindIdentityInput = { kind: IdentityKind; loginName?: string; password?: string };
+
+/** What a user may change about themselves (GET/PATCH /api/me answers with the AdminUser shape). */
+export type UpdateMeInput = Partial<Pick<AdminUser, 'displayName' | 'email' | 'phone' | 'department' | 'language'>>;
 
 export type CreateUserInput = {
   username: string;
