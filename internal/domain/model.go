@@ -66,13 +66,6 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
-// ApplicationSummary is one row of the application list.
-type ApplicationSummary struct {
-	Key         string
-	Name        string
-	Description string
-}
-
 // Repository is the persistence port. Only the domain service uses it;
 // the MySQL implementation lives in internal/store/mysqlstore.
 type Repository interface {
@@ -96,5 +89,6 @@ type Repository interface {
 	FindSession(ctx context.Context, tokenHash string) (Session, bool, error)
 	DeleteSession(ctx context.Context, tokenHash string) error
 
-	ListApplications(ctx context.Context) ([]ApplicationSummary, error)
+	ApplicationRepository
+	HistoryRepository
 }

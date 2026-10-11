@@ -216,10 +216,3 @@ func hashPassword(pw string) (string, error) {
 	b, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
 	return string(b), err
 }
-
-// ---------------------------------------------------------------- applications
-
-// ListApplications returns every application; any logged-in user may browse.
-func (s *Service) ListApplications(ctx context.Context, _ Actor) ([]ApplicationSummary, error) {
-	return s.repo.ListApplications(ctx)
-}

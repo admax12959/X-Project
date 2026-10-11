@@ -185,22 +185,3 @@ func (s *Store) DeleteSession(ctx context.Context, tokenHash string) error {
 	_, err := s.q.ExecContext(ctx, "DELETE FROM sessions WHERE token_hash = ?", tokenHash)
 	return err
 }
-
-// ---------------------------------------------------------------- applications
-
-func (s *Store) ListApplications(ctx context.Context) ([]domain.ApplicationSummary, error) {
-	rows, err := s.q.QueryContext(ctx, "SELECT app_key, name, description FROM applications ORDER BY app_key")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []domain.ApplicationSummary{}
-	for rows.Next() {
-		var a domain.ApplicationSummary
-		if err := rows.Scan(&a.Key, &a.Name, &a.Description); err != nil {
-			return nil, err
-		}
-		out = append(out, a)
-	}
-	return out, rows.Err()
-}
