@@ -11,6 +11,7 @@ import (
 
 	"github.com/admax12959/X-Project/internal/domain"
 	"github.com/admax12959/X-Project/internal/httpapi"
+	"github.com/admax12959/X-Project/internal/ldapdir"
 	"github.com/admax12959/X-Project/internal/store/mysqlstore"
 )
 
@@ -20,6 +21,28 @@ type Deps struct {
 	Directory     domain.Directory           // nil = LDAP not configured
 	CodePlatforms domain.CodePlatformAdapter // nil = no platform adapter available
 	Now           func() time.Time           // nil = time.Now
+}
+
+// NewDirectory builds the real LDAP adapter from the configuration. It returns nil
+// (LDAP not configured) when no LDAP url is set, and an error for a partial configuration.
+func NewDirectory(cfg Config) (domain.Directory, error) {
+	l := cfg.LDAP
+	if l.URL == "" {
+		if l.BaseDN != "" || l.BindDN != "" {
+			return nil, fmt.Errorf("ldap: base_dn/bind_dn are set but url is empty (ldap.url or XP_LDAP_URL)")
+		}
+		return nil, nil
+	}
+	d, err := ldapdir.New(ldapdir.Config{
+		URL: l.URL, StartTLS: l.StartTLS, SkipVerify: l.SkipVerify,
+		BindDN: l.BindDN, BindPassword: l.BindPassword, BaseDN: l.BaseDN,
+		UserFilter: l.UserFilter, LoginAttr: l.LoginAttr, NameAttr: l.NameAttr,
+		EmailAttr: l.EmailAttr, DeptAttr: l.DepartmentAttr, DisabledFilter: l.DisabledFilter, Timeout: l.Timeout,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ldap: %w", err)
+	}
+	return d, nil
 }
 
 // App is a started application.

@@ -11,4 +11,7 @@ export default {
   'error.network': 'Cannot reach the server.',
   'error.unknown': 'Unexpected error ({code}).',
   'error.invalidCredentials': 'Incorrect username or password.',
+  'error.usernameTakenByLocal': 'This username is already taken by a local user. Contact an administrator.',
+  'error.usernameExistsInLdap': 'This username already exists in LDAP.',
+  'error.ldapUnreachable': 'The LDAP directory cannot be reached. Try again later.',
 };

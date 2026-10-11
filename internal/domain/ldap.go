@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"strings"
+	"time"
 )
 
 // IdentityRepository is the part of the persistence port that LDAP login needs.
@@ -11,7 +12,9 @@ type IdentityRepository interface {
 	// FindUserByUsername matches the username as stored (MySQL compares case-insensitively).
 	FindUserByUsername(ctx context.Context, username string) (User, bool, error)
 	// UpdateUserProfile overwrites the directory-owned fields (display name, email, department).
-	UpdateUserProfile(ctx context.Context, id UserID, displayName, email, department string) error
+	UpdateUserProfile(ctx context.Context, id UserID, displayName, email, department string, at time.Time) error
+	// FindIdentityByUser returns the user's identity of the given kind, if any.
+	FindIdentityByUser(ctx context.Context, userID UserID, kind IdentityKind) (LoginIdentity, bool, error)
 }
 
 func ldapUnreachable() error { return newKind(KindUnavailable, CodeLdapUnreachable) }
@@ -57,10 +60,14 @@ func (s *Service) loginLDAP(ctx context.Context, in LoginInput) (LoginResult, er
 			if !ok || u.Status != UserEnabled {
 				return invalidCredentials()
 			}
-			if err := tx.UpdateUserProfile(ctx, u.ID, entry.DisplayName, entry.Email, entry.Department); err != nil {
+			name := strings.TrimSpace(entry.DisplayName)
+			if name == "" {
+				name = u.Username
+			}
+			if err := tx.UpdateUserProfile(ctx, u.ID, name, entry.Email, entry.Department, s.nowUTC()); err != nil {
 				return err
 			}
-			u.DisplayName, u.Email, u.Department = entry.DisplayName, entry.Email, entry.Department
+			u.DisplayName, u.Email, u.Department = name, entry.Email, entry.Department
 			user = u
 			return nil
 		}

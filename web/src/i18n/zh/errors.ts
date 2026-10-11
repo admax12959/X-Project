@@ -10,4 +10,7 @@ export default {
   'error.network': '无法连接服务器。',
   'error.unknown': '未知错误（{code}）。',
   'error.invalidCredentials': '用户名或密码不正确。',
+  'error.usernameTakenByLocal': '该用户名已被本地用户占用，请联系管理员。',
+  'error.usernameExistsInLdap': '该用户名在 LDAP 中已存在。',
+  'error.ldapUnreachable': '无法连接 LDAP 目录，请稍后再试。',
 };

@@ -29,8 +29,12 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// No real LDAP or code platform adapters yet (#14, #6 add them); nil = not configured.
-	a, err := app.Start(ctx, cfg, app.Deps{})
+	// nil = not configured. The code platform adapters arrive with #6.
+	dir, err := app.NewDirectory(cfg)
+	if err != nil {
+		return err
+	}
+	a, err := app.Start(ctx, cfg, app.Deps{Directory: dir})
 	if err != nil {
 		return err
 	}
