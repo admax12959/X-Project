@@ -10,8 +10,8 @@ import { fill } from './width.ts';
 const btnBase = 'inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded border px-3.5 font-semibold disabled:cursor-not-allowed';
 const btnKinds = {
   plain: 'border-line bg-white text-text hover:bg-subtle disabled:border-sep disabled:text-text-3',
-  primary: 'border-accent bg-accent text-white hover:border-accent-hover hover:bg-accent-hover disabled:border-[#cfd5dd] disabled:bg-[#cfd5dd]',
-  danger: 'border-danger bg-danger text-white hover:bg-[#991b1b]',
+  primary: 'border-accent bg-accent text-white hover:border-accent-hover hover:bg-accent-hover disabled:border-disabled disabled:bg-disabled',
+  danger: 'border-danger bg-danger text-white hover:bg-danger-hover',
 } as const;
 
 export function Button({ kind = 'plain', small, className = '', ...p }: ComponentProps<typeof BaseButton> & { kind?: keyof typeof btnKinds; small?: boolean }) {

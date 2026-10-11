@@ -9,6 +9,8 @@ import type { ApplicationSummary, VersionPage } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
 import { Button, Empty, Input, Select } from '../ui/controls.tsx';
 import { appPath, linePath } from '../ui/links.ts';
+import { th, tdTop as td } from '../ui/table.ts';
+import { refKindKey } from '../ui/labels.ts';
 
 const PAGE_SIZE = 20;
 
@@ -77,8 +79,6 @@ export function VersionsPage() {
   const total = data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const filtered = app !== '' || q !== '';
-  const th = 'h-10 whitespace-nowrap border-b border-line bg-thead px-3 text-left text-[13px] font-semibold';
-  const td = 'border-b border-sep px-3 py-2 align-top';
   const link = 'text-accent hover:underline';
 
   return (
@@ -157,7 +157,7 @@ export function VersionsPage() {
                   <span className="font-mono text-[12.5px] text-text-3">{v.line.branch}</span>
                 </td>
                 <td className={`${td} whitespace-nowrap`}>
-                  <span className="text-text-3">{t(v.ref.kind === 'tag' ? 'versions.ref.tag' : 'versions.ref.commit')}</span>{' '}
+                  <span className="text-text-3">{t(refKindKey(v.ref.kind))}</span>{' '}
                   <span className="font-mono text-[12.5px]">{v.ref.value}</span>
                 </td>
                 <td className={`${td} whitespace-nowrap`}>{v.releasedAt}</td>

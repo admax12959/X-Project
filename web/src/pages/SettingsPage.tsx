@@ -8,6 +8,7 @@ import { LOCALES, setLocale, useT, type Locale } from '../i18n/index.ts';
 import { useSession } from '../session/session.tsx';
 import { Button, Empty, Field, Input, Segmented } from '../ui/controls.tsx';
 import { BindIdentityDialog } from './BindIdentityDialog.tsx';
+import { th, td } from '../ui/table.ts';
 
 type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; me: AdminUser };
 
@@ -151,8 +152,6 @@ function IdentitiesSection({ me, methods, onChanged }: { me: AdminUser; methods:
   const missing = methods.filter((m) => !have.has(m));
   const onlyOne = me.identities.length <= 1;
 
-  const th = 'h-10 whitespace-nowrap border-b border-line bg-thead px-3 text-left text-[13px] font-semibold';
-  const td = 'h-10 border-b border-sep px-3';
 
   return (
     <Section title={t('settings.identities.title')}>

@@ -319,6 +319,6 @@ Prefixes: `term.*` (glossary), `common.*`, `error.*`, then one prefix per area (
 
 - All server calls go through `web/src/api/client.ts` (`api.<resource>.<action>`). Wire types are in `api/types.ts`.
 - Any 401 (except the session calls themselves) drops the SPA to anonymous. `RequireSession` then redirects to `/login?next=…`.
-- Styling uses Tailwind with the Console tokens in `src/index.css` (`text-text-2`, `border-line`, `bg-subtle`, `text-accent`…). Use Base UI controls from `src/ui/controls.tsx`.
+- Styling uses Tailwind with the Console tokens in `src/index.css` (`text-text-2`, `border-line`, `bg-subtle`, `text-accent`…). Never write a hex colour in a component: add a token to `@theme` in `src/index.css` (`text-info`, `bg-hover`, `bg-disabled`, `bg-danger-hover`…). Use Base UI controls from `src/ui/controls.tsx`; `Input`, `Select` and `Textarea` fill their container unless `className` sets a width (`w-56`). Table cell classes are `th`, `td` and `tdTop` from `src/ui/table.ts`; `isOwnerOf(app, userId)` (`ui/roles.ts`) and `refKindKey(kind)` (`ui/labels.ts`) are the shared display helpers.
 - Add pages under `src/pages/`, routes in `src/main.tsx`, and nav entries in `src/shell/Shell.tsx`.
 - Dependencies: the Docker build runs pnpm with a minimum release age, so a package version published only days ago can pass `pnpm install` locally and still fail `docker build`. Pin an older version in that case, and run `docker build` before calling a dependency change done.
