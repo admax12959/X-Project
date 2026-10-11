@@ -126,6 +126,26 @@ func (s *server) getApplication(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toApplicationJSON(a))
 }
 
+// updateApplication serves PATCH /api/applications/{key}: basic info, Owners only.
+// Unknown fields (key, repo...) are ignored: they have no edit path.
+func (s *server) updateApplication(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	a, err := s.svc.UpdateApplication(r.Context(), actorOf(r), r.PathValue("key"), domain.UpdateApplicationInput{
+		Name: body.Name, Description: body.Description,
+	})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toApplicationJSON(a))
+}
+
 // lineJSON: the mainline has no status (and no name of its own).
 type lineJSON struct {
 	ID     string `json:"id"`

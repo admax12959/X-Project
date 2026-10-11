@@ -4,7 +4,7 @@
 //
 // To add an event type: see "Change history" in docs/dev.md.
 import type { ChangeEvent } from '../api/types.ts';
-import { hasKey, translate, type Locale, type Params } from '../i18n/index.ts';
+import { hasKey, translate, type Locale, type MessageKey, type Params } from '../i18n/index.ts';
 
 type Renderer = (params: Record<string, unknown>, locale: Locale) => Params;
 
@@ -26,6 +26,12 @@ function users(list: unknown, locale: Locale): string {
 /** One entry per backend EventType (internal/domain/history.go): maps params to message placeholders. */
 const renderers: Record<string, Renderer> = {
   appCreated: (p, locale) => ({ owners: users(p.owners, locale) }),
+  appInfoChanged: (p, locale) => ({
+    fields: joinNames(
+      Object.keys((p.changes as Record<string, unknown> | undefined) ?? {}).map((f) => translate(`apps.field.${f}` as MessageKey)),
+      locale,
+    ),
+  }),
 };
 
 export function renderEvent(e: ChangeEvent, locale: Locale): string {

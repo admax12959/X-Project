@@ -2,6 +2,7 @@
 // 占位符由 web/src/history/render.ts 填充，用户输入的内容原样显示。
 export default {
   'history.event.appCreated': '创建应用，Owner：{owners}',
+  'history.event.appInfoChanged': '修改应用基本信息：{fields}',
   'history.event.unknown': '未知事件（{type}）',
   'history.col.time': '时间',
   'history.col.by': '操作人',
