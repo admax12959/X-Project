@@ -421,6 +421,81 @@ func TestAdministratorBindRules(t *testing.T) {
 	env.Client().LoginLocal("other", "other-pw-123").ExpectStatus(http.StatusOK)
 }
 
+// Spec story 9: only the LDAP way in is lost when the directory refuses; the user, the
+// profile and the other identity are untouched.
+func TestUserWithTwoIdentitiesStaysUsableWhenTheDirectoryRefusesTheLDAPIdentity(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addJane(env)
+	jane, created := localJane(t, env)
+	bindOwn(jane, bindLDAP("jane.doe", "jane-ldap-pw")).ExpectStatus(http.StatusCreated)
+	before := getMe(t, jane)
+
+	check := func(what string) {
+		t.Helper()
+		var u ldapSession
+		env.Client().LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK).JSON(&u)
+		if u.User.ID != created.ID {
+			t.Fatalf("%s: local login opened user %s, want %s", what, u.User.ID, created.ID)
+		}
+		fresh := env.Client()
+		fresh.LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+		after := getMe(t, fresh)
+		if len(after.Identities) != 2 || after.DisplayName != before.DisplayName || after.Email != before.Email ||
+			after.Department != before.Department || after.Username != before.Username {
+			t.Fatalf("%s: me = %+v, want the profile %+v and both identities", what, after, before)
+		}
+		// The still-open session keeps working too.
+		jane.Get("/api/session").ExpectStatus(http.StatusOK)
+	}
+
+	env.Directory.SetDisabled("jane.doe", true)
+	loginLDAP(env.Client(), "jane.doe", "jane-ldap-pw").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	check("directory account disabled")
+
+	env.Directory.SetDisabled("jane.doe", false)
+	env.Directory.RemoveAccount("jane.doe")
+	loginLDAP(env.Client(), "jane.doe", "jane-ldap-pw").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	check("directory account removed")
+
+	addJane(env)
+	env.Directory.SetUnreachable(true)
+	loginLDAP(env.Client(), "jane.doe", "jane-ldap-pw").ExpectError(http.StatusServiceUnavailable, "", "ldapUnreachable")
+	check("directory unreachable")
+
+	// And the LDAP way works again once the account is back.
+	env.Directory.SetUnreachable(false)
+	if u := userOf(t, loginLDAP(env.Client(), "jane.doe", "jane-ldap-pw")); u.ID != created.ID {
+		t.Fatalf("LDAP login after recovery opened user %s, want %s", u.ID, created.ID)
+	}
+}
+
+// ---------------------------------------------------------------- administrator edits of LDAP-bound users
+
+func TestAdministratorCannotRenameOrEditDirectoryOwnedFieldsOfAnLDAPBoundUser(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addEmma(env)
+	emma := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw"))
+	admin := env.AdminClient()
+
+	patchUser(admin, emma.ID, map[string]any{"username": "emma"}).ExpectError(http.StatusUnprocessableEntity, "username", "usernameLocked")
+	for _, field := range []string{"displayName", "email", "department"} {
+		patchUser(admin, emma.ID, map[string]any{field: "Changed By Admin"}).ExpectError(http.StatusUnprocessableEntity, field, "ldapManaged")
+	}
+	// The phone is not the directory's.
+	patchUser(admin, emma.ID, map[string]any{"phone": "555-0177"}).ExpectStatus(http.StatusOK)
+
+	got := findUser(t, listUsers(t, admin), "elarsen")
+	if got.DisplayName != "Emma Larsen" || got.Email != "emma.larsen@corp.example" || got.Department != "Payments Platform" || got.Phone != "555-0177" {
+		t.Fatalf("user after the refused edits = %+v", got)
+	}
+	// The old name still logs in to the same user: nothing was renamed.
+	if u := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw")); u.ID != emma.ID || u.Username != "elarsen" {
+		t.Fatalf("LDAP login opened %+v", u)
+	}
+}
+
 // ---------------------------------------------------------------- unbinding
 
 func unbindOwn(c *apitest.Client, kind string) *apitest.Response {
