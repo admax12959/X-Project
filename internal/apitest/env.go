@@ -38,6 +38,7 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 	t.Helper()
 	cfg := app.DefaultConfig()
 	cfg.Database.DSN = freshDatabase(t)
+	cfg.SecretKey = "test-secret-key"
 	cfg.Admin.Username = AdminUsername
 	cfg.Admin.Password = AdminPassword
 	cfg.Admin.DisplayName = "Initial Admin"
@@ -55,6 +56,7 @@ func StartError(t testing.TB, mutate func(*app.Config)) error {
 	t.Helper()
 	cfg := app.DefaultConfig()
 	cfg.Database.DSN = freshDatabase(t)
+	cfg.SecretKey = "test-secret-key"
 	cfg.Admin.Username = AdminUsername
 	cfg.Admin.Password = AdminPassword
 	mutate(&cfg)

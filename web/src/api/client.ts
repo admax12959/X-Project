@@ -3,6 +3,8 @@ import type {
   AdminUser,
   ApiFieldError,
   ApplicationSummary,
+  CodePlatform,
+  CodePlatformInput,
   CreateUserInput,
   List,
   LoginInput,
@@ -63,6 +65,12 @@ export const api = {
   },
   applications: {
     list: () => request<List<ApplicationSummary>>('GET', '/api/applications'),
+  },
+  codePlatforms: {
+    /** Administrators only (403 otherwise). */
+    list: () => request<List<CodePlatform>>('GET', '/api/code-platforms'),
+    /** 422 field errors on kind / baseUrl / token. */
+    create: (input: CodePlatformInput) => request<CodePlatform>('POST', '/api/code-platforms', { body: input }),
   },
   /** Administrator only (403 otherwise). There is no delete: users are disabled. */
   users: {

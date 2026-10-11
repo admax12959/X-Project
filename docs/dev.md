@@ -40,7 +40,7 @@ XP_PORT=18080 docker-compose -p mine up --build   # another host port / project 
 Backend against your own MySQL, with the frontend dev server:
 
 ```sh
-XP_DB_DSN='user:pw@tcp(127.0.0.1:3306)/xproject' XP_ADMIN_USERNAME=admin XP_ADMIN_PASSWORD=change-me-now go run ./cmd/xproject
+XP_DB_DSN='user:pw@tcp(127.0.0.1:3306)/xproject' XP_SECRET_KEY=dev-secret XP_ADMIN_USERNAME=admin XP_ADMIN_PASSWORD=change-me-now go run ./cmd/xproject
 pnpm --dir web install && pnpm --dir web dev   # http://localhost:5173, proxies /api to :8080 (XP_API_ORIGIN)
 ```
 
@@ -52,6 +52,7 @@ Optional YAML file named by `XP_CONFIG` (see `config.example.yaml`); environment
 |---|---|---|---|
 | `XP_DB_DSN` | `database.dsn` | (required) | go-sql-driver DSN. `parseTime`, UTC and `time_zone='+00:00'` are forced. |
 | `XP_DB_CONNECT_TIMEOUT` | `database.connect_timeout` | `90s` | Keep retrying the DB at startup this long. |
+| `XP_SECRET_KEY` | `secret_key` | (required) | Encrypts secrets stored in the database (code platform tokens, AES-256-GCM). Keep it stable: changing it makes stored tokens unreadable. |
 | `XP_LISTEN` | `listen` | `:8080` | HTTP listen address. |
 | `XP_WEB_DIR` | `web_dir` | empty (image: `/srv/web`) | Built SPA; empty serves the API only. |
 | `XP_ADMIN_USERNAME` / `XP_ADMIN_PASSWORD` | `admin.username` / `admin.password` | — | Initial administrator. Required only on the very first start. |
@@ -75,6 +76,7 @@ How the API tests work (`internal/apitest`):
 - `apitest.New(t)` creates a fresh database for the test and starts the app on it through `app.Start`, the same path production uses (migrate, then bootstrap). It serves the app with `httptest`. Tests are independent and call `t.Parallel()`.
 - `env.Client()` is a browser-like client with its own cookie jar. `env.AdminClient()` is already logged in as the initial admin.
 - `env.Directory` and `env.CodePlatforms` are the fakes wired into the app. Configure them in the test, for example `env.Directory.AddAccount(...)` or `env.CodePlatforms.AddRepo(...)`.
+- `env.SeedUserClient(username, password)` returns a client logged in as a plain (non-administrator) user inserted directly into the database. Use it for permission tests until the user-management API exists. The test config sets `SecretKey` for you.
 - `env.Restart(mutate)` simulates a process restart on the same database.
 - To reuse an existing MySQL 8 server instead of a container, set `XP_TEST_MYSQL_DSN='root:pw@tcp(127.0.0.1:3306)/'`. The value has no database name and no parameters.
 - Clean up containers left behind by a killed run with `make clean-test-containers`.

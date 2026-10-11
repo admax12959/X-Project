@@ -22,6 +22,7 @@ type Service struct {
 	codePlatforms CodePlatformAdapter
 	now           func() time.Time
 	sessionTTL    time.Duration
+	tokens        tokenCipher // encrypts stored secrets; zero value when no SecretKey
 }
 
 // Options configures a Service.
@@ -30,6 +31,7 @@ type Options struct {
 	CodePlatforms CodePlatformAdapter
 	Now           func() time.Time // defaults to time.Now
 	SessionTTL    time.Duration
+	SecretKey     string // encrypts stored secrets (code platform tokens); the app refuses to start without it
 }
 
 func NewService(repo Repository, o Options) *Service {
@@ -39,7 +41,8 @@ func NewService(repo Repository, o Options) *Service {
 	if o.SessionTTL <= 0 {
 		o.SessionTTL = 12 * time.Hour
 	}
-	return &Service{repo: repo, directory: o.Directory, codePlatforms: o.CodePlatforms, now: o.Now, sessionTTL: o.SessionTTL}
+	tokens, _ := newTokenCipher(o.SecretKey) // zero value on empty key; sealing then fails loudly
+	return &Service{repo: repo, directory: o.Directory, codePlatforms: o.CodePlatforms, now: o.Now, sessionTTL: o.SessionTTL, tokens: tokens}
 }
 
 func (s *Service) nowUTC() time.Time { return s.now().UTC().Truncate(time.Microsecond) }
