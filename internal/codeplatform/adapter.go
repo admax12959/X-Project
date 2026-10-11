@@ -59,7 +59,9 @@ func gitlabRequest(p domain.PlatformConn, path string) apiCall {
 		url:     strings.TrimRight(p.BaseURL, "/") + "/api/v4/projects/" + url.PathEscape(path),
 		headers: map[string]string{"PRIVATE-TOKEN": p.Token},
 		// GitLab answers 404, not 403, for a project the token cannot see; a bad token is 401.
-		forbidden: func(r *http.Response) bool { return r.StatusCode == http.StatusUnauthorized || r.StatusCode == http.StatusForbidden },
+		forbidden: func(r *http.Response) bool {
+			return r.StatusCode == http.StatusUnauthorized || r.StatusCode == http.StatusForbidden
+		},
 	}
 }
 

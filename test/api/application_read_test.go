@@ -52,4 +52,3 @@ func TestAnyLoggedInUserOpensTheApplicationOverview(t *testing.T) {
 	f.admin.Get("/api/applications/nope").ExpectError(http.StatusNotFound, "", "notFound")
 	f.env.Client().Get("/api/applications/payments-core").ExpectError(http.StatusUnauthorized, "", "unauthenticated")
 }
-
