@@ -51,8 +51,8 @@ func (s *Store) LockUserWithIdentities(ctx context.Context, id domain.UserID) (d
 
 func (s *Store) UpdateUser(ctx context.Context, u domain.User, at time.Time) error {
 	_, err := s.q.ExecContext(ctx,
-		"UPDATE users SET username = ?, display_name = ?, email = ?, phone = ?, department = ?, updated_at = ? WHERE id = ?",
-		u.Username, u.DisplayName, u.Email, u.Phone, u.Department, at, u.ID)
+		"UPDATE users SET username = ?, display_name = ?, email = ?, phone = ?, department = ?, language = ?, updated_at = ? WHERE id = ?",
+		u.Username, u.DisplayName, u.Email, u.Phone, u.Department, u.Language, at, u.ID)
 	return mapUsernameConflict(err)
 }
 
