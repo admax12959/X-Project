@@ -52,6 +52,9 @@ func (s *server) routes() {
 	s.route("DELETE /api/session", s.logout)
 
 	s.route("GET /api/applications", s.listApplications)
+
+	s.route("GET /api/code-platforms", s.listCodePlatforms)
+	s.route("POST /api/code-platforms", s.createCodePlatform)
 }
 
 func (s *server) route(pattern string, h http.HandlerFunc) { s.mux.HandleFunc(pattern, h) }
