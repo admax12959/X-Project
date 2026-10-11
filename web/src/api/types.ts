@@ -94,6 +94,18 @@ export type LineDetail = Line & {
   forkedAt?: string;
 };
 
+/** One entry of a line's status log (oldest first): who moved it from one status to another, and when (a timestamp). */
+export type LineStatusChange = { from: LineStatus; to: LineStatus; at: string; actor: { id: string; username: string; displayName: string } };
+
+/** GET /api/applications/{key}/lines/{id}, and the response of PATCH / PUT status. statusChanges is [] for the mainline. */
+export type LineWithLog = LineDetail & { statusChanges: LineStatusChange[] };
+
+/**
+ * PATCH /api/applications/{key}/lines/{id} (Owners). Absent = unchanged; "" clears note and plannedEnd. The Git branch,
+ * source version and fork reason have no edit path.
+ */
+export type UpdateLineInput = { name?: string; note?: string; plannedEnd?: string };
+
 /** GET /api/applications/{key}/lineage: the mainline as the root, children nested to any depth. */
 export type LineageNode = LineDetail & {
   versionCount: number;
