@@ -578,15 +578,14 @@ func TestALineCannotBeDeleted(t *testing.T) {
 	f.moveTo(t, "retired")
 
 	// There is no delete route at all: not for an Owner, not for an administrator, not for a retired line.
+	before := f.listLines(f.elarsen)
 	for _, c := range []*apitest.Client{f.elarsen, f.admin} {
-		if res := c.Delete(f.path()); res.Status < 400 {
-			t.Fatalf("DELETE a line = %d: %s", res.Status, res.Body)
-		}
+		c.Delete(f.path()).ExpectError(http.StatusNotFound, "", "notFound")
 	}
-	if got := f.listLines(f.elarsen); len(got) != 2 {
-		t.Fatalf("lines = %+v", got)
+	if got := f.listLines(f.elarsen); !reflect.DeepEqual(got, before) {
+		t.Fatalf("lines changed: %+v -> %+v", before, got)
 	}
-	if l := f.current(t); l.Status != "retired" {
+	if l := f.current(t); l.Status != "retired" || l.ID != f.line.ID {
 		t.Fatalf("line = %+v", l)
 	}
 }
@@ -625,5 +624,3 @@ func TestEditingALineIsRecordedInTheChangeHistoryOnlyWhenSomethingChanged(t *tes
 		t.Fatalf("event = %+v", e)
 	}
 }
-
-// -- tests below are appended as the lifecycle grows --

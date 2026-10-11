@@ -1,11 +1,18 @@
 package api
 
 import (
+	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/admax12959/X-Project/internal/apitest"
 	"github.com/admax12959/X-Project/internal/app"
+	"github.com/admax12959/X-Project/internal/domain"
 )
 
 func TestLoginWithWrongPasswordOrUnknownUserGivesTheSameError(t *testing.T) {
@@ -69,11 +76,56 @@ func TestLogoutInvalidatesTheSessionOnTheServer(t *testing.T) {
 	c.WithCookies(old).Get("/api/session").ExpectError(http.StatusUnauthorized, "", "unauthenticated")
 }
 
+// registeredRoutes reads the route table (every s.route / s.publicRoute call) out of the
+// httpapi sources, so a new route is covered by the test below without anyone remembering it.
+func registeredRoutes(t *testing.T) (all, public []string) {
+	t.Helper()
+	files, err := filepath.Glob("../../internal/httpapi/*.go")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("httpapi sources not found: %v", err)
+	}
+	re := regexp.MustCompile(`s\.(route|publicRoute)\("([A-Z]+ /api/[^"]*)"`)
+	for _, f := range files {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range re.FindAllStringSubmatch(string(src), -1) {
+			all = append(all, m[2])
+			if m[1] == "publicRoute" {
+				public = append(public, m[2])
+			}
+		}
+	}
+	return all, public
+}
+
 func TestEveryAPIRouteRequiresASessionUnlessPublic(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	c := env.Client()
-	for _, path := range []string{"/api/session", "/api/applications", "/api/no-such-route"} {
+	routes, public := registeredRoutes(t)
+
+	// The only routes reachable without a session. Adding one is a deliberate decision.
+	wantPublic := []string{"GET /api/healthz", "GET /api/login-methods", "POST /api/session"}
+	slices.Sort(public)
+	if !slices.Equal(public, wantPublic) {
+		t.Fatalf("public routes = %v, want %v", public, wantPublic)
+	}
+	if len(routes) < 30 {
+		t.Fatalf("found only %d routes in the httpapi sources; has the registration style changed?", len(routes))
+	}
+
+	pathParam := regexp.MustCompile(`\{[^}]+\}`)
+	for _, route := range routes {
+		if slices.Contains(public, route) {
+			continue
+		}
+		method, path, _ := strings.Cut(route, " ")
+		path = pathParam.ReplaceAllString(path, "1")
+		c.Do(method, path, map[string]any{}).ExpectError(http.StatusUnauthorized, "", "unauthenticated")
+	}
+	for _, path := range []string{"/api/session", "/api/no-such-route"} {
 		c.Get(path).ExpectError(http.StatusUnauthorized, "", "unauthenticated")
 	}
 	c.Get("/api/healthz").ExpectStatus(http.StatusOK)
@@ -107,8 +159,14 @@ func TestRestartWithoutAdminConfigurationStillStarts(t *testing.T) {
 
 func TestFirstStartWithoutAdminConfigurationFails(t *testing.T) {
 	t.Parallel()
-	err := apitest.StartError(t, func(c *app.Config) { c.Admin.Password = "" })
-	if err == nil {
-		t.Fatal("first start without admin password succeeded")
+	// Both the password and the username are required on the very first start, and the
+	// refusal is the bootstrap configuration error, not some other failure.
+	for name, mutate := range map[string]func(*app.Config){
+		"password": func(c *app.Config) { c.Admin.Password = "" },
+		"username": func(c *app.Config) { c.Admin.Username = "" },
+	} {
+		if err := apitest.StartError(t, mutate); !errors.Is(err, domain.ErrBootstrapConfig) {
+			t.Fatalf("first start without the admin %s: err = %v, want ErrBootstrapConfig", name, err)
+		}
 	}
 }

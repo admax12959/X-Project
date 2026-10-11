@@ -142,9 +142,8 @@ func TestChangeHistoryCannotBeChangedThroughTheAPI(t *testing.T) {
 
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		for _, path := range []string{"/api/applications/payments-core/history", "/api/applications/payments-core/history/" + h.Items[0].ID} {
-			if res := f.admin.Do(method, path, map[string]any{"type": "x"}); res.Status < 400 {
-				t.Fatalf("%s %s = %d, want an error", method, path, res.Status)
-			}
+			// There is no such route: the answer is "not found", whoever asks.
+			f.admin.Do(method, path, map[string]any{"type": "x"}).ExpectError(http.StatusNotFound, "", "notFound")
 		}
 	}
 	var after historyBody
