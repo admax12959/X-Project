@@ -142,7 +142,7 @@ The domain returns `*domain.Error`, built with `domain.Validation(...)`, a `doma
 
 The frontend shows errors with `errorsByField(err)` (field → message, `''` = request-level). Keep the raw error in state and render the messages at render time, so they follow a language switch.
 
-Codes added with applications (#6): `keyTaken` (field `key`), `userUnavailable` (fields `owners` / `pes`, params `{userId}`; the user does not exist or is disabled), `repoNotFound` and `repoForbidden` (field `repo.path`), `platformUnreachable` (field `repo.platformId`). All platform outcomes are plain 422s with their own code; there is no 5xx kind for them.
+Codes added with applications (#6): `keyTaken` (field `key`), `userUnavailable` (fields `owners` / `pes`, params `{userId}`; the user does not exist or is disabled), `repoNotFound` and `repoForbidden` (field `repo.path`), `platformUnreachable` (field `repo.platformId`). Not found and forbidden are 422s; an unreachable platform is `KindUnavailable` (503, like `ldapUnreachable`) and is never reported as "not found". Create calls the platform before opening its transaction.
 
 ### Applications
 

@@ -47,7 +47,7 @@ func TestRepositoryVerificationFailuresAreDistinguishable(t *testing.T) {
 
 	env.CodePlatforms.SetUnreachable(glURL, true)
 	admin.Post("/api/repo-verifications", verifyBody(pid, "payments/payments-core")).
-		ExpectError(http.StatusUnprocessableEntity, "repo.platformId", "platformUnreachable")
+		ExpectError(http.StatusServiceUnavailable, "repo.platformId", "platformUnreachable")
 }
 
 func TestRepositoryVerificationChecksItsInput(t *testing.T) {

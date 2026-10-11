@@ -87,7 +87,8 @@ func (s *Service) resolveRepo(ctx context.Context, repo Repository, field string
 	case RepoForbidden:
 		return RepoBinding{}, Validation(Invalid(field+".path", CodeRepoForbidden, nil))
 	case PlatformUnreachable:
-		return RepoBinding{}, Validation(Invalid(field+".platformId", CodePlatformUnreachable, nil))
+		// Like the directory, an unreachable platform is 503, not a validation failure.
+		return RepoBinding{}, &Error{Kind: KindUnavailable, Errors: []FieldError{Invalid(field+".platformId", CodePlatformUnreachable, nil)}}
 	}
 	return RepoBinding{}, errors.New("code platform adapter returned an unknown outcome")
 }

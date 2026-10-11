@@ -146,13 +146,14 @@ func (s *Service) CreateApplication(ctx context.Context, actor Actor, in CreateA
 		return Application{}, err
 	}
 
+	// The (slow, remote) platform call stays outside the transaction.
+	binding, err := s.resolveRepo(ctx, s.repo, "repo", platformID, path)
+	if err != nil {
+		return Application{}, err
+	}
 	var created Application
-	err := s.repo.InTx(ctx, func(tx Repository) error {
+	err = s.repo.InTx(ctx, func(tx Repository) error {
 		if err := s.checkMembers(ctx, tx, "owners", owners, "pes", pes); err != nil {
-			return err
-		}
-		binding, err := s.resolveRepo(ctx, tx, "repo", platformID, path)
-		if err != nil {
 			return err
 		}
 		now := s.nowUTC()

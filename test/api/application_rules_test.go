@@ -130,7 +130,7 @@ func TestAnApplicationCannotBeCreatedWithoutAPassingRepositoryVerification(t *te
 	f.post(map[string]any{"repo": map[string]any{"platformId": f.pid, "path": ""}}).
 		ExpectError(http.StatusUnprocessableEntity, "repo.path", "required")
 	f.env.CodePlatforms.SetUnreachable(glURL, true)
-	f.post(nil).ExpectError(http.StatusUnprocessableEntity, "repo.platformId", "platformUnreachable")
+	f.post(nil).ExpectError(http.StatusServiceUnavailable, "repo.platformId", "platformUnreachable")
 	f.expectNoApplications(t)
 }
 
