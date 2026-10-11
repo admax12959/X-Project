@@ -44,6 +44,12 @@ const (
 	// lines (fork)
 	CodeBranchTaken = "branchTaken" // field "branch"; params {line: {id,isMain,name,branch}} of the line that has it (the mainline's branch counts)
 
+	// line lifecycle (#10)
+	CodeInvalidTransition    = "invalidTransition"    // field "status"; params {from, to}; the state machine does not allow it
+	CodeNoteRequiredOnFrozen = "noteRequiredOnFrozen" // field "note"; registering on a Frozen line needs a note
+	CodeLineRetired          = "lineRetired"          // request-level; a Retired line takes no versions and no edits
+	CodeLineIsMainline       = "lineIsMainline"       // request-level; the mainline has no status and no line edits
+
 	// repository binding (field "repo.path" / "repo.platformId")
 	CodeRepoNotFound        = "repoNotFound"        // the platform has no repository at this path
 	CodeRepoForbidden       = "repoForbidden"       // the platform token cannot access this repository

@@ -59,3 +59,89 @@ func TestOwnerFreezesAnActiveLine(t *testing.T) {
 		t.Fatalf("listed status = %q", s)
 	}
 }
+
+func TestOwnerReturnsAFrozenLineToActive(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	f.setStatus("frozen").ExpectStatus(http.StatusOK)
+
+	var got lineDetailBody
+	f.setStatus("active").ExpectStatus(http.StatusOK).JSON(&got)
+
+	if got.Status != "active" || f.statusOf(t, f.line.ID) != "active" {
+		t.Fatalf("response = %+v", got)
+	}
+}
+
+func TestOwnerRetiresAFrozenLine(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	f.setStatus("frozen").ExpectStatus(http.StatusOK)
+
+	var got lineDetailBody
+	f.setStatus("retired").ExpectStatus(http.StatusOK).JSON(&got)
+
+	if got.Status != "retired" || f.statusOf(t, f.line.ID) != "retired" {
+		t.Fatalf("response = %+v", got)
+	}
+}
+
+// path from the freshly forked (active) line to each status, by legal moves only.
+var pathTo = map[string][]string{
+	"active":  nil,
+	"frozen":  {"frozen"},
+	"retired": {"frozen", "retired"},
+}
+
+func (f lineFixture) moveTo(t *testing.T, status string) {
+	t.Helper()
+	for _, step := range pathTo[status] {
+		f.setStatus(step).ExpectStatus(http.StatusOK)
+	}
+}
+
+func TestEveryIllegalStatusTransitionIsRejectedAndChangesNothing(t *testing.T) {
+	t.Parallel()
+	illegal := [][2]string{
+		{"active", "retired"}, // must be frozen first
+		{"active", "active"},
+		{"frozen", "frozen"},
+		{"retired", "active"}, // retiring is final
+		{"retired", "frozen"},
+		{"retired", "retired"},
+	}
+	for _, c := range illegal {
+		from, to := c[0], c[1]
+		t.Run(from+" to "+to, func(t *testing.T) {
+			t.Parallel()
+			f := newLineFixture(t)
+			f.moveTo(t, from)
+
+			res := f.setStatus(to)
+			res.ExpectError(http.StatusUnprocessableEntity, "status", "invalidTransition")
+			params := res.Errors()[0].Params
+			if params["from"] != from || params["to"] != to {
+				t.Fatalf("params = %+v", params)
+			}
+			if got := f.statusOf(t, f.line.ID); got != from {
+				t.Fatalf("status after the rejected change = %q, want %q", got, from)
+			}
+		})
+	}
+}
+
+func TestAStatusChangeNeedsAKnownTargetStatus(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	invalid := http.StatusUnprocessableEntity
+
+	f.setStatus("").ExpectError(invalid, "status", "required")
+	f.setStatus("  ").ExpectError(invalid, "status", "required")
+	f.setStatus("archived").ExpectError(invalid, "status", "invalid")
+	f.setStatus("Frozen").ExpectError(invalid, "status", "invalid") // values are lowercase
+	if got := f.statusOf(t, f.line.ID); got != "active" {
+		t.Fatalf("status = %q", got)
+	}
+}
+
+// -- tests below are appended as the lifecycle grows --

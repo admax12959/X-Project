@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -17,8 +18,14 @@ type LineLifecycleRepository interface {
 }
 
 // lineTransitions is the state machine: from -> allowed targets.
+// Retired is final; active cannot skip frozen.
 var lineTransitions = map[LineStatus][]LineStatus{
 	LineActive: {LineFrozen},
+	LineFrozen: {LineActive, LineRetired},
+}
+
+func knownLineStatus(s LineStatus) bool {
+	return s == LineActive || s == LineFrozen || s == LineRetired
 }
 
 // SetLineStatus moves a maintenance line along the state machine. Owners only.
@@ -34,6 +41,13 @@ func (s *Service) SetLineStatus(ctx context.Context, actor Actor, appKey, lineID
 		return Line{}, forbidden()
 	}
 	to := LineStatus(strings.TrimSpace(status))
+	var c Collector
+	if c.Required("status", string(to)) && !knownLineStatus(to) {
+		c.Add("status", CodeInvalid, nil)
+	}
+	if err := c.Err(); err != nil {
+		return Line{}, err
+	}
 	id, perr := strconv.ParseInt(strings.TrimSpace(lineID), 10, 64)
 	if perr != nil || id <= 0 {
 		return Line{}, newKind(KindNotFound, CodeNotFound)
@@ -46,6 +60,9 @@ func (s *Service) SetLineStatus(ctx context.Context, actor Actor, appKey, lineID
 		}
 		if !found {
 			return newKind(KindNotFound, CodeNotFound)
+		}
+		if !slices.Contains(lineTransitions[line.Status], to) {
+			return Validation(Invalid("status", CodeInvalidTransition, map[string]any{"from": string(line.Status), "to": string(to)}))
 		}
 		if err := tx.SetLineStatus(ctx, line.ID, to); err != nil {
 			return err
