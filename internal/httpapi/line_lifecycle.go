@@ -2,8 +2,6 @@ package httpapi
 
 import (
 	"net/http"
-	"strconv"
-	"time"
 
 	"github.com/admax12959/X-Project/internal/domain"
 )
@@ -28,7 +26,7 @@ func toLineWithLogJSON(d domain.LineDetail) lineWithLogJSON {
 	out := lineWithLogJSON{lineDetailJSON: toLineDetailJSON(d.Line), StatusChanges: make([]statusChangeJSON, 0, len(d.StatusChanges))}
 	for _, c := range d.StatusChanges {
 		out.StatusChanges = append(out.StatusChanges, statusChangeJSON{
-			From: string(c.From), To: string(c.To), At: c.At.UTC().Format(time.RFC3339Nano), Actor: memberRefJSON{ID: strconv.FormatInt(int64(c.Actor.ID), 10), Username: c.Actor.Username, DisplayName: c.Actor.DisplayName},
+			From: string(c.From), To: string(c.To), At: formatTime(c.At), Actor: toMemberRefJSON(c.Actor),
 		})
 	}
 	return out

@@ -15,7 +15,7 @@ var branchPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
 
 // validBranchName is a conservative check for a Git branch name: no blanks, no
 // "..", no empty path segments, no trailing "/", "." or ".lock". Used for the
-// mainline branch here and for fork branches later.
+// mainline branch and for the branches of maintenance lines.
 func validBranchName(b string) bool {
 	return len(b) <= 255 && branchPattern.MatchString(b) &&
 		!strings.Contains(b, "..") && !strings.Contains(b, "//") &&

@@ -29,6 +29,21 @@ type sessionJSON struct {
 	User userJSON `json:"user"`
 }
 
+// memberRefJSON is a user inside another record (Owner/PE lists, event and status-change actors).
+type memberRefJSON struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName"`
+}
+
+func toMemberRefJSON(u domain.UserRef) memberRefJSON {
+	return memberRefJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName}
+}
+
+// formatDate is a calendar date on the wire (YYYY-MM-DD); formatTime is an instant (RFC 3339, UTC).
+func formatDate(t time.Time) string { return t.Format(domain.DateLayout) }
+func formatTime(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+
 // listJSON is the envelope for every collection response.
 type listJSON[T any] struct {
 	Items []T `json:"items"`

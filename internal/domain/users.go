@@ -39,7 +39,7 @@ type UserRepository interface {
 // requireAdmin is the permission check for every user-management operation.
 func requireAdmin(actor Actor) error {
 	if !actor.User.IsAdmin {
-		return newKind(KindForbidden, CodeForbidden)
+		return forbidden()
 	}
 	return nil
 }

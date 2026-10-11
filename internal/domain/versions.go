@@ -3,7 +3,6 @@ package domain
 import (
 	"context"
 	"errors"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -79,7 +78,7 @@ const (
 	maxVersionNumberLength = 100 // app_versions.number
 	maxRefValueLength      = 255 // app_versions.ref_value
 	maxVersionNoteLength   = 2000
-	dateLayout             = "2006-01-02"
+	DateLayout             = "2006-01-02"
 )
 
 // parsedVersion is a RegisterVersionInput that passed the field checks.
@@ -111,7 +110,7 @@ func parseVersionInput(in RegisterVersionInput) (parsedVersion, error) {
 		checkLength(&c, "ref.value", p.refValue, maxRefValueLength)
 	}
 	if c.Required("releasedAt", in.ReleasedAt) {
-		d, err := time.Parse(dateLayout, strings.TrimSpace(in.ReleasedAt))
+		d, err := time.Parse(DateLayout, strings.TrimSpace(in.ReleasedAt))
 		if err != nil {
 			c.Add("releasedAt", CodeInvalid, nil)
 		}
@@ -119,11 +118,6 @@ func parseVersionInput(in RegisterVersionInput) (parsedVersion, error) {
 	}
 	checkLength(&c, "note", p.note, maxVersionNoteLength)
 	return p, c.Err()
-}
-
-// actorOwns reports whether the actor is one of the application's Owners.
-func actorOwns(app Application, actor Actor) bool {
-	return slices.ContainsFunc(app.Owners, func(o UserRef) bool { return o.ID == actor.User.ID })
 }
 
 // lineParam is the params form of a line inside an error or event: the conflict
@@ -163,16 +157,16 @@ func (s *Service) RegisterVersion(ctx context.Context, actor Actor, appKey, line
 	if err != nil {
 		return Version{}, err
 	}
-	if !actorOwns(app, actor) {
-		return Version{}, newKind(KindForbidden, CodeForbidden)
+	if !isOwner(actor, app) {
+		return Version{}, forbidden()
 	}
 	p, err := parseVersionInput(in)
 	if err != nil {
 		return Version{}, err
 	}
-	id, perr := strconv.ParseInt(strings.TrimSpace(lineID), 10, 64)
-	if perr != nil || id <= 0 {
-		return Version{}, newKind(KindNotFound, CodeNotFound)
+	id, err := parseLineID(lineID)
+	if err != nil {
+		return Version{}, err
 	}
 	var out Version
 	err = s.repo.InTx(ctx, func(tx Repository) error {
@@ -225,7 +219,7 @@ func (s *Service) numberTakenError(ctx context.Context, tx Repository, applicati
 	}
 	var params map[string]any
 	if found {
-		params = map[string]any{"line": lineParam(other.Line), "releasedAt": other.ReleasedAt.Format(dateLayout)}
+		params = map[string]any{"line": lineParam(other.Line), "releasedAt": other.ReleasedAt.Format(DateLayout)}
 	}
 	return Validation(Invalid("number", CodeNumberTaken, params))
 }

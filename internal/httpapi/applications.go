@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/admax12959/X-Project/internal/domain"
 )
@@ -68,7 +67,7 @@ func toApplicationJSON(a domain.Application) applicationJSON {
 	return applicationJSON{
 		Key: a.Key, Name: a.Name, Description: a.Description, Repo: toRepoJSON(a.Repo), MainBranch: a.MainBranch,
 		Owners: toMembersJSON(a.Owners), PEs: toMembersJSON(a.PEs), DeployInfo: a.DeployInfo,
-		CreatedAt: a.CreatedAt.UTC().Format(time.RFC3339Nano),
+		CreatedAt: formatTime(a.CreatedAt),
 	}
 }
 
@@ -107,8 +106,8 @@ func (s *server) listApplications(w http.ResponseWriter, r *http.Request) {
 		}
 		if v := a.LatestVersion; v != nil {
 			item.LatestVersion = &homeVersionJSON{
-				ID: strconv.FormatInt(v.ID, 10), Number: v.Number, ReleasedAt: v.ReleasedAt.Format("2006-01-02"),
-				Line: lineJSON{ID: strconv.FormatInt(v.Line.ID, 10), IsMain: v.Line.IsMain, Name: v.Line.Name, Branch: v.Line.Branch},
+				ID: strconv.FormatInt(v.ID, 10), Number: v.Number, ReleasedAt: formatDate(v.ReleasedAt),
+				Line: shortLineJSON(v.Line),
 			}
 		}
 		out.Items = append(out.Items, item)
@@ -270,12 +269,6 @@ type changeEventJSON struct {
 	Params map[string]any `json:"params"`
 }
 
-type memberRefJSON struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
-}
-
 func (s *server) listHistory(w http.ResponseWriter, r *http.Request) {
 	events, err := s.svc.ListChangeEvents(r.Context(), actorOf(r), r.PathValue("key"))
 	if err != nil {
@@ -285,8 +278,8 @@ func (s *server) listHistory(w http.ResponseWriter, r *http.Request) {
 	out := listJSON[changeEventJSON]{Items: make([]changeEventJSON, 0, len(events))}
 	for _, e := range events {
 		out.Items = append(out.Items, changeEventJSON{
-			ID: strconv.FormatInt(e.ID, 10), At: e.At.UTC().Format(time.RFC3339Nano), Type: string(e.Type), Params: e.Params,
-			Actor: memberRefJSON{ID: strconv.FormatInt(int64(e.Actor.ID), 10), Username: e.Actor.Username, DisplayName: e.Actor.DisplayName},
+			ID: strconv.FormatInt(e.ID, 10), At: formatTime(e.At), Type: string(e.Type), Params: e.Params,
+			Actor: toMemberRefJSON(e.Actor),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

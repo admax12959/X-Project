@@ -13,8 +13,8 @@ import (
 // with the application (applications.go); maintenance lines are forked here.
 
 // LineStatus is a maintenance line's lifecycle state. The mainline has none (empty).
-// Stored and sent lowercase. The state machine (active <-> frozen -> retired) is the
-// lifecycle ticket's (#10); forking only ever creates active lines.
+// Stored and sent lowercase. The state machine (active <-> frozen -> retired)
+// is in line_lifecycle.go (#10); forking only ever creates active lines.
 type LineStatus string
 
 const (
@@ -85,8 +85,8 @@ func (s *Service) ForkLine(ctx context.Context, actor Actor, appKey string, in F
 	if err != nil {
 		return Line{}, err
 	}
-	if !actorOwns(app, actor) {
-		return Line{}, newKind(KindForbidden, CodeForbidden)
+	if !isOwner(actor, app) {
+		return Line{}, forbidden()
 	}
 	var c Collector
 	name, branch := strings.TrimSpace(in.Name), strings.TrimSpace(in.Branch)
@@ -111,7 +111,7 @@ func (s *Service) ForkLine(ctx context.Context, actor Actor, appKey string, in F
 	checkLength(&c, "note", note, maxLineTextLength)
 	var plannedEnd *time.Time
 	if raw := strings.TrimSpace(in.PlannedEnd); raw != "" {
-		if d, perr := time.Parse(dateLayout, raw); perr != nil {
+		if d, perr := time.Parse(DateLayout, raw); perr != nil {
 			c.Add("plannedEnd", CodeInvalid, nil)
 		} else {
 			plannedEnd = &d

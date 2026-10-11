@@ -71,7 +71,7 @@ func dateOrEmpty(d *time.Time) string {
 	if d == nil {
 		return ""
 	}
-	return d.Format(dateLayout)
+	return d.Format(DateLayout)
 }
 
 func parseLineID(raw string) (int64, error) {
@@ -143,7 +143,7 @@ func (s *Service) UpdateLine(ctx context.Context, actor Actor, appKey, lineID st
 	if err != nil {
 		return LineDetail{}, err
 	}
-	if !actorOwns(app, actor) {
+	if !isOwner(actor, app) {
 		return LineDetail{}, forbidden()
 	}
 	var c Collector
@@ -164,7 +164,7 @@ func (s *Service) UpdateLine(ctx context.Context, actor Actor, appKey, lineID st
 	if in.PlannedEnd != nil {
 		var d *time.Time
 		if raw := strings.TrimSpace(*in.PlannedEnd); raw != "" {
-			parsed, perr := time.Parse(dateLayout, raw)
+			parsed, perr := time.Parse(DateLayout, raw)
 			if perr != nil {
 				c.Add("plannedEnd", CodeInvalid, nil)
 			}
@@ -238,7 +238,7 @@ func (s *Service) SetLineStatus(ctx context.Context, actor Actor, appKey, lineID
 	if err != nil {
 		return LineDetail{}, err
 	}
-	if !actorOwns(app, actor) {
+	if !isOwner(actor, app) {
 		return LineDetail{}, forbidden()
 	}
 	to := LineStatus(strings.TrimSpace(status))
