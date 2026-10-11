@@ -49,6 +49,22 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 	return e
 }
 
+// StartError attempts a first start on a fresh database with the adjusted
+// configuration and returns the startup error (nil if it started).
+func StartError(t testing.TB, mutate func(*app.Config)) error {
+	t.Helper()
+	cfg := app.DefaultConfig()
+	cfg.Database.DSN = freshDatabase(t)
+	cfg.Admin.Username = AdminUsername
+	cfg.Admin.Password = AdminPassword
+	mutate(&cfg)
+	a, err := app.Start(context.Background(), cfg, app.Deps{Directory: fakes.NewDirectory(), CodePlatforms: fakes.NewCodePlatform()})
+	if err == nil {
+		a.Close()
+	}
+	return err
+}
+
 func (e *Env) start() {
 	e.t.Helper()
 	a, err := app.Start(context.Background(), e.Config, app.Deps{Directory: e.Directory, CodePlatforms: e.CodePlatforms})
