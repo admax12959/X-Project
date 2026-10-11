@@ -126,6 +126,59 @@ func (s *server) getApplication(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toApplicationJSON(a))
 }
 
+// lineJSON: the mainline has no status (and no name of its own).
+type lineJSON struct {
+	ID     string `json:"id"`
+	IsMain bool   `json:"isMain"`
+	Name   string `json:"name"`
+	Branch string `json:"branch"`
+}
+
+func (s *server) listLines(w http.ResponseWriter, r *http.Request) {
+	lines, err := s.svc.ListLines(r.Context(), actorOf(r), r.PathValue("key"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	out := listJSON[lineJSON]{Items: make([]lineJSON, 0, len(lines))}
+	for _, l := range lines {
+		out.Items = append(out.Items, lineJSON{ID: strconv.FormatInt(l.ID, 10), IsMain: l.IsMain, Name: l.Name, Branch: l.Branch})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// changeEventJSON: type + structured params; the frontend renders the sentence
+// in the UI language. Params may nest and contain enriched user references.
+type changeEventJSON struct {
+	ID     string         `json:"id"`
+	At     string         `json:"at"`
+	Actor  memberRefJSON  `json:"actor"`
+	Type   string         `json:"type"`
+	Params map[string]any `json:"params"`
+}
+
+type memberRefJSON struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName"`
+}
+
+func (s *server) listHistory(w http.ResponseWriter, r *http.Request) {
+	events, err := s.svc.ListChangeEvents(r.Context(), actorOf(r), r.PathValue("key"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	out := listJSON[changeEventJSON]{Items: make([]changeEventJSON, 0, len(events))}
+	for _, e := range events {
+		out.Items = append(out.Items, changeEventJSON{
+			ID: strconv.FormatInt(e.ID, 10), At: e.At.UTC().Format(time.RFC3339Nano), Type: string(e.Type), Params: e.Params,
+			Actor: memberRefJSON{ID: strconv.FormatInt(int64(e.Actor.ID), 10), Username: e.Actor.Username, DisplayName: e.Actor.DisplayName},
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (s *server) verifyRepo(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Repo repoInputJSON `json:"repo"`

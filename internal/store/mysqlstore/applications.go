@@ -38,11 +38,29 @@ func (s *Store) CreateApplication(ctx context.Context, a domain.NewApplication) 
 }
 
 func (s *Store) CreateMainline(ctx context.Context, applicationID int64, branch string, at time.Time) error {
-	// The mainline's name is not shown: the UI labels it with the glossary term.
+	// The mainline has no name of its own: the UI labels it with the glossary term.
 	_, err := s.q.ExecContext(ctx,
-		"INSERT INTO app_lines (application_id, is_main, name, branch, created_at) VALUES (?, TRUE, 'Mainline', ?, ?)",
+		"INSERT INTO app_lines (application_id, is_main, name, branch, created_at) VALUES (?, TRUE, '', ?, ?)",
 		applicationID, branch, at)
 	return err
+}
+
+func (s *Store) ListLines(ctx context.Context, applicationID int64) ([]domain.Line, error) {
+	rows, err := s.q.QueryContext(ctx,
+		"SELECT id, is_main, name, branch, created_at FROM app_lines WHERE application_id = ? ORDER BY is_main DESC, id", applicationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.Line{}
+	for rows.Next() {
+		var l domain.Line
+		if err := rows.Scan(&l.ID, &l.IsMain, &l.Name, &l.Branch, &l.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) SetMembers(ctx context.Context, applicationID int64, role domain.MemberRole, users []domain.UserID) error {

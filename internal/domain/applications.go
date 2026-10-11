@@ -45,6 +45,16 @@ type ApplicationSummary struct {
 	Owners      []UserRef
 }
 
+// Line is the mainline or a maintenance line (GLOSSARY: 线). For now only the
+// mainline exists: it has no name of its own and no status.
+type Line struct {
+	ID        int64
+	IsMain    bool
+	Name      string
+	Branch    string
+	CreatedAt time.Time
+}
+
 // MemberRole is a user's role on one application.
 type MemberRole string
 
@@ -76,6 +86,8 @@ type ApplicationRepository interface {
 	CreateMainline(ctx context.Context, applicationID int64, branch string, at time.Time) error
 	// SetMembers stores the Owner or PE list in order.
 	SetMembers(ctx context.Context, applicationID int64, role MemberRole, users []UserID) error
+	// ListLines returns the application's lines, mainline first.
+	ListLines(ctx context.Context, applicationID int64) ([]Line, error)
 	GetApplicationByKey(ctx context.Context, key string) (Application, bool, error)
 	// ListApplications returns applications ordered by key. A non-empty query keeps
 	// those whose key, name, repository path or an Owner's name contains it
@@ -220,6 +232,15 @@ func parseUserIDs(c *Collector, field string, raw []string) []UserID {
 // ListApplications returns applications matching query (empty = all); any logged-in user may browse.
 func (s *Service) ListApplications(ctx context.Context, _ Actor, query string) ([]ApplicationSummary, error) {
 	return s.repo.ListApplications(ctx, strings.TrimSpace(query))
+}
+
+// ListLines returns an application's lines, mainline first; any logged-in user may read them.
+func (s *Service) ListLines(ctx context.Context, actor Actor, key string) ([]Line, error) {
+	a, err := s.GetApplication(ctx, actor, key)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.ListLines(ctx, a.ID)
 }
 
 // GetApplication returns one application by key; any logged-in user may read it.
