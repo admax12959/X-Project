@@ -63,6 +63,22 @@ export type CreateApplicationInput = {
 /** GET /api/applications/{key}/lines. The mainline has no status and no name of its own. */
 export type Line = { id: string; isMain: boolean; name: string; branch: string };
 
+export type RefKind = 'tag' | 'commit';
+
+/** GET /api/applications/{key}/versions. ref is the tag or commit as typed (never verified); releasedAt is a date "YYYY-MM-DD". */
+export type Version = {
+  id: string;
+  lineId: string;
+  line: Line;
+  number: string;
+  ref: { kind: RefKind; value: string };
+  releasedAt: string;
+  note: string;
+  createdAt: string;
+};
+
+export type RegisterVersionInput = { number: string; ref: { kind: RefKind; value: string }; releasedAt: string; note: string };
+
 /**
  * One change-history entry: a type plus structured params. The frontend renders the
  * sentence (src/history/render.ts). User references inside params are
