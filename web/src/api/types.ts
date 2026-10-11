@@ -44,6 +44,23 @@ export type ApplicationSummary = {
   owners: Member[];
 };
 
+/** The version released last on any line of an application (home page). */
+export type LatestVersion = {
+  id: string;
+  number: string;
+  /** Calendar date YYYY-MM-DD. */
+  releasedAt: string;
+  line: { id: string; isMain: boolean; name: string; branch: string };
+};
+
+/** One row of GET /api/applications (home page): the summary plus the latest version and the maintenance line count. */
+export type ApplicationListItem = ApplicationSummary & {
+  /** Maintenance lines in any status; the mainline is not counted. */
+  lineCount: number;
+  /** Null while no version is registered. */
+  latestVersion: LatestVersion | null;
+};
+
 /** GET /api/applications/{key}. */
 export type Application = ApplicationSummary & {
   mainBranch: string;
@@ -137,6 +154,9 @@ export type ChangeEvent = {
   type: string;
   params: Record<string, unknown>;
 };
+
+/** One entry of GET /api/recent-activity: a change event plus the application it belongs to. */
+export type RecentActivity = ChangeEvent & { application: { key: string; name: string } };
 
 /** Administrator view of a user (GET /api/users). */
 export type AdminUser = {
