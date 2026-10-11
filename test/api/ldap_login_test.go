@@ -145,6 +145,18 @@ func TestUnreachableDirectoryIsNeverReportedAsAWrongPassword(t *testing.T) {
 	loginLDAP(env.Client(), "elarsen", "ldap-pw").ExpectError(http.StatusServiceUnavailable, "", "ldapUnreachable")
 }
 
+func TestLoginPageCanLearnWhichLoginMethodsExistWithoutASession(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	var body struct {
+		Items []string `json:"items"`
+	}
+	env.Client().Get("/api/login-methods").ExpectStatus(http.StatusOK).JSON(&body)
+	if len(body.Items) != 2 || body.Items[0] != "local" || body.Items[1] != "ldap" {
+		t.Fatalf("login methods = %v, want [local ldap]", body.Items)
+	}
+}
+
 func TestLocalLoginStillWorksWhenTheDirectoryIsDown(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)

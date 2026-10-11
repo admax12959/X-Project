@@ -124,14 +124,21 @@ var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("x-project-dummy"), bcrypt
 
 func invalidCredentials() error { return newKind(KindUnauthenticated, CodeInvalidCredentials) }
 
+// LoginMethods lists the login methods the login page may offer: "local" always,
+// "ldap" when a directory is configured.
+func (s *Service) LoginMethods() []string {
+	m := []string{string(IdentityLocal)}
+	if s.directory != nil {
+		m = append(m, string(IdentityLDAP))
+	}
+	return m
+}
+
 // Login authenticates a user and opens a session. Wrong username, wrong password
 // and disabled users all yield the same invalidCredentials error.
 func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error) {
 	var c Collector
-	allowed := []string{string(IdentityLocal)}
-	if s.directory != nil {
-		allowed = append(allowed, string(IdentityLDAP))
-	}
+	allowed := s.LoginMethods()
 	if !slices.Contains(allowed, in.Method) {
 		c.Add("method", CodeInvalid, map[string]any{"allowed": allowed})
 	}

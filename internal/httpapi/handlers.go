@@ -59,6 +59,10 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(res.User)})
 }
 
+func (s *server) loginMethods(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, listJSON[string]{Items: s.svc.LoginMethods()})
+}
+
 func (s *server) currentSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(actorOf(r).User)})
 }

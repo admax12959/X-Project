@@ -1,5 +1,5 @@
 // Typed API client. Pages call api.<resource>.<action>(); nothing else calls fetch.
-import type { ApiFieldError, ApplicationSummary, List, LoginInput, SessionInfo } from './types.ts';
+import type { ApiFieldError, ApplicationSummary, List, LoginInput, LoginMethod, SessionInfo } from './types.ts';
 
 /** Thrown for every non-2xx response (and network failures, status 0, code "network"). */
 export class ApiError extends Error {
@@ -46,9 +46,11 @@ async function request<T>(method: string, path: string, opts: Options = {}): Pro
 
 export const api = {
   session: {
+    /** Public: which login methods the login page may offer. */
+    methods: () => request<List<LoginMethod>>('GET', '/api/login-methods', { expect401: true }),
     /** Current session; 401 (ApiError) when logged out. */
     get: () => request<SessionInfo>('GET', '/api/session', { expect401: true }),
-    /** 401 invalidCredentials or 422 field errors on failure. */
+    /** 401 invalidCredentials, 422 field errors (e.g. usernameTakenByLocal) or 503 ldapUnreachable on failure. */
     login: (input: LoginInput) => request<SessionInfo>('POST', '/api/session', { body: input, expect401: true }),
     logout: () => request<void>('DELETE', '/api/session', { expect401: true }),
   },
