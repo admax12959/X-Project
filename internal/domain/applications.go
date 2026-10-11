@@ -103,10 +103,17 @@ type ApplicationRepository interface {
 	// ListLines returns the application's lines, mainline first.
 	ListLines(ctx context.Context, applicationID int64) ([]Line, error)
 	GetApplicationByKey(ctx context.Context, key string) (Application, bool, error)
-	// ListApplications returns applications ordered by key. A non-empty query keeps
+	// ListApplications returns applications ordered by key. A non-empty Query keeps
 	// those whose key, name, repository path or an Owner's name contains it
-	// (case-insensitive, matched literally).
-	ListApplications(ctx context.Context, query string) ([]ApplicationSummary, error)
+	// (case-insensitive, matched literally). A non-zero MemberID keeps those where
+	// that user is an Owner or a PE. Both conditions must hold.
+	ListApplications(ctx context.Context, f ApplicationFilter) ([]ApplicationSummary, error)
+}
+
+// ApplicationFilter narrows the application list.
+type ApplicationFilter struct {
+	Query    string
+	MemberID UserID // 0 = no restriction
 }
 
 // CreateApplicationInput is the administrator's request to create an application.
@@ -244,9 +251,25 @@ func parseUserIDs(c *Collector, field string, raw []string) []UserID {
 	return out
 }
 
-// ListApplications returns applications matching query (empty = all); any logged-in user may browse.
-func (s *Service) ListApplications(ctx context.Context, _ Actor, query string) ([]ApplicationSummary, error) {
-	return s.repo.ListApplications(ctx, strings.TrimSpace(query))
+// ApplicationListQuery is the list request as sent. Mine is the raw query string:
+// "" and "false" list everything, "true" only the applications where the current
+// user is an Owner or a PE.
+type ApplicationListQuery struct {
+	Query string
+	Mine  string
+}
+
+// ListApplications returns applications matching the query (empty = all); any logged-in user may browse.
+func (s *Service) ListApplications(ctx context.Context, actor Actor, q ApplicationListQuery) ([]ApplicationSummary, error) {
+	f := ApplicationFilter{Query: strings.TrimSpace(q.Query)}
+	switch strings.TrimSpace(q.Mine) {
+	case "", "false":
+	case "true":
+		f.MemberID = actor.User.ID
+	default:
+		return nil, Validation(Invalid("mine", CodeInvalid, nil))
+	}
+	return s.repo.ListApplications(ctx, f)
 }
 
 // ListLines returns an application's lines, mainline first; any logged-in user may read them.

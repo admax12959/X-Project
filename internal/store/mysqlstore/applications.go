@@ -150,15 +150,24 @@ func likePattern(q string) string {
 	return "%" + r.Replace(q) + "%"
 }
 
-func (s *Store) ListApplications(ctx context.Context, query string) ([]domain.ApplicationSummary, error) {
+func (s *Store) ListApplications(ctx context.Context, f domain.ApplicationFilter) ([]domain.ApplicationSummary, error) {
 	q := appSelect
+	var where []string
 	var args []any
-	if query != "" {
-		q += ` WHERE (a.app_key LIKE ? ESCAPE '|' OR a.name LIKE ? ESCAPE '|' OR a.repo_path LIKE ? ESCAPE '|'
+	if f.Query != "" {
+		where = append(where, `(a.app_key LIKE ? ESCAPE '|' OR a.name LIKE ? ESCAPE '|' OR a.repo_path LIKE ? ESCAPE '|'
   OR EXISTS (SELECT 1 FROM application_members m JOIN users u ON u.id = m.user_id
-     WHERE m.application_id = a.id AND m.role = 'owner' AND (u.display_name LIKE ? ESCAPE '|' OR u.username LIKE ? ESCAPE '|')))`
-		p := likePattern(query)
-		args = []any{p, p, p, p, p}
+     WHERE m.application_id = a.id AND m.role = 'owner' AND (u.display_name LIKE ? ESCAPE '|' OR u.username LIKE ? ESCAPE '|')))`)
+		p := likePattern(f.Query)
+		args = append(args, p, p, p, p, p)
+	}
+	if f.MemberID != 0 {
+		// EXISTS, not a join: a user who is both Owner and PE must not list the application twice.
+		where = append(where, "EXISTS (SELECT 1 FROM application_members mm WHERE mm.application_id = a.id AND mm.user_id = ?)")
+		args = append(args, f.MemberID)
+	}
+	if len(where) > 0 {
+		q += " WHERE " + strings.Join(where, " AND ")
 	}
 	rows, err := s.q.QueryContext(ctx, q+" ORDER BY a.app_key", args...)
 	if err != nil {

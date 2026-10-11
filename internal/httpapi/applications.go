@@ -91,9 +91,10 @@ type homeVersionJSON struct {
 	Line       lineJSON `json:"line"`
 }
 
-// listApplications serves GET /api/applications?q=<search>.
+// listApplications serves GET /api/applications?q=<search>&mine=<true|false>.
 func (s *server) listApplications(w http.ResponseWriter, r *http.Request) {
-	apps, err := s.svc.ListApplications(r.Context(), actorOf(r), r.URL.Query().Get("q"))
+	query := r.URL.Query()
+	apps, err := s.svc.ListApplications(r.Context(), actorOf(r), domain.ApplicationListQuery{Query: query.Get("q"), Mine: query.Get("mine")})
 	if err != nil {
 		writeError(w, r, err)
 		return

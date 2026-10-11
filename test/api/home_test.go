@@ -2,7 +2,10 @@ package api
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
+
+	"github.com/admax12959/X-Project/internal/apitest"
 )
 
 // The home page (#12): the application list with its latest version and maintenance
@@ -102,6 +105,53 @@ func TestApplicationListShowsTheVersionReleasedLastNotTheHighestNumber(t *testin
 	if got := latest().LatestVersion; got.Number != "tie-second" {
 		t.Fatalf("latest = %+v, want tie-second", got)
 	}
+}
+
+func TestMineFilterKeepsApplicationsWhereTheUserIsOwnerOrPE(t *testing.T) {
+	t.Parallel()
+	f := newAppFixture(t) // f.owner is elarsen
+	brooks := createUser(t, f.admin, map[string]any{"username": "dbrooks", "displayName": "Daniel Brooks"})
+	praman := createUser(t, f.admin, map[string]any{"username": "praman", "displayName": "Priya Raman"})
+	create := func(key string, owners, pes []string) {
+		t.Helper()
+		createApp(t, f.admin, f.pid, owners, map[string]any{"key": key, "name": key + " name", "pes": pes})
+	}
+	create("order-service", []string{brooks.ID}, []string{f.owner.ID})              // elarsen is PE
+	create("payments-core", []string{f.owner.ID, brooks.ID}, nil)                   // elarsen is Owner
+	create("settlement-batch", []string{f.owner.ID}, []string{f.owner.ID})          // both roles: listed once
+	create("fraud-engine", []string{praman.ID}, nil)                                // not on it
+	create("payments-gateway", []string{praman.ID}, []string{brooks.ID, praman.ID}) // not on it
+
+	keys := func(c *apitest.Client, path string) []string {
+		t.Helper()
+		var l homeListBody
+		c.Get(path).ExpectStatus(http.StatusOK).JSON(&l)
+		out := []string{}
+		for _, a := range l.Items {
+			out = append(out, a.Key)
+		}
+		return out
+	}
+	elarsen := f.env.Client()
+	elarsen.LoginLocal("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
+	for _, tc := range []struct {
+		why    string
+		client *apitest.Client
+		path   string
+		want   []string
+	}{
+		{"Owner or PE, each application once", elarsen, "/api/applications?mine=true", []string{"order-service", "payments-core", "settlement-batch"}},
+		{"without the filter everything is listed", elarsen, "/api/applications", []string{"fraud-engine", "order-service", "payments-core", "payments-gateway", "settlement-batch"}},
+		{"mine=false is the same as no filter", elarsen, "/api/applications?mine=false", []string{"fraud-engine", "order-service", "payments-core", "payments-gateway", "settlement-batch"}},
+		{"combined with search (AND)", elarsen, "/api/applications?mine=true&q=brooks", []string{"order-service", "payments-core"}},
+		{"search matches nothing of mine", elarsen, "/api/applications?mine=true&q=fraud", []string{}},
+		{"an administrator who is not listed owns nothing", f.admin, "/api/applications?mine=true", []string{}},
+	} {
+		if got := keys(tc.client, tc.path); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %s got %v, want %v", tc.why, tc.path, got, tc.want)
+		}
+	}
+	elarsen.Get("/api/applications?mine=maybe").ExpectError(http.StatusUnprocessableEntity, "mine", "invalid")
 }
 
 // versionID finds a version of payments-core by number through the version list.
