@@ -150,6 +150,25 @@ func (s *server) updateApplication(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toApplicationJSON(a))
 }
 
+// listAssignableUsers serves GET /api/assignable-users: enabled users for the Owner/PE pickers.
+func (s *server) listAssignableUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := s.svc.ListAssignableUsers(r.Context(), actorOf(r))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	type userOption struct {
+		ID          string `json:"id"`
+		Username    string `json:"username"`
+		DisplayName string `json:"displayName"`
+	}
+	out := listJSON[userOption]{Items: make([]userOption, 0, len(users))}
+	for _, u := range users {
+		out.Items = append(out.Items, userOption{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 // deleteApplication serves DELETE /api/applications/{key} with {"confirmKey": "<key>"}.
 // A missing body counts as an empty confirmation (the domain answers 403 / 404 / 422).
 func (s *server) deleteApplication(w http.ResponseWriter, r *http.Request) {

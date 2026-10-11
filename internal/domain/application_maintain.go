@@ -238,6 +238,29 @@ func without(list, other []UserID) []UserID {
 	return out
 }
 
+// ListAssignableUsers returns the enabled users who can be chosen as Owner or PE,
+// ordered by display name. Any logged-in user may read it (the Owner/PE pickers
+// are used by Owners, who are not administrators); only names are exposed.
+func (s *Service) ListAssignableUsers(ctx context.Context, _ Actor) ([]UserRef, error) {
+	all, err := s.repo.ListUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []UserRef
+	for _, u := range all {
+		if u.User.Status == UserEnabled {
+			out = append(out, refOf(u.User))
+		}
+	}
+	slices.SortFunc(out, func(a, b UserRef) int {
+		if c := strings.Compare(strings.ToLower(a.DisplayName), strings.ToLower(b.DisplayName)); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Username, b.Username)
+	})
+	return out, nil
+}
+
 // DeleteApplication deletes an application with its lines, versions and change
 // history (the database cascades; nothing is deleted by hand). Administrators
 // only, and only after typing the application key.

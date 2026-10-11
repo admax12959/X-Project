@@ -363,6 +363,29 @@ func TestOnlyAnAdministratorWhoTypesTheKeyDeletesAnApplicationAndItsLinesAndHist
 	findUser(t, listUsers(t, f.admin), "praman")
 }
 
+// Owners are not administrators, so the Owner/PE picker cannot read /api/users.
+func TestEveryoneCanListTheEnabledUsersForTheOwnerAndPePickers(t *testing.T) {
+	t.Parallel()
+	f := newMaintFixture(t)
+	f.admin.Post("/api/users/"+f.pe.ID+"/disable", nil).ExpectStatus(http.StatusOK)
+
+	var list struct {
+		Items []map[string]any `json:"items"`
+	}
+	f.ownerC.Get("/api/assignable-users").ExpectStatus(http.StatusOK).JSON(&list)
+	var names []string
+	for _, it := range list.Items {
+		names = append(names, it["username"].(string))
+		if len(it) != 3 || it["id"] == "" || it["displayName"] == "" { // no email, phone, department...
+			t.Fatalf("item = %v", it)
+		}
+	}
+	if want := []string{"bob", "elarsen", "admin"}; !reflect.DeepEqual(names, want) { // by display name
+		t.Fatalf("users = %v, want %v", names, want)
+	}
+	f.env.Client().Get("/api/assignable-users").ExpectStatus(http.StatusUnauthorized)
+}
+
 func TestApplicationInfoIsValidated(t *testing.T) {
 	t.Parallel()
 	f := newMaintFixture(t)
