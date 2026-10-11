@@ -52,6 +52,7 @@ func (s *server) routes() {
 	s.route("DELETE /api/session", s.logout)
 
 	s.route("GET /api/applications", s.listApplications)
+	s.route("POST /api/repo-verifications", s.verifyRepo)
 
 	s.route("GET /api/code-platforms", s.listCodePlatforms)
 	s.route("POST /api/code-platforms", s.createCodePlatform)

@@ -23,6 +23,8 @@ type CodePlatformRepository interface {
 	CreateCodePlatform(ctx context.Context, p CodePlatform, tokenEnc []byte) (int64, error)
 	// ListCodePlatforms returns every platform, oldest first. It never returns tokens.
 	ListCodePlatforms(ctx context.Context) ([]CodePlatform, error)
+	// GetCodePlatform returns one platform with its encrypted token (decrypt with tokenCipher.open).
+	GetCodePlatform(ctx context.Context, id int64) (CodePlatform, []byte, bool, error)
 }
 
 // CodePlatformInput is a registration request.

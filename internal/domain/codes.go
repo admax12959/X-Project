@@ -21,4 +21,9 @@ const (
 	CodeUsernameTaken  = "usernameTaken"  // another user already has this username
 	CodeUsernameLocked = "usernameLocked" // LDAP-bound users keep their username (ADR-0004)
 	CodeLdapManaged    = "ldapManaged"    // field is owned by the directory for LDAP-bound users
+
+	// repository binding (field "repo.path" / "repo.platformId")
+	CodeRepoNotFound        = "repoNotFound"        // the platform has no repository at this path
+	CodeRepoForbidden       = "repoForbidden"       // the platform token cannot access this repository
+	CodePlatformUnreachable = "platformUnreachable" // the code platform could not be reached; try again later
 )
