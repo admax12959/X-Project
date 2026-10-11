@@ -15,4 +15,11 @@ export default {
   'term.loginIdentity': '登录身份',
   'term.name': '名称',
   'term.description': '描述',
+  'term.repository': '仓库',
+  'term.mainlineBranch': '主线分支',
+  'term.projectId': '项目 ID',
+  'term.deploymentInfo': '部署信息',
+  'term.overview': '概览',
+  'term.essentials': '基本信息',
+  'term.changeHistory': '变更历史',
 };

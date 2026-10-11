@@ -16,4 +16,11 @@ export default {
   'term.loginIdentity': 'Login identity',
   'term.name': 'Name',
   'term.description': 'Description',
+  'term.repository': 'Repository',
+  'term.mainlineBranch': 'Mainline branch',
+  'term.projectId': 'Project ID',
+  'term.deploymentInfo': 'Deployment info',
+  'term.overview': 'Overview',
+  'term.essentials': 'Essentials',
+  'term.changeHistory': 'Change history',
 };
