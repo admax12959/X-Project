@@ -53,6 +53,12 @@ export function Shell() {
       <div className="flex min-h-0 flex-1">
         <nav aria-label={t('shell.nav')} className="w-60 flex-none overflow-y-auto border-r border-line bg-white pb-20 pt-3">
           <NavItem to="/" end label="term.applications" />
+          {user.isAdmin && (
+            <>
+              <div className="px-5 pb-1 pt-4 text-[13px] font-semibold text-text-3">{t('platforms.navGroup')}</div>
+              <NavItem to="/admin/platforms" label="platforms.title" />
+            </>
+          )}
         </nav>
         <main className="min-w-0 flex-1 overflow-auto">
           <div className="max-w-[1500px] space-y-5 px-6 pb-24 pt-5">

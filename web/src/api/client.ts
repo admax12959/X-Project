@@ -1,5 +1,5 @@
 // Typed API client. Pages call api.<resource>.<action>(); nothing else calls fetch.
-import type { ApiFieldError, ApplicationSummary, List, LoginInput, SessionInfo } from './types.ts';
+import type { ApiFieldError, ApplicationSummary, CodePlatform, CodePlatformInput, List, LoginInput, SessionInfo } from './types.ts';
 
 /** Thrown for every non-2xx response (and network failures, status 0, code "network"). */
 export class ApiError extends Error {
@@ -54,5 +54,11 @@ export const api = {
   },
   applications: {
     list: () => request<List<ApplicationSummary>>('GET', '/api/applications'),
+  },
+  codePlatforms: {
+    /** Administrators only (403 otherwise). */
+    list: () => request<List<CodePlatform>>('GET', '/api/code-platforms'),
+    /** 422 field errors on kind / baseUrl / token. */
+    create: (input: CodePlatformInput) => request<CodePlatform>('POST', '/api/code-platforms', { body: input }),
   },
 };

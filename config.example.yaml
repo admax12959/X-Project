@@ -5,6 +5,7 @@ web_dir: ""                 # built frontend dir; the Docker image sets /srv/web
 database:
   dsn: "xproject:xproject-pw@tcp(127.0.0.1:3306)/xproject"
   connect_timeout: 90s      # keep retrying while MySQL starts
+secret_key: "change-me"     # required; encrypts stored secrets (code platform tokens). Keep it stable: changing it makes them unreadable
 admin:                      # initial administrator, used only on the very first start
   username: admin
   password: change-me-now

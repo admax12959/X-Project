@@ -26,5 +26,18 @@ export type ApplicationSummary = {
   description: string;
 };
 
+export type PlatformKind = 'gitlab' | 'github';
+
+/** A registered code platform. The token is never returned; tokenTail is its last 4 characters ("" for short tokens). */
+export type CodePlatform = {
+  id: string;
+  kind: PlatformKind;
+  baseUrl: string;
+  tokenTail: string;
+  createdAt: string;
+};
+
+export type CodePlatformInput = { kind: PlatformKind | ''; baseUrl: string; token: string };
+
 /** Every collection endpoint returns {items: [...]}. */
 export type List<T> = { items: T[] };
