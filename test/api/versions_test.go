@@ -26,10 +26,10 @@ type versionListBody struct {
 }
 
 // versionFixture is an application "payments-core" (mainline branch develop) whose
-// Owner elarsen is logged in as owner.
+// Owner elarsen is logged in as elarsen.
 type versionFixture struct {
 	appFixture
-	owner    *apitest.Client
+	elarsen  *apitest.Client
 	mainline lineBody
 }
 
@@ -43,7 +43,7 @@ func newVersionFixture(t *testing.T) versionFixture {
 		Items []lineBody `json:"items"`
 	}
 	owner.Get("/api/applications/payments-core/lines").ExpectStatus(http.StatusOK).JSON(&lines)
-	return versionFixture{appFixture: f, owner: owner, mainline: lines.Items[0]}
+	return versionFixture{appFixture: f, elarsen: owner, mainline: lines.Items[0]}
 }
 
 func versionsPath(appKey, lineID string) string {
@@ -65,7 +65,7 @@ func newVersion(over map[string]any) map[string]any {
 }
 
 func (f versionFixture) register(over map[string]any) *apitest.Response {
-	return f.owner.Post(versionsPath("payments-core", f.mainline.ID), newVersion(over))
+	return f.elarsen.Post(versionsPath("payments-core", f.mainline.ID), newVersion(over))
 }
 
 func (f versionFixture) list(c *apitest.Client) []versionBody {
