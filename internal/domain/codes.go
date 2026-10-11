@@ -30,6 +30,8 @@ const (
 	CodeKeyTaken        = "keyTaken"        // another application already has this key
 	CodeUserUnavailable = "userUnavailable" // Owner/PE is not an existing enabled user; params {userId}
 
+	CodeSoleOwner       = "soleOwner"       // disabling the only (enabled) Owner of applications; params {applications: [{key, name}]}
+
 	// repository binding (field "repo.path" / "repo.platformId")
 	CodeRepoNotFound        = "repoNotFound"        // the platform has no repository at this path
 	CodeRepoForbidden       = "repoForbidden"       // the platform token cannot access this repository

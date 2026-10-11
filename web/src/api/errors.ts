@@ -7,6 +7,8 @@ function flatParams(p: ApiFieldError['params']): Params {
   const out: Params = {};
   for (const [k, v] of Object.entries(p ?? {})) {
     if (typeof v === 'string' || typeof v === 'number') out[k] = v;
+    // A list of objects with a name (soleOwner's applications) reads as "A, B".
+    else if (Array.isArray(v)) out[k] = v.map((x) => (x as { name?: unknown } | null)?.name ?? '').join(', ');
   }
   return out;
 }

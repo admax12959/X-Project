@@ -22,6 +22,10 @@ type ApplicationMaintenanceRepository interface {
 	LockApplication(ctx context.Context, id int64) error
 	// UpdateApplicationInfo overwrites name and description.
 	UpdateApplicationInfo(ctx context.Context, id int64, name, description string) error
+	// LockOwnedApplications locks every application the user is an Owner of (ordered by
+	// key, to keep lock order stable) and reads, under a shared lock, how many other
+	// enabled Owners each has. Call inside InTx.
+	LockOwnedApplications(ctx context.Context, userID UserID) ([]OwnedApplication, error)
 	SetDeployInfo(ctx context.Context, id int64, text string) error
 	// SetMainBranch renames the branch on the application's mainline row.
 	SetMainBranch(ctx context.Context, applicationID int64, branch string) error
@@ -181,6 +185,35 @@ func (s *Service) UpdateMembers(ctx context.Context, actor Actor, key string, in
 		return err
 	})
 	return result, err
+}
+
+// OwnedApplication is an application a user is an Owner of, with the number of
+// OTHER enabled Owners it has (read under a lock, see the repository).
+type OwnedApplication struct {
+	Key                string
+	Name               string
+	OtherEnabledOwners int
+}
+
+// checkNotSoleOwner refuses to disable a user who is the only enabled Owner of
+// some application. Applications where the other Owners are all disabled count
+// too, so an application always keeps an Owner who can act. Call it inside the
+// transaction that holds the lock on the user row.
+func (s *Service) checkNotSoleOwner(ctx context.Context, tx Repository, id UserID) error {
+	owned, err := tx.LockOwnedApplications(ctx, id)
+	if err != nil {
+		return err
+	}
+	var blocking []any
+	for _, a := range owned {
+		if a.OtherEnabledOwners == 0 {
+			blocking = append(blocking, map[string]any{"key": a.Key, "name": a.Name})
+		}
+	}
+	if len(blocking) == 0 {
+		return nil
+	}
+	return Validation(Invalid("", CodeSoleOwner, map[string]any{"applications": blocking}))
 }
 
 func userIDsOf(refs []UserRef) []UserID {
