@@ -1,0 +1,19 @@
+// GLOSSARY.md terms (English names). Never use the glossary's "Avoid" words:
+// Version (not Release), User (not Account), Retired (not Archived), Maintenance line (not fork/branch).
+export default {
+  'term.application': 'Application',
+  'term.applications': 'Applications',
+  'term.applicationKey': 'Application key',
+  'term.codePlatform': 'Code platform',
+  'term.repositoryBinding': 'Repository binding',
+  'term.owners': 'Owners',
+  'term.pes': 'PEs',
+  'term.administrator': 'Administrator',
+  'term.mainline': 'Mainline',
+  'term.maintenanceLines': 'Maintenance lines',
+  'term.latestVersion': 'Latest version',
+  'term.user': 'User',
+  'term.loginIdentity': 'Login identity',
+  'term.name': 'Name',
+  'term.description': 'Description',
+};
