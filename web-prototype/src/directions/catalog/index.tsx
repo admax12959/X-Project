@@ -1,5 +1,10 @@
-// STUB — replaced by the real catalog direction.
+// Direction B · Catalog: dark narrow sidebar, white panels on a warm grey canvas, filter rail, mainline-spine lineage, releases-style versions.
 import type { Direction } from '../../prototype';
+import './catalog.css';
+import './messages';
+import { AppDetail } from './detail';
+import { AppList } from './list';
+import { AdminPlatforms, AdminUsers, Login, Settings } from './pages';
+import { Versions } from './versions';
 
-const Stub = () => <p style={{ padding: 24 }}>catalog direction: not built yet.</p>;
-export const direction: Direction = { Login: Stub, AppList: Stub, AppDetail: Stub, Versions: Stub, Settings: Stub, AdminPlatforms: Stub, AdminUsers: Stub };
+export const direction: Direction = { Login, AppList, AppDetail, Versions, Settings, AdminPlatforms, AdminUsers };

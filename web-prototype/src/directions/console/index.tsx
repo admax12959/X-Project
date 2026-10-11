@@ -1,5 +1,9 @@
-// STUB — replaced by the real console direction.
 import type { Direction } from '../../prototype';
+import './console.css';
+import './messages';
+import { AdminPlatforms, AdminUsers, Login, Settings } from './account';
+import { AppDetail } from './detail';
+import { AppList } from './list';
+import { Versions } from './versions';
 
-const Stub = () => <p style={{ padding: 24 }}>console direction: not built yet.</p>;
-export const direction: Direction = { Login: Stub, AppList: Stub, AppDetail: Stub, Versions: Stub, Settings: Stub, AdminPlatforms: Stub, AdminUsers: Stub };
+export const direction: Direction = { Login, AppList, AppDetail, Versions, Settings, AdminPlatforms, AdminUsers };
