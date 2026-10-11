@@ -32,8 +32,8 @@ export function LinePanel({
   line: LineDetail;
   /** This line's versions, latest release date first. */
   versions: Version[];
-  /** The status log, oldest first; null until it has loaded. */
-  log: LineStatusChange[] | null;
+  /** The status log, oldest first; null until it has loaded, 'error' if it could not be loaded. */
+  log: LineStatusChange[] | 'error' | null;
   isOwner: boolean;
   onClose: () => void;
   onSelectLine: (lineId: string) => void;
@@ -145,6 +145,8 @@ export function LinePanel({
           <h3 className="mb-1.5 text-[13px] font-semibold">{t('lineage.panel.statusLog')}</h3>
           {log === null ? (
             <p className="text-[13px] text-text-3">{t('common.loading')}</p>
+          ) : log === 'error' ? (
+            <p className="text-[13px] text-danger">{t('lineage.panel.statusLogFailed')}</p>
           ) : log.length === 0 ? (
             <p className="text-[13px] text-text-3">{t('lineage.panel.statusLogEmpty')}</p>
           ) : (

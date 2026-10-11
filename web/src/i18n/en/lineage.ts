@@ -67,6 +67,7 @@ export default {
   'lineage.panel.edit': 'Edit',
   'lineage.panel.statusLog': 'Status history',
   'lineage.panel.statusLogEmpty': 'No status changes yet. The line has been Active since it was forked.',
+  'lineage.panel.statusLogFailed': 'Could not load the status history.',
   'lineage.action.frozen': 'Freeze',
   'lineage.action.active': 'Return to Active',
   'lineage.action.retired': 'Retire',

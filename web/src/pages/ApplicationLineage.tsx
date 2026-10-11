@@ -83,7 +83,7 @@ export function ApplicationLineage() {
   const [editing, setEditing] = useState(false);
   const [statusTarget, setStatusTarget] = useState<LineStatus | null>(null);
   // The status log of the selected line (null while loading); `logKey` bumps to refetch.
-  const [log, setLog] = useState<{ lineId: string; items: LineStatusChange[] } | null>(null);
+  const [log, setLog] = useState<{ lineId: string; items: LineStatusChange[] | 'error' } | null>(null);
   const [logKey, setLogKey] = useState(0);
   const [showGraph, setShowGraph] = useGraphSwitch();
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -113,7 +113,7 @@ export function ApplicationLineage() {
     let live = true;
     api.applications.line(app.key, selectedId).then(
       (d) => live && setLog({ lineId: selectedId, items: d.statusChanges }),
-      () => live && setLog({ lineId: selectedId, items: [] }),
+      () => live && setLog({ lineId: selectedId, items: 'error' }),
     );
     return () => {
       live = false;

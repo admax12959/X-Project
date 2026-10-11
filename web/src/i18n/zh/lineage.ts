@@ -67,6 +67,7 @@ export default {
   'lineage.panel.edit': '修改',
   'lineage.panel.statusLog': '状态记录',
   'lineage.panel.statusLogEmpty': '还没有状态变更。这条线自分叉以来一直是活跃状态。',
+  'lineage.panel.statusLogFailed': '状态记录加载失败。',
   'lineage.action.frozen': '冻结',
   'lineage.action.active': '恢复为活跃',
   'lineage.action.retired': '终止',
