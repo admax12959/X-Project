@@ -21,6 +21,8 @@ type ApplicationMaintenanceRepository interface {
 	LockApplication(ctx context.Context, id int64) error
 	// UpdateApplicationInfo overwrites name and description.
 	UpdateApplicationInfo(ctx context.Context, id int64, name, description string) error
+	// SetMainBranch renames the branch on the application's mainline row.
+	SetMainBranch(ctx context.Context, applicationID int64, branch string) error
 }
 
 // isOwner reports whether the actor is one of the application's Owners.
@@ -42,6 +44,7 @@ func forbidden() error { return newKind(KindForbidden, CodeForbidden) }
 type UpdateApplicationInput struct {
 	Name        *string
 	Description *string
+	MainBranch  *string
 }
 
 // UpdateApplication edits the basic information. Owners only: neither
@@ -56,7 +59,7 @@ func (s *Service) UpdateApplication(ctx context.Context, actor Actor, key string
 		if !isOwner(actor, app) {
 			return forbidden()
 		}
-		name, description := app.Name, app.Description
+		name, description, branch := app.Name, app.Description, app.MainBranch
 		var c Collector
 		if in.Name != nil {
 			name = strings.TrimSpace(*in.Name)
@@ -68,6 +71,12 @@ func (s *Service) UpdateApplication(ctx context.Context, actor Actor, key string
 			description = strings.TrimSpace(*in.Description)
 			checkLength(&c, "description", description, maxDescriptionLength)
 		}
+		if in.MainBranch != nil {
+			branch = strings.TrimSpace(*in.MainBranch)
+			if c.Required("mainBranch", branch) && !validBranchName(branch) {
+				c.Add("mainBranch", CodeInvalid, nil)
+			}
+		}
 		if err := c.Err(); err != nil {
 			return err
 		}
@@ -78,8 +87,14 @@ func (s *Service) UpdateApplication(ctx context.Context, actor Actor, key string
 		if description != app.Description {
 			changes["description"] = map[string]any{"from": app.Description, "to": description}
 		}
+		if branch != app.MainBranch {
+			changes["mainBranch"] = map[string]any{"from": app.MainBranch, "to": branch}
+		}
 		if len(changes) > 0 {
 			if err := tx.UpdateApplicationInfo(ctx, app.ID, name, description); err != nil {
+				return err
+			}
+			if err := tx.SetMainBranch(ctx, app.ID, branch); err != nil {
 				return err
 			}
 			if err := s.recordEvent(ctx, tx, app.ID, actor, appInfoChangedEvent(changes)); err != nil {

@@ -132,12 +132,13 @@ func (s *server) updateApplication(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name        *string `json:"name"`
 		Description *string `json:"description"`
+		MainBranch  *string `json:"mainBranch"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
 	a, err := s.svc.UpdateApplication(r.Context(), actorOf(r), r.PathValue("key"), domain.UpdateApplicationInput{
-		Name: body.Name, Description: body.Description,
+		Name: body.Name, Description: body.Description, MainBranch: body.MainBranch,
 	})
 	if err != nil {
 		writeError(w, r, err)

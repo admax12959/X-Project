@@ -13,6 +13,11 @@ func (s *Store) LockApplication(ctx context.Context, id int64) error {
 	return s.q.QueryRowContext(ctx, "SELECT id FROM applications WHERE id = ? FOR UPDATE", id).Scan(&got)
 }
 
+func (s *Store) SetMainBranch(ctx context.Context, applicationID int64, branch string) error {
+	_, err := s.q.ExecContext(ctx, "UPDATE app_lines SET branch = ? WHERE application_id = ? AND is_main", branch, applicationID)
+	return err
+}
+
 func (s *Store) UpdateApplicationInfo(ctx context.Context, id int64, name, description string) error {
 	_, err := s.q.ExecContext(ctx, "UPDATE applications SET name = ?, description = ? WHERE id = ?", name, description, id)
 	return err

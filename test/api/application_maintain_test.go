@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/admax12959/X-Project/internal/apitest"
@@ -68,5 +69,73 @@ func TestOwnerEditsNameAndDescriptionAndItIsRecordedInTheHistory(t *testing.T) {
 	h := f.history(t)
 	if len(h) != 2 || h[0].Type != "appInfoChanged" || h[0].Actor.Username != "elarsen" {
 		t.Fatalf("history = %+v", h)
+	}
+}
+
+func TestSavingUnchangedValuesWritesNoHistoryAndKeyAndRepoCannotBeEdited(t *testing.T) {
+	t.Parallel()
+	f := newMaintFixture(t)
+	before := f.app(t)
+
+	f.ownerC.Do(http.MethodPatch, f.appPath, map[string]any{"name": before.Name, "description": before.Description}).ExpectStatus(http.StatusOK)
+	if n := len(f.history(t)); n != 1 {
+		t.Fatalf("history has %d events after a no-op save, want 1", n)
+	}
+
+	// Key and repository binding have no edit path: they are silently not part of the request.
+	f.ownerC.Do(http.MethodPatch, f.appPath, map[string]any{
+		"key": "renamed", "repo": map[string]any{"platformId": f.pid, "path": "elsewhere/else"}, "name": "Edited",
+	}).ExpectStatus(http.StatusOK)
+	after := f.app(t)
+	if after.Key != "payments-core" || after.Repo != before.Repo || after.Name != "Edited" {
+		t.Fatalf("after = %+v", after)
+	}
+	f.admin.Get("/api/applications/renamed").ExpectError(http.StatusNotFound, "", "notFound")
+}
+
+func TestOwnerChangesTheMainBranchOnTheMainline(t *testing.T) {
+	t.Parallel()
+	f := newMaintFixture(t)
+
+	f.ownerC.Do(http.MethodPatch, f.appPath, map[string]any{"mainBranch": "develop"}).ExpectStatus(http.StatusOK)
+	if got := f.app(t).MainBranch; got != "develop" {
+		t.Fatalf("mainBranch = %q", got)
+	}
+	var lines struct {
+		Items []struct {
+			IsMain bool   `json:"isMain"`
+			Branch string `json:"branch"`
+		} `json:"items"`
+	}
+	f.admin.Get(f.appPath + "/lines").ExpectStatus(http.StatusOK).JSON(&lines)
+	if len(lines.Items) != 1 || !lines.Items[0].IsMain || lines.Items[0].Branch != "develop" {
+		t.Fatalf("lines = %+v", lines.Items)
+	}
+	if h := f.history(t); len(h) != 2 || h[0].Type != "appInfoChanged" {
+		t.Fatalf("history = %+v", h)
+	}
+
+	f.ownerC.Do(http.MethodPatch, f.appPath, map[string]any{"mainBranch": "has space"}).ExpectError(http.StatusUnprocessableEntity, "mainBranch", "invalid")
+	f.ownerC.Do(http.MethodPatch, f.appPath, map[string]any{"mainBranch": ""}).ExpectError(http.StatusUnprocessableEntity, "mainBranch", "required")
+	if got := f.app(t).MainBranch; got != "develop" {
+		t.Fatalf("a rejected edit changed mainBranch to %q", got)
+	}
+}
+
+func TestApplicationInfoIsValidated(t *testing.T) {
+	t.Parallel()
+	f := newMaintFixture(t)
+	patch := func(body map[string]any) *apitest.Response { return f.ownerC.Do(http.MethodPatch, f.appPath, body) }
+
+	patch(map[string]any{"name": "  "}).ExpectError(http.StatusUnprocessableEntity, "name", "required")
+	patch(map[string]any{"name": strings.Repeat("n", 201)}).ExpectError(http.StatusUnprocessableEntity, "name", "tooLong")
+	patch(map[string]any{"description": strings.Repeat("d", 4001)}).ExpectError(http.StatusUnprocessableEntity, "description", "tooLong")
+	// All problems are reported at once and nothing is applied.
+	res := patch(map[string]any{"name": "", "description": strings.Repeat("d", 4001), "mainBranch": "a..b"}).ExpectStatus(http.StatusUnprocessableEntity)
+	if len(res.Errors()) != 3 {
+		t.Fatalf("errors = %s", res.Body)
+	}
+	if got := f.app(t); got.Name != "Payments Core" || got.Description != "Card and ledger services" {
+		t.Fatalf("app = %+v", got)
 	}
 }
