@@ -121,7 +121,7 @@ func (s *Store) CreateUser(ctx context.Context, u domain.User) (domain.UserID, e
 		"INSERT INTO users (username, display_name, email, phone, department, status, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		u.Username, u.DisplayName, u.Email, u.Phone, u.Department, string(u.Status), u.IsAdmin, u.CreatedAt, u.CreatedAt)
 	if err != nil {
-		return 0, err
+		return 0, mapUsernameConflict(err)
 	}
 	id, err := res.LastInsertId()
 	return domain.UserID(id), err
@@ -174,7 +174,7 @@ func (s *Store) CreateIdentity(ctx context.Context, i domain.LoginIdentity) erro
 	_, err := s.q.ExecContext(ctx,
 		"INSERT INTO login_identities (user_id, kind, login_name, password_hash, bound_at, bound_via) VALUES (?, ?, ?, ?, ?, ?)",
 		i.UserID, string(i.Kind), i.LoginName, hash, i.BoundAt, string(i.BoundVia))
-	return err
+	return mapUsernameConflict(err)
 }
 
 func (s *Store) FindIdentity(ctx context.Context, kind domain.IdentityKind, loginName string) (domain.LoginIdentity, bool, error) {

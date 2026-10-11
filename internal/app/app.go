@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -56,6 +57,9 @@ func (a *App) Close() { _ = a.db.Close() }
 // Start connects to the database (retrying while it starts), runs migrations,
 // creates the initial administrator on first start, and builds the handler.
 func Start(ctx context.Context, cfg Config, deps Deps) (*App, error) {
+	if cfg.SecretKey == "" {
+		return nil, errors.New("secret key is required (secret_key or XP_SECRET_KEY)")
+	}
 	db, err := mysqlstore.Open(ctx, cfg.Database.DSN, cfg.Database.ConnectTimeout)
 	if err != nil {
 		return nil, err
@@ -66,6 +70,7 @@ func Start(ctx context.Context, cfg Config, deps Deps) (*App, error) {
 	}
 	svc := domain.NewService(mysqlstore.New(db), domain.Options{
 		Directory: deps.Directory, CodePlatforms: deps.CodePlatforms, Now: deps.Now, SessionTTL: cfg.Session.TTL,
+		SecretKey: cfg.SecretKey,
 	})
 	if err := svc.Bootstrap(ctx, domain.InitialAdmin{
 		Username: cfg.Admin.Username, Password: cfg.Admin.Password,

@@ -77,6 +77,7 @@ type ApplicationSummary struct {
 // the MySQL implementation lives in internal/store/mysqlstore.
 type Repository interface {
 	IdentityRepository
+	CodePlatformRepository
 
 	// InTx runs fn in one transaction; fn receives a Repository bound to it.
 	InTx(ctx context.Context, fn func(tx Repository) error) error
@@ -90,6 +91,7 @@ type Repository interface {
 	GetUser(ctx context.Context, id UserID) (User, bool, error)
 	CreateIdentity(ctx context.Context, i LoginIdentity) error
 	FindIdentity(ctx context.Context, kind IdentityKind, loginName string) (LoginIdentity, bool, error)
+	UserRepository
 
 	CreateSession(ctx context.Context, s Session) error
 	FindSession(ctx context.Context, tokenHash string) (Session, bool, error)

@@ -19,7 +19,8 @@ type Config struct {
 		DSN            string        `yaml:"dsn"`             // XP_DB_DSN, go-sql-driver DSN, e.g. user:pw@tcp(host:3306)/xproject
 		ConnectTimeout time.Duration `yaml:"connect_timeout"` // XP_DB_CONNECT_TIMEOUT, default 90s
 	} `yaml:"database"`
-	Admin struct { // initial administrator, used only on the very first start
+	SecretKey string `yaml:"secret_key"` // XP_SECRET_KEY, required: encrypts stored secrets (code platform tokens); keep it stable
+	Admin     struct { // initial administrator, used only on the very first start
 		Username    string `yaml:"username"`     // XP_ADMIN_USERNAME
 		Password    string `yaml:"password"`     // XP_ADMIN_PASSWORD
 		DisplayName string `yaml:"display_name"` // XP_ADMIN_DISPLAY_NAME
@@ -92,6 +93,7 @@ func Load() (Config, error) {
 	str("XP_LISTEN", &c.Listen)
 	str("XP_WEB_DIR", &c.WebDir)
 	str("XP_DB_DSN", &c.Database.DSN)
+	str("XP_SECRET_KEY", &c.SecretKey)
 	dur("XP_DB_CONNECT_TIMEOUT", &c.Database.ConnectTimeout)
 	str("XP_LDAP_URL", &c.LDAP.URL)
 	boolean("XP_LDAP_START_TLS", &c.LDAP.StartTLS)
@@ -117,6 +119,9 @@ func Load() (Config, error) {
 	}
 	if c.Database.DSN == "" {
 		return c, fmt.Errorf("database DSN is required (database.dsn or XP_DB_DSN)")
+	}
+	if c.SecretKey == "" {
+		return c, fmt.Errorf("secret key is required (secret_key or XP_SECRET_KEY)")
 	}
 	return c, nil
 }

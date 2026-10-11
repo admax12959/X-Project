@@ -5,6 +5,8 @@ import './index.css';
 import { useT } from './i18n/index.ts';
 import { ApplicationsPage } from './pages/ApplicationsPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
+import { PlatformsPage } from './pages/PlatformsPage.tsx';
+import { UsersPage } from './pages/UsersPage.tsx';
 import { RequireSession, SessionProvider } from './session/session.tsx';
 import { Shell } from './shell/Shell.tsx';
 
@@ -33,6 +35,8 @@ function App() {
         }
       >
         <Route index element={<ApplicationsPage />} />
+        <Route path="admin/platforms" element={<PlatformsPage />} />
+        <Route path="admin/users" element={<UsersPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

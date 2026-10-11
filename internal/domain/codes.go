@@ -19,4 +19,10 @@ const (
 	CodeUsernameTakenByLocal = "usernameTakenByLocal" // first LDAP login, but a user already owns the username
 	CodeUsernameExistsInLdap = "usernameExistsInLdap" // creating a local user whose username is a directory login name
 	CodeLdapUnreachable      = "ldapUnreachable"      // directory could not be queried (HTTP 503); never "not found"
+	// users (field-level; params noted where present)
+	CodeTooShort       = "tooShort"       // params {min}
+	CodeTooLong        = "tooLong"        // params {max}
+	CodeUsernameTaken  = "usernameTaken"  // another user already has this username
+	CodeUsernameLocked = "usernameLocked" // LDAP-bound users keep their username (ADR-0004)
+	CodeLdapManaged    = "ldapManaged"    // field is owned by the directory for LDAP-bound users
 )

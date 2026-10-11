@@ -1,0 +1,21 @@
+// Administration: code platforms (#4). GitLab and GitHub are product names and are not translated.
+export default {
+  'platforms.navGroup': 'Administration',
+  'platforms.title': 'Code platforms',
+  'platforms.register': 'Register code platform',
+  'platforms.col.kind': 'Type',
+  'platforms.col.baseUrl': 'Instance address',
+  'platforms.col.token': 'Token',
+  'platforms.col.createdAt': 'Registered',
+  'platforms.field.kind': 'Type',
+  'platforms.field.baseUrl': 'Instance address',
+  'platforms.field.token': 'Service account token',
+  'platforms.hint.baseUrl': 'For example https://gitlab.example.com',
+  'platforms.hint.token': 'A read-only service account token. It is stored encrypted, and only its last 4 characters are shown afterwards.',
+  'platforms.cancel': 'Cancel',
+  'platforms.save': 'Register',
+  'platforms.saving': 'Registering…',
+  'platforms.empty.title': 'No code platforms yet',
+  'platforms.empty.body': 'Register the GitLab or GitHub instances that applications keep their code on.',
+  'platforms.loadFailed': 'Could not load code platforms.',
+};

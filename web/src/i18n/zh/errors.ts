@@ -13,4 +13,9 @@ export default {
   'error.usernameTakenByLocal': '该用户名已被本地用户占用，请联系管理员。',
   'error.usernameExistsInLdap': '该用户名在 LDAP 中已存在。',
   'error.ldapUnreachable': '无法连接 LDAP 目录，请稍后再试。',
+  'error.tooShort': '至少需要 {min} 个字符。',
+  'error.tooLong': '最多 {max} 个字符。',
+  'error.usernameTaken': '该用户名已被占用。',
+  'error.usernameLocked': '已绑定 LDAP 登录身份的用户不能修改用户名。',
+  'error.ldapManaged': '该字段由 LDAP 管理，不能在此修改。',
 };
