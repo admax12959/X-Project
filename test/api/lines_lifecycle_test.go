@@ -283,4 +283,95 @@ func TestTheMainlineAcceptsVersionsWithoutANote(t *testing.T) {
 	f.register(map[string]any{"number": "2.2.0", "note": ""}).ExpectStatus(http.StatusCreated)
 }
 
+// statusChangeBody is one entry of a line's status log.
+type statusChangeBody struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	At    string `json:"at"`
+	Actor struct {
+		Username    string `json:"username"`
+		DisplayName string `json:"displayName"`
+	} `json:"actor"`
+}
+
+// lineWithLogBody is GET /lines/{id}: the line plus its status log.
+type lineWithLogBody struct {
+	lineDetailBody
+	StatusChanges []statusChangeBody `json:"statusChanges"`
+}
+
+func (f lineFixture) detail(t *testing.T, c *apitest.Client) lineWithLogBody {
+	t.Helper()
+	var l lineWithLogBody
+	c.Get(f.path()).ExpectStatus(http.StatusOK).JSON(&l)
+	return l
+}
+
+func TestEveryStatusChangeIsRecordedWithTimeAndActorAndShownInTheLineDetail(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	praman := createUser(t, f.admin, map[string]any{"username": "praman", "displayName": "Priya Raman"})
+	f.admin.Do(http.MethodPut, "/api/applications/payments-core/members", map[string]any{
+		"owners": []string{f.owner.ID, praman.ID}, "pes": []string{},
+	}).ExpectStatus(http.StatusOK)
+	bob := f.env.SeedUserClient("bob", "bob-password-1")
+
+	if l := f.detail(t, bob); len(l.StatusChanges) != 0 || l.Status != "active" || l.ForkedAt == "" {
+		t.Fatalf("a new line has no status changes yet: %+v", l)
+	}
+	f.setStatus("frozen").ExpectStatus(http.StatusOK)                                                // elarsen
+	f.setStatus("retired").ExpectStatus(http.StatusOK)                                               // elarsen
+	f.setStatus("active").ExpectError(http.StatusUnprocessableEntity, "status", "invalidTransition") // rejected: not recorded
+	f.login("praman").Do(http.MethodPut, f.path()+"/status", map[string]any{"status": "active"}).ExpectStatus(http.StatusUnprocessableEntity)
+
+	l := f.detail(t, bob) // any logged-in user may read it
+	if l.Status != "retired" || l.Branch != "cust/northwind" || l.Reason == "" || l.SourceVersion == nil {
+		t.Fatalf("line = %+v", l)
+	}
+	want := []struct{ from, to, actor string }{{"active", "frozen", "elarsen"}, {"frozen", "retired", "elarsen"}}
+	if len(l.StatusChanges) != len(want) {
+		t.Fatalf("status changes = %+v", l.StatusChanges)
+	}
+	prev := ""
+	for i, w := range want {
+		c := l.StatusChanges[i]
+		if c.From != w.from || c.To != w.to || c.Actor.Username != w.actor || c.Actor.DisplayName != "Emma Larsen" || c.At == "" || c.At < prev {
+			t.Fatalf("status change %d = %+v, want %+v after %q", i, c, w, prev)
+		}
+		prev = c.At
+	}
+}
+
+func TestAnotherOwnersStatusChangeIsRecordedWithTheirName(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	praman := createUser(t, f.admin, map[string]any{"username": "praman", "displayName": "Priya Raman"})
+	f.admin.Do(http.MethodPut, "/api/applications/payments-core/members", map[string]any{
+		"owners": []string{f.owner.ID, praman.ID}, "pes": []string{},
+	}).ExpectStatus(http.StatusOK)
+
+	f.setStatus("frozen").ExpectStatus(http.StatusOK)
+	f.login("praman").Do(http.MethodPut, f.path()+"/status", map[string]any{"status": "active"}).ExpectStatus(http.StatusOK)
+
+	got := f.detail(t, f.elarsen).StatusChanges
+	if len(got) != 2 || got[0].Actor.Username != "elarsen" || got[1].Actor.Username != "praman" || got[1].From != "frozen" || got[1].To != "active" {
+		t.Fatalf("status changes = %+v", got)
+	}
+}
+
+func TestTheDetailOfAnUnknownLineIsNotFoundAndTheMainlineHasNoStatusLog(t *testing.T) {
+	t.Parallel()
+	f := newLineFixture(t)
+	f.elarsen.Get(linesPath("payments-core")+"/999999").ExpectError(http.StatusNotFound, "", "notFound")
+	f.elarsen.Get(linesPath("nope")+"/"+f.line.ID).ExpectError(http.StatusNotFound, "", "notFound")
+	other := f.secondApp(t, f.owner.ID, nil)
+	f.elarsen.Get(linesPath("payments-core")+"/"+other.ID).ExpectError(http.StatusNotFound, "", "notFound")
+
+	var main lineWithLogBody
+	f.elarsen.Get(linesPath("payments-core") + "/" + f.mainline.ID).ExpectStatus(http.StatusOK).JSON(&main)
+	if !main.IsMain || main.Status != "" || len(main.StatusChanges) != 0 {
+		t.Fatalf("mainline = %+v", main)
+	}
+}
+
 // -- tests below are appended as the lifecycle grows --
