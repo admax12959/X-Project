@@ -151,7 +151,8 @@ func TestGlobalVersionListSearchesVersionNumbersIgnoringCaseAndTakingWildcardsLi
 		query string
 		want  []string
 	}{
-		{"?q=v2.1", []string{"2.1.0-nw.1", "V2.1.0"}},
+		{"?q=v2.1", []string{"V2.1.0"}},
+		{"?q=2.1", []string{"2.1.0-nw.1", "V2.1.0"}},
 		{"?q=nw", []string{"2.1.0-nw.1"}},
 		{"?q=rc_1", []string{"rc_1"}},
 		{"?q=%25", nil},

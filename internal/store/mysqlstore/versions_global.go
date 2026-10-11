@@ -2,6 +2,7 @@ package mysqlstore
 
 import (
 	"context"
+	"strings"
 
 	"github.com/admax12959/X-Project/internal/domain"
 )
@@ -13,9 +14,18 @@ func (s *Store) ListAllVersions(ctx context.Context, f domain.GlobalVersionFilte
   l.id, l.is_main, l.name, l.branch, l.created_at, a.app_key, a.name
 FROM app_versions v JOIN app_lines l ON l.id = v.line_id JOIN applications a ON a.id = v.application_id`
 	var args []any
+	var where []string
 	if f.AppKey != "" {
-		q += " WHERE a.app_key = ?"
+		where = append(where, "a.app_key = ?")
 		args = append(args, f.AppKey)
+	}
+	if f.Search != "" {
+		// number is utf8mb4_bin (exact uniqueness); search ignores case but keeps accents apart.
+		where = append(where, "v.number COLLATE utf8mb4_0900_as_ci LIKE ? ESCAPE '|'")
+		args = append(args, likePattern(f.Search))
+	}
+	if len(where) > 0 {
+		q += " WHERE " + strings.Join(where, " AND ")
 	}
 	rows, err := s.q.QueryContext(ctx, q+" ORDER BY v.released_at DESC, v.id DESC", args...)
 	if err != nil {

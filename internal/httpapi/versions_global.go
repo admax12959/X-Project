@@ -18,7 +18,8 @@ type globalVersionJSON struct {
 // listAllVersions serves GET /api/versions: every application's versions, latest
 // release date first.
 func (s *server) listAllVersions(w http.ResponseWriter, r *http.Request) {
-	versions, err := s.svc.ListAllVersions(r.Context(), actorOf(r), domain.GlobalVersionFilter{AppKey: r.URL.Query().Get("app")})
+	query := r.URL.Query()
+	versions, err := s.svc.ListAllVersions(r.Context(), actorOf(r), domain.GlobalVersionFilter{AppKey: query.Get("app"), Search: query.Get("q")})
 	if err != nil {
 		writeError(w, r, err)
 		return

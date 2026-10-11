@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // GlobalVersion is a version together with the application it belongs to, as the
 // cross-application list shows it.
@@ -14,6 +17,9 @@ type GlobalVersion struct {
 // unknown key simply matches nothing.
 type GlobalVersionFilter struct {
 	AppKey string
+	// Search is a case-insensitive substring of the version number; % and _ are
+	// taken literally. Empty matches everything.
+	Search string
 }
 
 // GlobalVersionRepository is the cross-application version listing part of Repository.
@@ -27,5 +33,6 @@ type GlobalVersionRepository interface {
 // ListAllVersions returns every application's versions, latest release date first.
 // Any logged-in user may read them.
 func (s *Service) ListAllVersions(ctx context.Context, _ Actor, f GlobalVersionFilter) ([]GlobalVersion, error) {
+	f.Search = strings.TrimSpace(f.Search)
 	return s.repo.ListAllVersions(ctx, f)
 }
