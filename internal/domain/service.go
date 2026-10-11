@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -126,12 +127,23 @@ var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("x-project-dummy"), bcrypt
 
 func invalidCredentials() error { return newKind(KindUnauthenticated, CodeInvalidCredentials) }
 
+// LoginMethods lists the login methods the login page may offer: "local" always,
+// "ldap" when a directory is configured.
+func (s *Service) LoginMethods() []string {
+	m := []string{string(IdentityLocal)}
+	if s.directory != nil {
+		m = append(m, string(IdentityLDAP))
+	}
+	return m
+}
+
 // Login authenticates a user and opens a session. Wrong username, wrong password
 // and disabled users all yield the same invalidCredentials error.
 func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error) {
 	var c Collector
-	if in.Method != string(IdentityLocal) {
-		c.Add("method", CodeInvalid, map[string]any{"allowed": []string{string(IdentityLocal)}})
+	allowed := s.LoginMethods()
+	if !slices.Contains(allowed, in.Method) {
+		c.Add("method", CodeInvalid, map[string]any{"allowed": allowed})
 	}
 	c.Required("username", in.Username)
 	if in.Password == "" {
@@ -139,6 +151,9 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	}
 	if err := c.Err(); err != nil {
 		return LoginResult{}, err
+	}
+	if in.Method == string(IdentityLDAP) {
+		return s.loginLDAP(ctx, in)
 	}
 
 	ident, found, err := s.repo.FindIdentity(ctx, IdentityLocal, strings.TrimSpace(in.Username))

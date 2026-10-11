@@ -30,8 +30,12 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// No real LDAP adapter yet (#14 adds it); nil Directory = LDAP not configured.
-	a, err := app.Start(ctx, cfg, app.Deps{CodePlatforms: codeplatform.New()})
+	// A nil Directory means LDAP is not configured.
+	dir, err := app.NewDirectory(cfg)
+	if err != nil {
+		return err
+	}
+	a, err := app.Start(ctx, cfg, app.Deps{Directory: dir, CodePlatforms: codeplatform.New()})
 	if err != nil {
 		return err
 	}

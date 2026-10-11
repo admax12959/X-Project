@@ -13,12 +13,15 @@ export type User = {
   username: string;
   displayName: string;
   email: string;
+  department: string;
   isAdmin: boolean;
 };
 
 export type SessionInfo = { user: User };
 
-export type LoginInput = { method: 'local'; username: string; password: string };
+export type LoginMethod = 'local' | 'ldap';
+
+export type LoginInput = { method: LoginMethod; username: string; password: string };
 
 /** Owner / PE as shown in an application. */
 export type Member = { id: string; username: string; displayName: string; status: 'enabled' | 'disabled' };

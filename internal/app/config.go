@@ -19,13 +19,29 @@ type Config struct {
 		DSN            string        `yaml:"dsn"`             // XP_DB_DSN, go-sql-driver DSN, e.g. user:pw@tcp(host:3306)/xproject
 		ConnectTimeout time.Duration `yaml:"connect_timeout"` // XP_DB_CONNECT_TIMEOUT, default 90s
 	} `yaml:"database"`
-	SecretKey string `yaml:"secret_key"` // XP_SECRET_KEY, required: encrypts stored secrets (code platform tokens); keep it stable
+	SecretKey string   `yaml:"secret_key"` // XP_SECRET_KEY, required: encrypts stored secrets (code platform tokens); keep it stable
 	Admin     struct { // initial administrator, used only on the very first start
 		Username    string `yaml:"username"`     // XP_ADMIN_USERNAME
 		Password    string `yaml:"password"`     // XP_ADMIN_PASSWORD
 		DisplayName string `yaml:"display_name"` // XP_ADMIN_DISPLAY_NAME
 		Email       string `yaml:"email"`        // XP_ADMIN_EMAIL
 	} `yaml:"admin"`
+	// LDAP is the one corporate directory. Leaving url empty means LDAP login is not configured.
+	LDAP struct {
+		URL            string        `yaml:"url"`             // XP_LDAP_URL, ldap://host:389 or ldaps://host:636
+		StartTLS       bool          `yaml:"start_tls"`       // XP_LDAP_START_TLS
+		SkipVerify     bool          `yaml:"skip_verify"`     // XP_LDAP_SKIP_VERIFY, accept any server certificate
+		BindDN         string        `yaml:"bind_dn"`         // XP_LDAP_BIND_DN, service account for searching; empty = anonymous
+		BindPassword   string        `yaml:"bind_password"`   // XP_LDAP_BIND_PASSWORD
+		BaseDN         string        `yaml:"base_dn"`         // XP_LDAP_BASE_DN, users are searched below it
+		UserFilter     string        `yaml:"user_filter"`     // XP_LDAP_USER_FILTER, one %s for the login name, default (uid=%s)
+		LoginAttr      string        `yaml:"login_attr"`      // XP_LDAP_LOGIN_ATTR, default uid
+		NameAttr       string        `yaml:"name_attr"`       // XP_LDAP_NAME_ATTR, default displayName
+		EmailAttr      string        `yaml:"email_attr"`      // XP_LDAP_EMAIL_ATTR, default mail
+		DepartmentAttr string        `yaml:"department_attr"` // XP_LDAP_DEPARTMENT_ATTR, default department
+		DisabledFilter string        `yaml:"disabled_filter"` // XP_LDAP_DISABLED_FILTER, matches an account when disabled; empty = never disabled
+		Timeout        time.Duration `yaml:"timeout"`         // XP_LDAP_TIMEOUT, default 10s
+	} `yaml:"ldap"`
 	Session struct {
 		TTL          time.Duration `yaml:"ttl"`           // XP_SESSION_TTL, default 12h
 		CookieSecure bool          `yaml:"cookie_secure"` // XP_COOKIE_SECURE, set true behind HTTPS
@@ -79,6 +95,19 @@ func Load() (Config, error) {
 	str("XP_DB_DSN", &c.Database.DSN)
 	str("XP_SECRET_KEY", &c.SecretKey)
 	dur("XP_DB_CONNECT_TIMEOUT", &c.Database.ConnectTimeout)
+	str("XP_LDAP_URL", &c.LDAP.URL)
+	boolean("XP_LDAP_START_TLS", &c.LDAP.StartTLS)
+	boolean("XP_LDAP_SKIP_VERIFY", &c.LDAP.SkipVerify)
+	str("XP_LDAP_BIND_DN", &c.LDAP.BindDN)
+	str("XP_LDAP_BIND_PASSWORD", &c.LDAP.BindPassword)
+	str("XP_LDAP_BASE_DN", &c.LDAP.BaseDN)
+	str("XP_LDAP_USER_FILTER", &c.LDAP.UserFilter)
+	str("XP_LDAP_LOGIN_ATTR", &c.LDAP.LoginAttr)
+	str("XP_LDAP_NAME_ATTR", &c.LDAP.NameAttr)
+	str("XP_LDAP_EMAIL_ATTR", &c.LDAP.EmailAttr)
+	str("XP_LDAP_DEPARTMENT_ATTR", &c.LDAP.DepartmentAttr)
+	str("XP_LDAP_DISABLED_FILTER", &c.LDAP.DisabledFilter)
+	dur("XP_LDAP_TIMEOUT", &c.LDAP.Timeout)
 	str("XP_ADMIN_USERNAME", &c.Admin.Username)
 	str("XP_ADMIN_PASSWORD", &c.Admin.Password)
 	str("XP_ADMIN_DISPLAY_NAME", &c.Admin.DisplayName)

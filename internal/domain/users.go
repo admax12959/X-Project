@@ -82,6 +82,11 @@ func (s *Service) CreateLocalUser(ctx context.Context, actor Actor, in CreateLoc
 		return UserWithIdentities{}, err
 	}
 
+	// ADR-0004: LDAP owns the namespace. Asked before the transaction (a network call);
+	// an unreachable directory fails the creation, the check is never skipped.
+	if err := s.CheckUsernameFreeInDirectory(ctx, "username", in.Username); err != nil {
+		return UserWithIdentities{}, err
+	}
 	hash, err := hashPassword(in.Password)
 	if err != nil {
 		return UserWithIdentities{}, err
