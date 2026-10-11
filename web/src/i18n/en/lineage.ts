@@ -60,4 +60,6 @@ export default {
   'lineage.fork.saving': 'Forking…',
   'lineage.fork.cancel': 'Cancel',
   'lineage.fork.newLine': 'The new line starts Active.',
+  // Graph column (#11).
+  'lineage.graph': 'Graph',
 };
