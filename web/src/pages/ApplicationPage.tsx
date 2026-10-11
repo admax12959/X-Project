@@ -1,5 +1,5 @@
 // Application page: header and tab strip shared by the tabs (routes under /apps/:key).
-// Tabs are child routes in main.tsx; the maintenance-line ticket (#7) adds Lineage between
+// Tabs are child routes in main.tsx; the fork ticket (#9) adds Lineage between
 // Overview and Versions by adding a <Route> there and an entry in TABS below. Tabs read
 // the application through useApplication().
 import { useEffect, useState } from 'react';

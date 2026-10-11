@@ -67,10 +67,7 @@ export function RegisterVersionDialog({
             <dt className="text-text-3">{t('versions.dialog.previous')}</dt>
             <dd>
               {previous ? (
-                <>
-                  <span className="font-mono text-[12.5px]">{previous.number}</span>
-                  <span className="text-text-3"> · {previous.releasedAt}</span>
-                </>
+                t('versions.dialog.previousValue', { number: previous.number, date: previous.releasedAt })
               ) : (
                 <span className="text-text-3">{t('versions.dialog.noVersions')}</span>
               )}

@@ -136,7 +136,8 @@ func lineParam(l Line) map[string]any {
 // Only the mainline exists today, and it accepts versions without conditions.
 // Maintenance lines (forking and lifecycle tickets) add their rules here:
 //   - Frozen: c.Add("note", CodeNoteRequiredOnFrozen, nil) when note is empty.
-//   - Retired: c.Add("lineId", CodeLineRetired, nil); nothing may be registered.
+//   - Retired: c.Add("", CodeLineRetired, nil); nothing may be registered. The error is
+//     request-level (no field): the line is in the URL, not in the body.
 //
 // It runs inside the transaction that holds the line's row lock.
 func checkLineAcceptsVersion(_ *Collector, _ Line, _ string) {}
