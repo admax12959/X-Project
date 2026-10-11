@@ -1,5 +1,16 @@
 // Typed API client. Pages call api.<resource>.<action>(); nothing else calls fetch.
-import type { ApiFieldError, ApplicationSummary, CodePlatform, CodePlatformInput, List, LoginInput, SessionInfo } from './types.ts';
+import type {
+  AdminUser,
+  ApiFieldError,
+  ApplicationSummary,
+  CodePlatform,
+  CodePlatformInput,
+  CreateUserInput,
+  List,
+  LoginInput,
+  SessionInfo,
+  UpdateUserInput,
+} from './types.ts';
 
 /** Thrown for every non-2xx response (and network failures, status 0, code "network"). */
 export class ApiError extends Error {
@@ -60,5 +71,13 @@ export const api = {
     list: () => request<List<CodePlatform>>('GET', '/api/code-platforms'),
     /** 422 field errors on kind / baseUrl / token. */
     create: (input: CodePlatformInput) => request<CodePlatform>('POST', '/api/code-platforms', { body: input }),
+  },
+  /** Administrator only (403 otherwise). There is no delete: users are disabled. */
+  users: {
+    list: () => request<List<AdminUser>>('GET', '/api/users'),
+    create: (input: CreateUserInput) => request<AdminUser>('POST', '/api/users', { body: input }),
+    update: (id: string, input: UpdateUserInput) => request<AdminUser>('PATCH', `/api/users/${id}`, { body: input }),
+    disable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/disable`),
+    enable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/enable`),
   },
 };

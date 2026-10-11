@@ -6,7 +6,8 @@ import errors from './errors.ts';
 import login from './login.ts';
 import platforms from './platforms.ts';
 import terms from './terms.ts';
+import users from './users.ts';
 
-export const sections = { applications, common, errors, login, platforms, terms };
+export const sections = { applications, common, errors, login, platforms, terms, users };
 
-export const zh: Record<MessageKey, string> = { ...applications, ...common, ...errors, ...login, ...platforms, ...terms };
+export const zh: Record<MessageKey, string> = { ...applications, ...common, ...errors, ...login, ...platforms, ...terms, ...users };

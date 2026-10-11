@@ -11,4 +11,9 @@ export default {
   'error.network': 'Cannot reach the server.',
   'error.unknown': 'Unexpected error ({code}).',
   'error.invalidCredentials': 'Incorrect username or password.',
+  'error.tooShort': 'Must be at least {min} characters.',
+  'error.tooLong': 'Must be at most {max} characters.',
+  'error.usernameTaken': 'This username is already taken.',
+  'error.usernameLocked': 'The username of a user with an LDAP login identity cannot be changed.',
+  'error.ldapManaged': 'This field is managed by LDAP and cannot be changed here.',
 };

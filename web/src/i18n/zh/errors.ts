@@ -10,4 +10,9 @@ export default {
   'error.network': '无法连接服务器。',
   'error.unknown': '未知错误（{code}）。',
   'error.invalidCredentials': '用户名或密码不正确。',
+  'error.tooShort': '至少需要 {min} 个字符。',
+  'error.tooLong': '最多 {max} 个字符。',
+  'error.usernameTaken': '该用户名已被占用。',
+  'error.usernameLocked': '已绑定 LDAP 登录身份的用户不能修改用户名。',
+  'error.ldapManaged': '该字段由 LDAP 管理，不能在此修改。',
 };
