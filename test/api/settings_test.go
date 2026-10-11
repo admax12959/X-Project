@@ -312,6 +312,76 @@ func TestAnIdentityHeldByAnotherUserCannotBeBound(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------- unbinding
+
+func unbindOwn(c *apitest.Client, kind string) *apitest.Response {
+	return c.Delete("/api/me/identities/" + kind)
+}
+
+func TestTheLastLoginIdentityCannotBeUnbound(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	jane, _ := localJane(t, env)
+
+	unbindOwn(jane, "local").ExpectError(http.StatusUnprocessableEntity, "kind", "lastIdentity")
+	if me := getMe(t, jane); len(me.Identities) != 1 {
+		t.Fatalf("identities = %+v, the only identity must stay", me.Identities)
+	}
+	env.Client().LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+
+	emma := env.Client()
+	addEmma(env)
+	loginLDAP(emma, "elarsen", "ldap-pw").ExpectStatus(http.StatusOK)
+	unbindOwn(emma, "ldap").ExpectError(http.StatusUnprocessableEntity, "kind", "lastIdentity")
+}
+
+func TestUnbindingOneOfTwoIdentitiesRemovesOnlyThatLoginWay(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addJane(env)
+	jane, created := localJane(t, env)
+	bindOwn(jane, bindLDAP("jane.doe", "jane-ldap-pw")).ExpectStatus(http.StatusCreated)
+
+	var me meBody
+	unbindOwn(jane, "local").ExpectStatus(http.StatusOK).JSON(&me)
+	if len(me.Identities) != 1 || me.Identities[0].Kind != "ldap" {
+		t.Fatalf("identities after unbinding local = %+v", me.Identities)
+	}
+	env.Client().LoginLocal("jdoe", "jane-pw-123").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	if u := userOf(t, loginLDAP(env.Client(), "jane.doe", "jane-ldap-pw")); u.ID != created.ID {
+		t.Fatalf("LDAP login opened user %s, want %s", u.ID, created.ID)
+	}
+	// The last one is protected now.
+	unbindOwn(jane, "ldap").ExpectError(http.StatusUnprocessableEntity, "kind", "lastIdentity")
+}
+
+func TestUnbindingLDAPGivesTheProfileBackToTheUser(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addJane(env)
+	jane, _ := localJane(t, env)
+	bindOwn(jane, bindLDAP("jane.doe", "jane-ldap-pw")).ExpectStatus(http.StatusCreated)
+	patchMe(jane, map[string]any{"displayName": "Mine"}).ExpectError(http.StatusUnprocessableEntity, "displayName", "ldapManaged")
+
+	unbindOwn(jane, "ldap").ExpectStatus(http.StatusOK)
+	patchMe(jane, map[string]any{"displayName": "Mine"}).ExpectStatus(http.StatusOK)
+
+	// The directory login name is free again and is never silently re-attached by name:
+	// it logs in as a new, separate user.
+	if u := userOf(t, loginLDAP(env.Client(), "jane.doe", "jane-ldap-pw")); u.ID == getMe(t, jane).ID {
+		t.Fatalf("LDAP login after unbinding opened the original user %s", u.ID)
+	}
+}
+
+func TestUnbindingAnIdentityTheUserDoesNotHaveIsNotFound(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	jane, _ := localJane(t, env)
+	unbindOwn(jane, "ldap").ExpectError(http.StatusNotFound, "", "notFound")
+	unbindOwn(jane, "kerberos").ExpectError(http.StatusNotFound, "", "notFound")
+	env.Client().Delete("/api/me/identities/local").ExpectError(http.StatusUnauthorized, "", "unauthenticated")
+}
+
 func TestSettingsShowEachLoginIdentityWithItsTypeLoginNameBindingTimeAndSource(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)

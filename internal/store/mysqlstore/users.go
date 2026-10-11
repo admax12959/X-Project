@@ -64,6 +64,11 @@ func (s *Store) UpdateUser(ctx context.Context, u domain.User, at time.Time) err
 	return mapUsernameConflict(err)
 }
 
+func (s *Store) DeleteIdentity(ctx context.Context, id domain.UserID, kind domain.IdentityKind) error {
+	_, err := s.q.ExecContext(ctx, "DELETE FROM login_identities WHERE user_id = ? AND kind = ?", id, string(kind))
+	return err
+}
+
 func (s *Store) RenameLocalLogin(ctx context.Context, id domain.UserID, loginName string) error {
 	_, err := s.q.ExecContext(ctx, "UPDATE login_identities SET login_name = ? WHERE user_id = ? AND kind = ?",
 		loginName, id, string(domain.IdentityLocal))

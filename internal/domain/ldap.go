@@ -16,6 +16,8 @@ type IdentityRepository interface {
 	UpdateUserProfile(ctx context.Context, id UserID, displayName, email, department string, at time.Time) error
 	// FindIdentityByUser returns the user's identity of the given kind, if any.
 	FindIdentityByUser(ctx context.Context, userID UserID, kind IdentityKind) (LoginIdentity, bool, error)
+	// DeleteIdentity removes the user's identity of the given kind.
+	DeleteIdentity(ctx context.Context, userID UserID, kind IdentityKind) error
 }
 
 func ldapUnreachable() error { return newKind(KindUnavailable, CodeLdapUnreachable) }

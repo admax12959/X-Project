@@ -11,6 +11,16 @@ func (s *server) meRoutes() {
 	s.route("GET /api/me", s.getMe)
 	s.route("PATCH /api/me", s.updateMe)
 	s.route("POST /api/me/identities", s.bindOwnIdentity)
+	s.route("DELETE /api/me/identities/{kind}", s.unbindOwnIdentity)
+}
+
+func (s *server) unbindOwnIdentity(w http.ResponseWriter, r *http.Request) {
+	u, err := s.svc.UnbindOwnIdentity(r.Context(), actorOf(r), r.PathValue("kind"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAdminUserJSON(u))
 }
 
 func (s *server) getMe(w http.ResponseWriter, r *http.Request) {

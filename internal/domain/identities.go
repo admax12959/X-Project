@@ -78,6 +78,31 @@ func (s *Service) BindOwnIdentity(ctx context.Context, actor Actor, in BindIdent
 	return s.bindIdentity(ctx, actor.User.ID, bindSpec{kind: IdentityLDAP, loginName: login, via: BoundViaSelf, entry: &entry})
 }
 
+// UnbindOwnIdentity removes the actor's login identity of the given kind. The last
+// identity cannot be removed (lastIdentity); the user and everything else stay.
+func (s *Service) UnbindOwnIdentity(ctx context.Context, actor Actor, kind string) (UserWithIdentities, error) {
+	var result UserWithIdentities
+	err := s.repo.InTx(ctx, func(tx Repository) error {
+		cur, found, err := tx.LockUserWithIdentities(ctx, actor.User.ID)
+		if err != nil {
+			return err
+		}
+		if !found || !cur.hasIdentity(IdentityKind(kind)) {
+			return newKind(KindNotFound, CodeNotFound)
+		}
+		if len(cur.Identities) <= 1 {
+			return Validation(Invalid("kind", CodeLastIdentity, nil))
+		}
+		if err := tx.DeleteIdentity(ctx, cur.User.ID, IdentityKind(kind)); err != nil {
+			return err
+		}
+		cur.Identities = slices.DeleteFunc(cur.Identities, func(i LoginIdentity) bool { return i.Kind == IdentityKind(kind) })
+		result = cur
+		return nil
+	})
+	return result, err
+}
+
 // bindLocalIdentity gives the user a local password identity. Its login name is the
 // user's username (so a rename keeps them in step), the password is the one given:
 // there is no existing credential to authenticate with, the user is already logged in.
