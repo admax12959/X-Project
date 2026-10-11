@@ -94,4 +94,5 @@ type Repository interface {
 	ApplicationRepository
 	VersionRepository
 	HistoryRepository
+	ApplicationMaintenanceRepository
 }

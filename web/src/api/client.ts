@@ -4,6 +4,7 @@ import type {
   ApiFieldError,
   Application,
   ApplicationSummary,
+  AssignableUser,
   BindIdentityInput,
   ChangeEvent,
   CodePlatform,
@@ -19,6 +20,8 @@ import type {
   RegisterVersionInput,
   RepoInput,
   SessionInfo,
+  UpdateApplicationInput,
+  UpdateMembersInput,
   UpdateMeInput,
   UpdateUserInput,
   Version,
@@ -95,6 +98,19 @@ export const api = {
     history: (key: string) => request<List<ChangeEvent>>('GET', `/api/applications/${encodeURIComponent(key)}/history`),
     /** Administrators only. 422 field errors: key, name, mainBranch, owners, pes, repo.platformId, repo.path. */
     create: (input: CreateApplicationInput) => request<Application>('POST', '/api/applications', { body: input }),
+    /** Owners only (403 otherwise). 422 field errors: name, description, mainBranch. */
+    update: (key: string, input: UpdateApplicationInput) => request<Application>('PATCH', `/api/applications/${encodeURIComponent(key)}`, { body: input }),
+    /** Administrators and Owners. 422: owners required (never empty), owners / pes userUnavailable {userId}. */
+    setMembers: (key: string, input: UpdateMembersInput) => request<Application>('PUT', `/api/applications/${encodeURIComponent(key)}/members`, { body: input }),
+    /** Owners and PEs. Free text; 422 deployInfo tooLong. */
+    setDeployInfo: (key: string, deployInfo: string) =>
+      request<Application>('PUT', `/api/applications/${encodeURIComponent(key)}/deploy-info`, { body: { deployInfo } }),
+    /** Administrators only; confirmKey must equal the key (422 confirmKey). Lines, versions and history go with it. */
+    remove: (key: string, confirmKey: string) => request<void>('DELETE', `/api/applications/${encodeURIComponent(key)}`, { body: { confirmKey } }),
+  },
+  /** Any logged-in user: enabled users for the Owner/PE pickers. */
+  assignableUsers: {
+    list: () => request<List<AssignableUser>>('GET', '/api/assignable-users'),
   },
   repos: {
     /** Administrators only. Errors: repo.path repoNotFound / repoForbidden, repo.platformId platformUnreachable. */

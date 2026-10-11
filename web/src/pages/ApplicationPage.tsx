@@ -22,6 +22,11 @@ export function useApplication(): Application {
   return useOutletContext<{ app: Application }>().app;
 }
 
+/** Replaces the loaded application after an edit (the server returns the updated application). */
+export function useSetApplication(): (app: Application) => void {
+  return useOutletContext<{ setApp: (app: Application) => void }>().setApp;
+}
+
 export function ApplicationPage() {
   const { t } = useT();
   const { key = '' } = useParams();
@@ -79,7 +84,7 @@ export function ApplicationPage() {
           </NavLink>
         ))}
       </div>
-      <Outlet context={{ app }} />
+      <Outlet context={{ app, setApp: (a: Application) => setLoad({ status: 'ok', app: a }) }} />
     </>
   );
 }

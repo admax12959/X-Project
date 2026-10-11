@@ -238,7 +238,9 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 
 // DisableUser blocks a user from logging in; open sessions stop working too
 // (Authenticate rejects disabled users). Users are never deleted. Idempotent.
-// Protection for an application's only Owner is added by the Owner/PE ticket.
+// A user who is the only enabled Owner of any application cannot be disabled
+// (422 soleOwner with the blocking applications): an administrator hands the
+// applications over first (ADR-0003).
 func (s *Service) DisableUser(ctx context.Context, actor Actor, id UserID) (UserWithIdentities, error) {
 	return s.setUserStatus(ctx, actor, id, UserDisabled)
 }
@@ -262,6 +264,11 @@ func (s *Service) setUserStatus(ctx context.Context, actor Actor, id UserID, sta
 			return newKind(KindNotFound, CodeNotFound)
 		}
 		if cur.User.Status != status {
+			if status == UserDisabled {
+				if err := s.checkNotSoleOwner(ctx, tx, id); err != nil {
+					return err
+				}
+			}
 			if err := tx.SetUserStatus(ctx, id, status, s.nowUTC()); err != nil {
 				return err
 			}
