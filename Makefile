@@ -1,4 +1,4 @@
-.PHONY: test web-check web-build image check clean-test-containers
+.PHONY: test test-ldap-contract web-check web-build image check clean-test-containers
 
 # Everything a ticket must pass before it is done.
 check: test web-check web-build
@@ -7,6 +7,10 @@ check: test web-check web-build
 test:
 	go vet ./...
 	go test ./...
+
+# Contract tests of the real LDAP adapter; need Docker, not part of `check`.
+test-ldap-contract:
+	go test -count=1 -tags ldapcontract ./internal/ldapdir
 
 web-check:
 	pnpm --dir web install --frozen-lockfile

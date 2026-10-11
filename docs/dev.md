@@ -57,6 +57,13 @@ Optional YAML file named by `XP_CONFIG` (see `config.example.yaml`); environment
 | `XP_WEB_DIR` | `web_dir` | empty (image: `/srv/web`) | Built SPA; empty serves the API only. |
 | `XP_ADMIN_USERNAME` / `XP_ADMIN_PASSWORD` | `admin.username` / `admin.password` | — | Initial administrator. Required only on the very first start. |
 | `XP_ADMIN_DISPLAY_NAME` / `XP_ADMIN_EMAIL` | `admin.display_name` / `admin.email` | username / empty | |
+| `XP_LDAP_URL` / `ldap.url` | | empty | The one LDAP directory, `ldap://host:389` or `ldaps://host:636`. Empty = LDAP login is not configured (the login page offers local login only). Setting any other `XP_LDAP_*` value without a URL, or a URL without `base_dn`, stops startup. |
+| `XP_LDAP_BASE_DN` | `ldap.base_dn` | (required with URL) | Users are searched in this subtree. |
+| `XP_LDAP_BIND_DN` / `XP_LDAP_BIND_PASSWORD` | `ldap.bind_dn` / `ldap.bind_password` | anonymous | Service account for searching. Set both or neither. |
+| `XP_LDAP_USER_FILTER` | `ldap.user_filter` | `(uid=%s)` | Finds one user; exactly one `%s` is replaced by the escaped login name. |
+| `XP_LDAP_LOGIN_ATTR` / `XP_LDAP_NAME_ATTR` / `XP_LDAP_EMAIL_ATTR` / `XP_LDAP_DEPARTMENT_ATTR` | `ldap.login_attr` / `name_attr` / `email_attr` / `department_attr` | `uid` / `displayName` / `mail` / `department` | Attributes read from the directory. The login attribute is the canonical login name and becomes the username. |
+| `XP_LDAP_DISABLED_FILTER` | `ldap.disabled_filter` | empty | Optional filter that matches a user entry when the account is disabled, for example Active Directory `(userAccountControl:1.2.840.113556.1.4.803:=2)`. Empty = never disabled. |
+| `XP_LDAP_START_TLS` / `XP_LDAP_SKIP_VERIFY` / `XP_LDAP_TIMEOUT` | `ldap.start_tls` / `skip_verify` / `timeout` | `false` / `false` / `10s` | |
 | `XP_SESSION_TTL` | `session.ttl` | `12h` | Session lifetime. |
 | `XP_COOKIE_SECURE` | `session.cookie_secure` | `false` | Set `true` behind HTTPS. |
 
@@ -80,6 +87,14 @@ How the API tests work (`internal/apitest`):
 - `env.Restart(mutate)` simulates a process restart on the same database.
 - To reuse an existing MySQL 8 server instead of a container, set `XP_TEST_MYSQL_DSN='root:pw@tcp(127.0.0.1:3306)/'`. The value has no database name and no parameters.
 - Clean up containers left behind by a killed run with `make clean-test-containers`.
+
+LDAP adapter contract tests (not in the default set; need Docker, pull `osixia/openldap:1.5.0`):
+
+```sh
+make test-ldap-contract    # = go test -tags ldapcontract ./internal/ldapdir
+```
+
+They start a throwaway OpenLDAP container (unique name, dynamic port, label `xproj-test`). To use your own server set `XP_TEST_LDAP_URL`, `XP_TEST_LDAP_BASE_DN`, `XP_TEST_LDAP_ADMIN_DN` and `XP_TEST_LDAP_ADMIN_PASSWORD`; entries are created under `ou=xp-contract`. `go vet -tags ldapcontract ./internal/ldapdir` checks that they compile.
 
 Keep **all** API tests in `test/api`. Every extra test package starts another container. Write tests as user stories through HTTP only: no SQL, no calls into internal functions.
 
@@ -109,6 +124,7 @@ Every non-2xx body has this shape:
 | `KindUnauthenticated` | 401 | `unauthenticated`, `invalidCredentials` (failed login) |
 | `KindForbidden` | 403 | `forbidden` |
 | `KindNotFound` | 404 | `notFound` |
+| `KindUnavailable` | 503 | `ldapUnreachable`. A required external system cannot be reached; never report it as not found or as wrong credentials. Code platform tickets use it for an unreachable platform. |
 | malformed JSON | 400 | `badRequest` |
 | anything else | 500 | `internal` (details only in the server log) |
 
@@ -143,7 +159,15 @@ Applied files are recorded by name in `schema_migrations`. A file merged later w
 - `CodePlatformAdapter.ResolveRepo(ctx, PlatformConn, path)` returns `RepoFound` with a project ID, or `RepoNotFound`, `RepoForbidden` or `PlatformUnreachable`.
 - `Directory.Authenticate(ctx, login, password)` and `Directory.Lookup(ctx, login)` return `DirectoryOK` with an entry, or `DirectoryBadPassword` (Authenticate only), `DirectoryNotFound`, `DirectoryDisabled` or `DirectoryUnreachable`. Never treat Unreachable as NotFound (ADR-0004).
 
-`app.Deps` passes them in. In production, nil means "not configured" (there is no real LDAP or GitLab/GitHub implementation yet).
+`app.Deps` passes them in. In production, nil means "not configured". The real LDAP adapter is `internal/ldapdir`, built by `app.NewDirectory(cfg)` (nil when `ldap.url` is empty); there is no real GitLab/GitHub implementation yet.
+
+### LDAP login (ADR-0002, ADR-0004)
+
+- `POST /api/session` with `method: "ldap"`. `GET /api/login-methods` (public) lists `["local"]` or `["local","ldap"]`.
+- The directory is asked on every login. Not found, disabled or wrong password all give `401 invalidCredentials`; unreachable gives `503 ldapUnreachable`. Nothing is deleted when the directory refuses: the user and the LDAP identity stay and work again when the account comes back.
+- A known LDAP identity logs in to its user (whoever bound it) and overwrites display name, email and department. An unknown one creates a user (username = login name, binding source `firstLogin`) only if the username is free; otherwise `422 usernameTakenByLocal` on field `username` and nothing is stored. Never merged by email or username.
+- `Service.CheckUsernameFreeInDirectory(ctx, field, username)` is the admin-side check, already called by `CreateLocalUser`: `422 usernameExistsInLdap` (a disabled directory account counts too) or `503 ldapUnreachable` when the directory cannot be queried; it never skips the check. With no directory configured it passes. Any other code path that creates a local user must call it too.
+- Binding an LDAP identity to an existing user (ticket #15) needs no change to login: a known LDAP identity signs in to whichever user holds it and the directory overwrites display name, email and department.
 
 ### i18n
 

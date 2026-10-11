@@ -47,6 +47,7 @@ func (s *server) routes() {
 	s.publicRoute("GET /api/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	s.publicRoute("GET /api/login-methods", s.loginMethods)
 	s.publicRoute("POST /api/session", s.login)
 	s.route("GET /api/session", s.currentSession)
 	s.route("DELETE /api/session", s.logout)

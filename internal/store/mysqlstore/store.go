@@ -135,6 +135,37 @@ func (s *Store) GetUser(ctx context.Context, id domain.UserID) (domain.User, boo
 	return u, err == nil, err
 }
 
+func (s *Store) FindUserByUsername(ctx context.Context, username string) (domain.User, bool, error) {
+	u, err := scanUser(s.q.QueryRowContext(ctx, "SELECT "+userCols+" FROM users WHERE username = ?", username))
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.User{}, false, nil
+	}
+	return u, err == nil, err
+}
+
+func (s *Store) UpdateUserProfile(ctx context.Context, id domain.UserID, displayName, email, department string, at time.Time) error {
+	_, err := s.q.ExecContext(ctx, "UPDATE users SET display_name = ?, email = ?, department = ?, updated_at = ? WHERE id = ?",
+		displayName, email, department, at, id)
+	return err
+}
+
+func (s *Store) FindIdentityByUser(ctx context.Context, userID domain.UserID, kind domain.IdentityKind) (domain.LoginIdentity, bool, error) {
+	var i domain.LoginIdentity
+	var k, via string
+	var hash sql.NullString
+	err := s.q.QueryRowContext(ctx,
+		"SELECT id, user_id, kind, login_name, password_hash, bound_at, bound_via FROM login_identities WHERE user_id = ? AND kind = ?",
+		userID, string(kind)).Scan(&i.ID, &i.UserID, &k, &i.LoginName, &hash, &i.BoundAt, &via)
+	if errors.Is(err, sql.ErrNoRows) {
+		return i, false, nil
+	}
+	if err != nil {
+		return i, false, err
+	}
+	i.Kind, i.BoundVia, i.PasswordHash = domain.IdentityKind(k), domain.BoundVia(via), hash.String
+	return i, true, nil
+}
+
 func (s *Store) CreateIdentity(ctx context.Context, i domain.LoginIdentity) error {
 	var hash sql.NullString
 	if i.PasswordHash != "" {

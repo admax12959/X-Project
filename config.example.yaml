@@ -14,3 +14,14 @@ admin:                      # initial administrator, used only on the very first
 session:
   ttl: 12h
   cookie_secure: false      # true when served over HTTPS
+# ldap:                     # optional; without ldap.url the login page offers local login only
+#   url: "ldaps://ldap.corp.example:636"
+#   base_dn: "ou=people,dc=corp,dc=example"
+#   bind_dn: "cn=xproject,ou=services,dc=corp,dc=example"   # service account used to search
+#   bind_password: ""
+#   user_filter: "(uid=%s)"          # exactly one %s
+#   login_attr: uid
+#   name_attr: displayName
+#   email_attr: mail
+#   department_attr: department
+#   disabled_filter: ""              # matches disabled accounts, e.g. AD: (userAccountControl:1.2.840.113556.1.4.803:=2)

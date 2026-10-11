@@ -76,6 +76,7 @@ type ApplicationSummary struct {
 // Repository is the persistence port. Only the domain service uses it;
 // the MySQL implementation lives in internal/store/mysqlstore.
 type Repository interface {
+	IdentityRepository
 	CodePlatformRepository
 
 	// InTx runs fn in one transaction; fn receives a Repository bound to it.
