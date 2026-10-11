@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/admax12959/X-Project/internal/apitest"
+	"github.com/admax12959/X-Project/internal/domain"
 )
 
 // ---------------------------------------------------------------- helpers
@@ -163,6 +164,122 @@ func TestLDAPBoundUserCannotEditDisplayNameEmailDepartmentButCanEditPhone(t *tes
 	me := getMe(t, emma)
 	if me.DisplayName != "Emma Larsen" || me.Email != "emma.larsen@corp.example" || me.Department != "Payments Platform" || me.Phone != "555-0142" {
 		t.Fatalf("me = %+v", me)
+	}
+}
+
+// ---------------------------------------------------------------- binding an identity yourself
+
+func addJane(env *apitest.Env) {
+	env.Directory.AddAccount("jane.doe", "jane-ldap-pw", domain.DirectoryEntry{
+		DisplayName: "Jane Doe (Corp)", Email: "jane.doe@corp.example", Department: "Treasury",
+	})
+}
+
+// localJane creates the local user jdoe and returns a client logged in as them.
+func localJane(t *testing.T, env *apitest.Env) (*apitest.Client, userBody) {
+	t.Helper()
+	u := createUser(t, env.AdminClient(), map[string]any{"username": "jdoe", "password": "jane-pw-123"})
+	c := env.Client()
+	c.LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+	return c, u
+}
+
+func bindOwn(c *apitest.Client, fields map[string]any) *apitest.Response {
+	return c.Post("/api/me/identities", fields)
+}
+
+func bindLDAP(login, password string) map[string]any {
+	return map[string]any{"kind": "ldap", "loginName": login, "password": password}
+}
+
+func TestUserBindsAnLDAPIdentityAfterAuthenticatingWithItAndThenLogsInWithEither(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addJane(env)
+	jane, created := localJane(t, env)
+
+	var me meBody
+	bindOwn(jane, bindLDAP("jane.doe", "jane-ldap-pw")).ExpectStatus(http.StatusCreated).JSON(&me)
+	if len(me.Identities) != 2 || me.Identities[1].Kind != "ldap" || me.Identities[1].LoginName != "jane.doe" ||
+		me.Identities[1].BoundVia != "self" || me.Identities[1].BoundAt == "" {
+		t.Fatalf("identities after binding = %+v, want local (admin) then ldap (self)", me.Identities)
+	}
+	if got := getMe(t, jane); len(got.Identities) != 2 {
+		t.Fatalf("GET /api/me identities = %+v", got.Identities)
+	}
+
+	// The LDAP login now enters the same user, not a new one.
+	ldap := env.Client()
+	if u := userOf(t, loginLDAP(ldap, "jane.doe", "jane-ldap-pw")); u.ID != created.ID || u.Username != "jdoe" {
+		t.Fatalf("LDAP login opened %+v, want user %s (jdoe)", u, created.ID)
+	}
+	env.Client().LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+}
+
+func TestBindingAnLDAPIdentityMakesTheDirectoryOwnDisplayNameEmailAndDepartment(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addJane(env)
+	jane, _ := localJane(t, env)
+	bindOwn(jane, bindLDAP("jane.doe", "jane-ldap-pw")).ExpectStatus(http.StatusCreated)
+
+	me := getMe(t, jane)
+	if me.DisplayName != "Jane Doe (Corp)" || me.Email != "jane.doe@corp.example" || me.Department != "Treasury" {
+		t.Fatalf("profile after binding = %+v, want the directory's values", me)
+	}
+	patchMe(jane, map[string]any{"displayName": "Mine"}).ExpectError(http.StatusUnprocessableEntity, "displayName", "ldapManaged")
+}
+
+func TestBindingAnLDAPIdentityIsRefusedWhenAuthenticationFails(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addJane(env)
+	jane, _ := localJane(t, env)
+
+	// 422, not 401: a 401 would log the browser out.
+	bindOwn(jane, bindLDAP("jane.doe", "wrong")).ExpectError(http.StatusUnprocessableEntity, "password", "invalidCredentials")
+	bindOwn(jane, bindLDAP("nobody", "x")).ExpectError(http.StatusUnprocessableEntity, "password", "invalidCredentials")
+	env.Directory.SetDisabled("jane.doe", true)
+	bindOwn(jane, bindLDAP("jane.doe", "jane-ldap-pw")).ExpectError(http.StatusUnprocessableEntity, "password", "invalidCredentials")
+
+	env.Directory.SetDisabled("jane.doe", false)
+	env.Directory.SetUnreachable(true)
+	bindOwn(jane, bindLDAP("jane.doe", "jane-ldap-pw")).ExpectError(http.StatusServiceUnavailable, "", "ldapUnreachable")
+
+	bindOwn(jane, map[string]any{"kind": "ldap", "loginName": "", "password": ""}).ExpectStatus(http.StatusUnprocessableEntity)
+	if me := getMe(t, jane); len(me.Identities) != 1 {
+		t.Fatalf("identities = %+v, nothing may be bound by a failed attempt", me.Identities)
+	}
+}
+
+func TestAUserHasAtMostOneIdentityOfEachType(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addJane(env)
+	env.Directory.AddAccount("jane.second", "pw2", domain.DirectoryEntry{DisplayName: "Jane Two"})
+	jane, _ := localJane(t, env)
+	bindOwn(jane, bindLDAP("jane.doe", "jane-ldap-pw")).ExpectStatus(http.StatusCreated)
+
+	bindOwn(jane, bindLDAP("jane.second", "pw2")).ExpectError(http.StatusUnprocessableEntity, "kind", "identityKindBound")
+	if me := getMe(t, jane); len(me.Identities) != 2 {
+		t.Fatalf("identities = %+v, want the original two", me.Identities)
+	}
+}
+
+func TestAnIdentityHeldByAnotherUserCannotBeBound(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addEmma(env)
+	emma := env.Client()
+	emmaUser := userOf(t, loginLDAP(emma, "elarsen", "ldap-pw"))
+	jane, _ := localJane(t, env)
+
+	bindOwn(jane, bindLDAP("elarsen", "ldap-pw")).ExpectError(http.StatusUnprocessableEntity, "loginName", "identityTaken")
+	if me := getMe(t, jane); len(me.Identities) != 1 {
+		t.Fatalf("identities = %+v", me.Identities)
+	}
+	if u := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw")); u.ID != emmaUser.ID {
+		t.Fatalf("LDAP login opened user %s, want the original holder %s", u.ID, emmaUser.ID)
 	}
 }
 

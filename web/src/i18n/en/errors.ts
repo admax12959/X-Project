@@ -19,4 +19,8 @@ export default {
   'error.usernameTaken': 'This username is already taken.',
   'error.usernameLocked': 'The username of a user with an LDAP login identity cannot be changed.',
   'error.ldapManaged': 'This field is managed by LDAP and cannot be changed here.',
+  'error.lastIdentity': 'The last login identity cannot be unbound.',
+  'error.identityKindBound': 'This user already has a login identity of this type.',
+  'error.identityTaken': 'This login identity is already bound to another user.',
+  'error.ldapAccountNotFound': 'The LDAP directory has no such login name.',
 };
