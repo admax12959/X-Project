@@ -312,6 +312,115 @@ func TestAnIdentityHeldByAnotherUserCannotBeBound(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------- administrator binds an identity (ADR-0004)
+
+func adminBind(c *apitest.Client, userID string, fields map[string]any) *apitest.Response {
+	return c.Post("/api/users/"+userID+"/identities", fields)
+}
+
+// The whole ADR-0004 story: the LDAP user is refused because a local user owns the name,
+// the administrator decides they are the same person and binds, and from then on the
+// LDAP login opens the original user and the directory owns the profile.
+func TestAdministratorBindsTheLDAPIdentityToTheExistingLocalUserAndLDAPLoginEntersThatUser(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+	local := createUser(t, admin, map[string]any{"username": "elarsen", "displayName": "E. Larsen", "email": "old@example.com", "department": "Old Dept", "password": "local-pw-1"})
+	addEmma(env)
+	loginLDAP(env.Client(), "elarsen", "ldap-pw").ExpectError(http.StatusUnprocessableEntity, "username", "usernameTakenByLocal")
+
+	var bound userBody
+	adminBind(admin, local.ID, map[string]any{"kind": "ldap", "loginName": "elarsen"}).ExpectStatus(http.StatusCreated).JSON(&bound)
+	if len(bound.Identities) != 2 || bound.Identities[1].Kind != "ldap" || bound.Identities[1].BoundVia != "admin" {
+		t.Fatalf("identities after the administrator's bind = %+v, want local then ldap bound by admin", bound.Identities)
+	}
+	if got := findUser(t, listUsers(t, admin), "elarsen"); len(got.Identities) != 2 {
+		t.Fatalf("user list identities = %+v", got.Identities)
+	}
+
+	// The directory changes between the bind and the login: the login is what syncs.
+	env.Directory.AddAccount("elarsen", "ldap-pw", domain.DirectoryEntry{
+		DisplayName: "Emma Larsen-Brooks", Email: "emma.lb@corp.example", Department: "Risk",
+	})
+	got := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw"))
+	want := ldapUser{ID: local.ID, Username: "elarsen", DisplayName: "Emma Larsen-Brooks", Email: "emma.lb@corp.example", Department: "Risk"}
+	if got != want {
+		t.Fatalf("LDAP login user = %+v, want %+v (the original local user, profile from the directory)", got, want)
+	}
+	// Still no second user, and the local password keeps working.
+	if n := len(listUsers(t, admin)); n != 2 {
+		t.Fatalf("%d users, want the admin and elarsen only", n)
+	}
+	local2 := env.Client()
+	if u := userOf(t, local2.LoginLocal("elarsen", "local-pw-1")); u.ID != local.ID {
+		t.Fatalf("local login opened user %s, want %s", u.ID, local.ID)
+	}
+	// From now on the directory owns those fields and the username.
+	patchUser(admin, local.ID, map[string]any{"displayName": "Other"}).ExpectError(http.StatusUnprocessableEntity, "displayName", "ldapManaged")
+	patchUser(admin, local.ID, map[string]any{"username": "elarsen2"}).ExpectError(http.StatusUnprocessableEntity, "username", "usernameLocked")
+}
+
+func TestAdministratorCanBindALocalPasswordToAnLDAPUser(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addEmma(env)
+	emma := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw"))
+	admin := env.AdminClient()
+
+	adminBind(admin, emma.ID, map[string]any{"kind": "local", "password": "short"}).ExpectError(http.StatusUnprocessableEntity, "password", "tooShort")
+	var bound userBody
+	adminBind(admin, emma.ID, map[string]any{"kind": "local", "password": "set-by-admin-1"}).ExpectStatus(http.StatusCreated).JSON(&bound)
+	if len(bound.Identities) != 2 || bound.Identities[1].Kind != "local" || bound.Identities[1].BoundVia != "admin" {
+		t.Fatalf("identities = %+v", bound.Identities)
+	}
+	if u := userOf(t, env.Client().LoginLocal("elarsen", "set-by-admin-1")); u.ID != emma.ID {
+		t.Fatalf("local login opened user %s, want %s", u.ID, emma.ID)
+	}
+}
+
+func TestAdministratorBindRules(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addEmma(env)
+	env.Directory.AddAccount("gone.person", "pw", domain.DirectoryEntry{DisplayName: "Gone Person", Email: "gone@corp.example"})
+	env.Directory.SetDisabled("gone.person", true)
+	admin := env.AdminClient()
+	jane := createUser(t, admin, map[string]any{"username": "jdoe", "password": "jane-pw-123"})
+	other := createUser(t, admin, map[string]any{"username": "other", "password": "other-pw-123"})
+	emma := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw"))
+
+	// Only administrators.
+	plain := env.SeedUserClient("plain", "plain-pw-123")
+	adminBind(plain, jane.ID, map[string]any{"kind": "ldap", "loginName": "elarsen"}).ExpectError(http.StatusForbidden, "", "forbidden")
+	adminBind(env.Client(), jane.ID, map[string]any{"kind": "ldap", "loginName": "elarsen"}).ExpectError(http.StatusUnauthorized, "", "unauthenticated")
+
+	adminBind(admin, "99999", map[string]any{"kind": "ldap", "loginName": "elarsen"}).ExpectError(http.StatusNotFound, "", "notFound")
+	adminBind(admin, jane.ID, map[string]any{"kind": "kerberos", "loginName": "x"}).ExpectError(http.StatusUnprocessableEntity, "kind", "invalid")
+	adminBind(admin, jane.ID, map[string]any{"kind": "ldap", "loginName": " "}).ExpectError(http.StatusUnprocessableEntity, "loginName", "required")
+
+	// The directory must know the login name; an unreachable directory is never "not found".
+	adminBind(admin, jane.ID, map[string]any{"kind": "ldap", "loginName": "nobody"}).ExpectError(http.StatusUnprocessableEntity, "loginName", "ldapAccountNotFound")
+	env.Directory.SetUnreachable(true)
+	adminBind(admin, jane.ID, map[string]any{"kind": "ldap", "loginName": "elarsen2"}).ExpectError(http.StatusServiceUnavailable, "", "ldapUnreachable")
+	env.Directory.SetUnreachable(false)
+
+	// Already held by another user.
+	adminBind(admin, jane.ID, map[string]any{"kind": "ldap", "loginName": "elarsen"}).ExpectError(http.StatusUnprocessableEntity, "loginName", "identityTaken")
+	// One identity per kind.
+	adminBind(admin, emma.ID, map[string]any{"kind": "ldap", "loginName": "gone.person"}).ExpectError(http.StatusUnprocessableEntity, "kind", "identityKindBound")
+	adminBind(admin, jane.ID, map[string]any{"kind": "local", "password": "another-pw-123"}).ExpectError(http.StatusUnprocessableEntity, "kind", "identityKindBound")
+
+	// A directory account that is disabled still exists: it can be bound (it just cannot log in),
+	// and the user's profile is left as it was, there being nothing current to sync.
+	var bound userBody
+	adminBind(admin, other.ID, map[string]any{"kind": "ldap", "loginName": "gone.person"}).ExpectStatus(http.StatusCreated).JSON(&bound)
+	if bound.DisplayName != "Jane Doe" || bound.Email != "jane@example.com" || len(bound.Identities) != 2 {
+		t.Fatalf("profile was synced from a disabled directory account: %+v", bound)
+	}
+	loginLDAP(env.Client(), "gone.person", "pw").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	env.Client().LoginLocal("other", "other-pw-123").ExpectStatus(http.StatusOK)
+}
+
 // ---------------------------------------------------------------- unbinding
 
 func unbindOwn(c *apitest.Client, kind string) *apitest.Response {

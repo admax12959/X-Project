@@ -12,6 +12,7 @@ func (s *server) meRoutes() {
 	s.route("PATCH /api/me", s.updateMe)
 	s.route("POST /api/me/identities", s.bindOwnIdentity)
 	s.route("DELETE /api/me/identities/{kind}", s.unbindOwnIdentity)
+	s.route("POST /api/users/{id}/identities", s.adminBindIdentity)
 }
 
 func (s *server) unbindOwnIdentity(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +64,24 @@ type bindIdentityBody struct {
 
 func (b bindIdentityBody) input() domain.BindIdentityInput {
 	return domain.BindIdentityInput{Kind: b.Kind, LoginName: b.LoginName, Password: b.Password}
+}
+
+// adminBindIdentity: an administrator binds an identity to any user (user management).
+func (s *server) adminBindIdentity(w http.ResponseWriter, r *http.Request) {
+	id, ok := userIDParam(w, r)
+	if !ok {
+		return
+	}
+	var body bindIdentityBody
+	if !decode(w, r, &body) {
+		return
+	}
+	u, err := s.svc.BindIdentityForUser(r.Context(), actorOf(r), id, body.input())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, toAdminUserJSON(u))
 }
 
 func (s *server) bindOwnIdentity(w http.ResponseWriter, r *http.Request) {

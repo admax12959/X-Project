@@ -120,6 +120,45 @@ func (s *Service) bindLocalIdentity(ctx context.Context, userID UserID, password
 	return s.bindIdentity(ctx, userID, bindSpec{kind: IdentityLocal, hash: hash, via: via})
 }
 
+// BindIdentityForUser is the administrator's bind. Unlike a user binding for themselves,
+// the administrator does not authenticate with the identity: for "ldap" the directory is
+// only asked whether the login name exists (a disabled directory account counts as
+// existing, like in ADR-0004's name check; it simply cannot log in), and for "local"
+// the administrator sets the password. The binding source is "admin".
+func (s *Service) BindIdentityForUser(ctx context.Context, actor Actor, id UserID, in BindIdentityInput) (UserWithIdentities, error) {
+	if err := requireAdmin(actor); err != nil {
+		return UserWithIdentities{}, err
+	}
+	var c Collector
+	s.checkBindableKind(&c, in.Kind)
+	in.LoginName = strings.TrimSpace(in.LoginName)
+	if err := c.Err(); err != nil {
+		return UserWithIdentities{}, err
+	}
+	if in.Kind == string(IdentityLocal) {
+		return s.bindLocalIdentity(ctx, id, in.Password, BoundViaAdmin)
+	}
+	if !c.Required("loginName", in.LoginName) {
+		return UserWithIdentities{}, c.Err()
+	}
+
+	res := s.directory.Lookup(ctx, in.LoginName)
+	spec := bindSpec{kind: IdentityLDAP, loginName: in.LoginName, via: BoundViaAdmin}
+	switch res.Outcome {
+	case DirectoryOK:
+		spec.entry = &res.Entry
+	case DirectoryDisabled: // exists; nothing current to sync
+	case DirectoryNotFound:
+		return UserWithIdentities{}, Validation(Invalid("loginName", CodeLdapAccountNotFound, nil))
+	default: // unreachable or anything unexpected: fail closed
+		return UserWithIdentities{}, ldapUnreachable()
+	}
+	if login := strings.TrimSpace(res.Entry.Login); login != "" {
+		spec.loginName = login
+	}
+	return s.bindIdentity(ctx, id, spec)
+}
+
 // bindIdentity adds the identity inside one transaction, with the user row locked so
 // that two concurrent binds cannot both pass the checks.
 func (s *Service) bindIdentity(ctx context.Context, userID UserID, sp bindSpec) (UserWithIdentities, error) {
