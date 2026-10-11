@@ -31,6 +31,9 @@ type UserRepository interface {
 	// Returns ErrUsernameTaken on a conflict.
 	RenameLocalLogin(ctx context.Context, id UserID, loginName string) error
 	SetUserStatus(ctx context.Context, id UserID, status UserStatus, at time.Time) error
+	// ReadUsersLocked reads the given users (those that exist) under a shared lock, taken
+	// in ID order, so that none of them can be disabled until the transaction ends.
+	ReadUsersLocked(ctx context.Context, ids []UserID) (map[UserID]User, error)
 }
 
 // requireAdmin is the permission check for every user-management operation.

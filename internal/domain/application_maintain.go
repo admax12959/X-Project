@@ -134,13 +134,7 @@ type UpdateMembersInput struct {
 func (s *Service) UpdateMembers(ctx context.Context, actor Actor, key string, in UpdateMembersInput) (Application, error) {
 	var result Application
 	err := s.repo.InTx(ctx, func(tx Repository) error {
-		app, err := s.lockApplicationByKey(ctx, tx, key)
-		if err != nil {
-			return err
-		}
-		if !actor.User.IsAdmin && !isOwner(actor, app) {
-			return forbidden()
-		}
+		// Parse first: the people named are locked before the application row (see lockMembers).
 		var c Collector
 		var owners, pes []UserID
 		if in.Owners == nil || len(*in.Owners) == 0 {
@@ -153,11 +147,27 @@ func (s *Service) UpdateMembers(ctx context.Context, actor Actor, key string, in
 		} else {
 			pes = parseUserIDs(&c, "pes", *in.PEs)
 		}
+		if _, found, err := tx.GetApplicationByKey(ctx, key); err != nil {
+			return err
+		} else if !found {
+			return newKind(KindNotFound, CodeNotFound)
+		}
+		users, err := s.lockMembers(ctx, tx, owners, pes)
+		if err != nil {
+			return err
+		}
+		app, err := s.lockApplicationByKey(ctx, tx, key)
+		if err != nil {
+			return err
+		}
+		if !actor.User.IsAdmin && !isOwner(actor, app) {
+			return forbidden()
+		}
 		if err := c.Err(); err != nil {
 			return err
 		}
 		oldOwners, oldPEs := userIDsOf(app.Owners), userIDsOf(app.PEs)
-		if err := s.checkMembers(ctx, tx, "owners", without(owners, oldOwners), "pes", without(pes, oldPEs)); err != nil {
+		if err := checkMembers(users, owners, oldOwners, pes, oldPEs); err != nil {
 			return err
 		}
 		lists := []struct {

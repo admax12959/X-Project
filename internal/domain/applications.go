@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -174,7 +175,11 @@ func (s *Service) CreateApplication(ctx context.Context, actor Actor, in CreateA
 	}
 	var created Application
 	err = s.repo.InTx(ctx, func(tx Repository) error {
-		if err := s.checkMembers(ctx, tx, "owners", owners, "pes", pes); err != nil {
+		users, err := s.lockMembers(ctx, tx, owners, pes)
+		if err != nil {
+			return err
+		}
+		if err := checkMembers(users, owners, nil, pes, nil); err != nil {
 			return err
 		}
 		now := s.nowUTC()
@@ -212,23 +217,40 @@ func (s *Service) CreateApplication(ctx context.Context, actor Actor, in CreateA
 
 const maxDescriptionLength = 4000
 
-// checkMembers requires every Owner/PE to be an existing, enabled user (spec:
-// Owner/PE can only be chosen from enabled users; an LDAP user must log in once first).
-func (s *Service) checkMembers(ctx context.Context, tx Repository, ownersField string, owners []UserID, pesField string, pes []UserID) error {
+// lockMembers reads every person named in the lists under a shared lock (in ID order), so
+// nobody can be disabled until the transaction ends. Take it before locking the
+// application row: disabling a user locks the user first and the applications second.
+func (s *Service) lockMembers(ctx context.Context, tx Repository, lists ...[]UserID) (map[UserID]User, error) {
+	var ids []UserID
+	for _, l := range lists {
+		for _, id := range l {
+			if !slices.Contains(ids, id) {
+				ids = append(ids, id)
+			}
+		}
+	}
+	slices.Sort(ids)
+	return tx.ReadUsersLocked(ctx, ids)
+}
+
+// checkMembers applies the Owner/PE rules to the final lists. users is what lockMembers
+// returned. Anyone newly added (not in oldOwners / oldPEs) must be an existing enabled
+// user (an LDAP user must log in once first); someone already listed may stay even if
+// disabled since. After the change at least one enabled Owner must remain.
+func checkMembers(users map[UserID]User, owners, oldOwners, pes, oldPEs []UserID) error {
 	var c Collector
 	for _, list := range []struct {
-		field string
-		ids   []UserID
-	}{{ownersField, owners}, {pesField, pes}} {
-		for _, id := range list.ids {
-			u, found, err := tx.GetUser(ctx, id)
-			if err != nil {
-				return err
-			}
-			if !found || u.Status != UserEnabled {
+		field    string
+		ids, old []UserID
+	}{{"owners", owners, oldOwners}, {"pes", pes, oldPEs}} {
+		for _, id := range without(list.ids, list.old) {
+			if u, found := users[id]; !found || u.Status != UserEnabled {
 				c.Add(list.field, CodeUserUnavailable, map[string]any{"userId": strconv.FormatInt(int64(id), 10)})
 			}
 		}
+	}
+	if c.Err() == nil && !slices.ContainsFunc(owners, func(id UserID) bool { return users[id].Status == UserEnabled }) {
+		c.Add("owners", CodeNoEnabledOwner, nil)
 	}
 	return c.Err()
 }

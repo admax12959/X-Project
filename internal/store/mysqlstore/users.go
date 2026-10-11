@@ -118,3 +118,28 @@ func (s *Store) ListUsers(ctx context.Context) ([]domain.UserWithIdentities, err
 	}
 	return out, idRows.Err()
 }
+
+func (s *Store) ReadUsersLocked(ctx context.Context, ids []domain.UserID) (map[domain.UserID]domain.User, error) {
+	out := map[domain.UserID]domain.User{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.q.QueryContext(ctx,
+		"SELECT "+userCols+" FROM users WHERE id IN (?"+strings.Repeat(",?", len(ids)-1)+") ORDER BY id FOR SHARE", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		out[u.ID] = u
+	}
+	return out, rows.Err()
+}

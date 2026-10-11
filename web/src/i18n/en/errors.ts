@@ -25,6 +25,7 @@ export default {
   'error.ldapLoginNotFound': 'The LDAP directory has no such login name.',
   'error.keyTaken': 'This application key is already in use.',
   'error.userUnavailable': 'This user does not exist or is disabled. Choose an enabled user.',
+  'error.noEnabledOwner': 'At least one Owner must be enabled. Add an enabled user as Owner.',
   'error.soleOwner': 'This user is the only Owner of: {applications}. Hand these applications over to another Owner before disabling the user.',
   'error.numberTaken': 'This version number is already used by a version on {line}, released {releasedAt}.',
   'error.branchTaken': 'This Git branch is already used by {line}.',
