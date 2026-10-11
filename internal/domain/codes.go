@@ -36,6 +36,9 @@ const (
 	CodeKeyTaken        = "keyTaken"        // another application already has this key
 	CodeUserUnavailable = "userUnavailable" // Owner/PE is not an existing enabled user; params {userId}
 
+	// versions
+	CodeNumberTaken = "numberTaken" // field "number"; params {line: {id,isMain,name,branch}, releasedAt: "YYYY-MM-DD"} of the version that has it
+
 	// repository binding (field "repo.path" / "repo.platformId")
 	CodeRepoNotFound        = "repoNotFound"        // the platform has no repository at this path
 	CodeRepoForbidden       = "repoForbidden"       // the platform token cannot access this repository

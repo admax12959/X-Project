@@ -24,6 +24,7 @@ export default {
   'error.ldapLoginNotFound': 'LDAP 目录中没有这个登录名。',
   'error.keyTaken': '该应用标识已被使用。',
   'error.userUnavailable': '该用户不存在或已被禁用，请选择已启用的用户。',
+  'error.numberTaken': '该版本号已被{line}上的版本使用，发布时间 {releasedAt}。',
   'error.repoNotFound': '代码平台上找不到这个仓库，请检查仓库路径。',
   'error.repoForbidden': '代码平台的令牌无权访问这个仓库。',
   'error.platformUnreachable': '无法连接代码平台，请稍后再试。',

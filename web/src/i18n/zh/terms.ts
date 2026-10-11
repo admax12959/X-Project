@@ -22,4 +22,5 @@ export default {
   'term.overview': '概览',
   'term.essentials': '基本信息',
   'term.changeHistory': '变更历史',
+  'term.versions': '版本',
 };

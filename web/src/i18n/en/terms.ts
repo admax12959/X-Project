@@ -23,4 +23,5 @@ export default {
   'term.overview': 'Overview',
   'term.essentials': 'Essentials',
   'term.changeHistory': 'Change history',
+  'term.versions': 'Versions',
 };

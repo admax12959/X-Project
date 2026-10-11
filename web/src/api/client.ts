@@ -16,10 +16,12 @@ import type {
   LoginInput,
   LoginMethod,
   Repo,
+  RegisterVersionInput,
   RepoInput,
   SessionInfo,
   UpdateMeInput,
   UpdateUserInput,
+  Version,
 } from './types.ts';
 
 /** Thrown for every non-2xx response (and network failures, status 0, code "network"). */
@@ -81,6 +83,14 @@ export const api = {
     /** 404 notFound for an unknown key. */
     get: (key: string) => request<Application>('GET', `/api/applications/${encodeURIComponent(key)}`),
     lines: (key: string) => request<List<Line>>('GET', `/api/applications/${encodeURIComponent(key)}/lines`),
+    /** Versions on all lines, latest release date first. */
+    versions: (key: string) => request<List<Version>>('GET', `/api/applications/${encodeURIComponent(key)}/versions`),
+    /**
+     * Owners only (403 otherwise). 422 field errors: number (required, tooLong, numberTaken with params
+     * {line, releasedAt}), ref.kind, ref.value, releasedAt, note.
+     */
+    registerVersion: (key: string, lineId: string, input: RegisterVersionInput) =>
+      request<Version>('POST', `/api/applications/${encodeURIComponent(key)}/lines/${encodeURIComponent(lineId)}/versions`, { body: input }),
     /** Newest first. */
     history: (key: string) => request<List<ChangeEvent>>('GET', `/api/applications/${encodeURIComponent(key)}/history`),
     /** Administrators only. 422 field errors: key, name, mainBranch, owners, pes, repo.platformId, repo.path. */

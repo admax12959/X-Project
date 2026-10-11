@@ -26,6 +26,9 @@ type EventType string
 const (
 	// EventAppCreated: application created. Params: owners = [userParam].
 	EventAppCreated EventType = "appCreated"
+	// EventVersionRegistered: version registered on a line. Params: number,
+	// line = {id, isMain, name, branch} as the line was when it happened.
+	EventVersionRegistered EventType = "versionRegistered"
 )
 
 // event is a change-history entry that has not been written yet. Build it with
@@ -41,6 +44,10 @@ func appCreatedEvent(owners []UserID) event {
 		refs[i] = userParam(id)
 	}
 	return event{EventAppCreated, map[string]any{"owners": refs}}
+}
+
+func versionRegisteredEvent(number string, line Line) event {
+	return event{EventVersionRegistered, map[string]any{"number": number, "line": lineParam(line)}}
 }
 
 // userParam is the params form of a reference to a user.
