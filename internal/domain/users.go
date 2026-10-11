@@ -73,13 +73,7 @@ func (s *Service) CreateLocalUser(ctx context.Context, actor Actor, in CreateLoc
 	in.Department = strings.TrimSpace(in.Department)
 	checkUsername(&c, in.Username)
 	checkProfile(&c, in.DisplayName, in.Email, in.Phone, in.Department)
-	if in.Password == "" {
-		c.Add("password", CodeRequired, nil)
-	} else if utf8.RuneCountInString(in.Password) < minPasswordLength {
-		c.Add("password", CodeTooShort, map[string]any{"min": minPasswordLength})
-	} else if len(in.Password) > maxPasswordBytes {
-		c.Add("password", CodeTooLong, map[string]any{"max": maxPasswordBytes})
-	}
+	checkNewPassword(&c, in.Password)
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
 	}
@@ -312,6 +306,17 @@ func checkUsername(c *Collector, username string) {
 		c.Add("username", CodeRequired, nil)
 	} else if !usernamePattern.MatchString(username) {
 		c.Add("username", CodeInvalid, nil)
+	}
+}
+
+// checkNewPassword validates a password being set for a local identity.
+func checkNewPassword(c *Collector, password string) {
+	if password == "" {
+		c.Add("password", CodeRequired, nil)
+	} else if utf8.RuneCountInString(password) < minPasswordLength {
+		c.Add("password", CodeTooShort, map[string]any{"min": minPasswordLength})
+	} else if len(password) > maxPasswordBytes {
+		c.Add("password", CodeTooLong, map[string]any{"max": maxPasswordBytes})
 	}
 }
 

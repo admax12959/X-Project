@@ -266,6 +266,35 @@ func TestAUserHasAtMostOneIdentityOfEachType(t *testing.T) {
 	}
 }
 
+func TestLDAPUserBindsALocalPasswordIdentityAndThenLogsInWithEither(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	addEmma(env)
+	emma := env.Client()
+	emmaUser := userOf(t, loginLDAP(emma, "elarsen", "ldap-pw"))
+
+	// The local login name is always the username; only the password is chosen.
+	bindOwn(emma, map[string]any{"kind": "local", "password": "short"}).ExpectError(http.StatusUnprocessableEntity, "password", "tooShort")
+	bindOwn(emma, map[string]any{"kind": "local", "password": ""}).ExpectError(http.StatusUnprocessableEntity, "password", "required")
+
+	var me meBody
+	bindOwn(emma, map[string]any{"kind": "local", "password": "emma-local-pw-1"}).ExpectStatus(http.StatusCreated).JSON(&me)
+	if len(me.Identities) != 2 || me.Identities[1].Kind != "local" || me.Identities[1].LoginName != "elarsen" || me.Identities[1].BoundVia != "self" {
+		t.Fatalf("identities = %+v, want ldap then a local identity named after the username, bound by self", me.Identities)
+	}
+	if u := userOf(t, env.Client().LoginLocal("elarsen", "emma-local-pw-1")); u.ID != emmaUser.ID {
+		t.Fatalf("local login opened user %s, want %s", u.ID, emmaUser.ID)
+	}
+	bindOwn(emma, map[string]any{"kind": "local", "password": "other-local-pw-2"}).ExpectError(http.StatusUnprocessableEntity, "kind", "identityKindBound")
+}
+
+func TestUnknownIdentityKindCannotBeBound(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	jane, _ := localJane(t, env)
+	bindOwn(jane, map[string]any{"kind": "kerberos", "loginName": "jdoe", "password": "x"}).ExpectError(http.StatusUnprocessableEntity, "kind", "invalid")
+}
+
 func TestAnIdentityHeldByAnotherUserCannotBeBound(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)

@@ -37,7 +37,6 @@ type bindSpec struct {
 
 func (s *Service) checkBindableKind(c *Collector, kind string) {
 	allowed := s.LoginMethods()
-	allowed = slices.DeleteFunc(allowed, func(k string) bool { return k == string(IdentityLocal) }) // local: next slice
 	if !slices.Contains(allowed, kind) {
 		c.Add("kind", CodeInvalid, map[string]any{"allowed": allowed})
 	}
@@ -50,6 +49,9 @@ func (s *Service) BindOwnIdentity(ctx context.Context, actor Actor, in BindIdent
 	in.LoginName = strings.TrimSpace(in.LoginName)
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
+	}
+	if in.Kind == string(IdentityLocal) {
+		return s.bindLocalIdentity(ctx, actor.User.ID, in.Password, BoundViaSelf)
 	}
 	c.Required("loginName", in.LoginName)
 	if in.Password == "" {
@@ -76,6 +78,23 @@ func (s *Service) BindOwnIdentity(ctx context.Context, actor Actor, in BindIdent
 	return s.bindIdentity(ctx, actor.User.ID, bindSpec{kind: IdentityLDAP, loginName: login, via: BoundViaSelf, entry: &entry})
 }
 
+// bindLocalIdentity gives the user a local password identity. Its login name is the
+// user's username (so a rename keeps them in step), the password is the one given:
+// there is no existing credential to authenticate with, the user is already logged in.
+func (s *Service) bindLocalIdentity(ctx context.Context, userID UserID, password string, via BoundVia) (UserWithIdentities, error) {
+	var c Collector
+	checkNewPassword(&c, password)
+	if err := c.Err(); err != nil {
+		return UserWithIdentities{}, err
+	}
+	hash, err := hashPassword(password)
+	if err != nil {
+		return UserWithIdentities{}, err
+	}
+	// loginName stays empty: bindIdentity uses the username it reads under the lock.
+	return s.bindIdentity(ctx, userID, bindSpec{kind: IdentityLocal, hash: hash, via: via})
+}
+
 // bindIdentity adds the identity inside one transaction, with the user row locked so
 // that two concurrent binds cannot both pass the checks.
 func (s *Service) bindIdentity(ctx context.Context, userID UserID, sp bindSpec) (UserWithIdentities, error) {
@@ -90,6 +109,9 @@ func (s *Service) bindIdentity(ctx context.Context, userID UserID, sp bindSpec) 
 		}
 		if cur.hasIdentity(sp.kind) {
 			return Validation(Invalid("kind", CodeIdentityKindBound, nil))
+		}
+		if sp.kind == IdentityLocal {
+			sp.loginName = cur.User.Username
 		}
 		if _, held, err := tx.FindIdentity(ctx, sp.kind, sp.loginName); err != nil {
 			return err
