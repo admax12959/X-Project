@@ -48,6 +48,11 @@ export default {
   'error.departmentNotEmpty': 'This department still has {members} users and {children} sub-departments. Move or reassign them first.',
   'error.mailNotConfigured': 'Email is not configured. Ask an administrator to set up the mail service.',
   'error.siteUrlRequired': 'The site’s external address is not configured, so the email links cannot be built. Ask an administrator to set it on the Email page.',
+  'error.tokenInvalid': 'This link is not valid. Ask for a new one.',
+  'error.tokenExpired': 'This link has expired. Ask for a new one.',
+  'error.tokenUsed': 'This link has already been used. If you still need to set a password, ask for a new one.',
+  'error.rateLimited': 'Too many requests. Please try again later.',
+  'error.inviteNotPending': 'This user has already set a password, so there is no invitation to send.',
   'error.noContactEmail': 'Your account has no contact email to send the test message to.',
   'error.smtpUnreachable': 'Cannot connect to the mail server. Check the host, the port and the network.',
   'error.smtpTlsFailed': 'The secure connection to the mail server failed. Check the encryption setting and the server certificate (add your own CA if it is a private one).',
@@ -63,5 +68,4 @@ export default {
   'error.storageUnavailable': 'The object storage is unavailable. An administrator should check the Storage page.',
   'error.avatarTooLarge': 'The picture is larger than 2 MB, or has too many pixels. Choose a smaller one.',
   'error.avatarUnsupportedType': 'Only JPEG, PNG and WebP pictures can be used as an avatar.',
-  'error.rateLimited': 'Too many attempts. Please try again in a few minutes.',
 };

@@ -211,7 +211,7 @@ func (s *Service) bindIdentity(ctx context.Context, userID UserID, sp bindSpec) 
 			return taken()
 		}
 		ident := LoginIdentity{
-			UserID: userID, Kind: sp.kind, LoginName: sp.loginName, PasswordHash: sp.hash,
+			UserID: userID, Kind: sp.kind, LoginName: sp.loginName, PasswordHash: sp.hash, PasswordSet: sp.hash != "",
 			BoundAt: s.nowUTC(), BoundVia: sp.via, MustChangePassword: sp.kind == IdentityEmail,
 		}
 		if err := tx.CreateIdentity(ctx, ident); errors.Is(err, ErrIdentityTaken) { // lost a race for the login name

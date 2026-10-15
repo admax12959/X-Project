@@ -82,7 +82,51 @@ func (s *server) loginMethods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, listJSON[string]{Items: methods})
+	recovery, err := s.svc.PasswordRecoveryAvailable(r.Context())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, loginMethodsJSON{Items: methods, PasswordRecovery: recovery})
+}
+
+// loginMethodsJSON is the login page's view of the system: the methods it may offer and
+// whether "forgot password" can work (it needs mail).
+type loginMethodsJSON struct {
+	Items            []string `json:"items"`
+	PasswordRecovery bool     `json:"passwordRecovery"`
+}
+
+// requestPasswordRecovery answers 202 whatever the address is (see Service.RequestPasswordRecovery).
+func (s *server) requestPasswordRecovery(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.svc.RequestPasswordRecovery(r.Context(), body.Email, domain.ClientIP(r.RemoteAddr)); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// setPassword is the set-password page of invitations and recovery: the token from the mail
+// and the new password. It opens no session; the user logs in afterwards.
+func (s *server) setPassword(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Token    string `json:"token"`
+		Password string `json:"password"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.svc.SetPasswordWithToken(r.Context(), body.Token, body.Password); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) currentSession(w http.ResponseWriter, r *http.Request) {

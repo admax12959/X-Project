@@ -107,7 +107,7 @@ func TestEveryAPIRouteRequiresASessionUnlessPublic(t *testing.T) {
 	routes, public := registeredRoutes(t)
 
 	// The only routes reachable without a session. Adding one is a deliberate decision.
-	wantPublic := []string{"GET /api/healthz", "GET /api/login-methods", "POST /api/session"}
+	wantPublic := []string{"GET /api/healthz", "GET /api/login-methods", "POST /api/password-recovery", "POST /api/password-setup", "POST /api/session"}
 	slices.Sort(public)
 	if !slices.Equal(public, wantPublic) {
 		t.Fatalf("public routes = %v, want %v", public, wantPublic)

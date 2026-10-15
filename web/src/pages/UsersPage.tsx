@@ -62,6 +62,18 @@ export function UsersPage() {
   const replace = (u: AdminUser) => setLoad({ status: 'ok', items: items.map((x) => (x.id === u.id ? u : x)) });
   const append = (u: AdminUser) => setLoad({ status: 'ok', items: [...items, u] });
 
+  const [notice, setNotice] = useState<string | null>(null);
+  const sendInvitation = async (u: AdminUser) => {
+    setActionError(null);
+    setNotice(null);
+    try {
+      await api.users.sendInvitation(u.id);
+      setNotice(t('users.invite.sent', { email: u.identities.find((i) => i.kind === 'email')?.loginName ?? u.email }));
+    } catch (err) {
+      setActionError(err);
+    }
+  };
+
   const changeStatus = async (u: AdminUser) => {
     setActionError(null);
     setActionUser(u);
@@ -96,6 +108,12 @@ export function UsersPage() {
         />
         {departmentFilter && <span className="text-[13px] text-text-3">{t('users.filter.includesBelow')}</span>}
       </div>
+
+      {notice !== null && (
+        <div role="status" className="rounded border border-line bg-white px-3 py-2 text-[13px] text-text-2">
+          {notice}
+        </div>
+      )}
 
       {actionError !== null && (
         <div role="alert" className="rounded border border-danger/40 bg-danger/5 px-3 py-2 text-[13px] text-danger">
@@ -147,7 +165,9 @@ export function UsersPage() {
                 <td className={td}>{pathLabel(departments ?? [], u.departmentId)}</td>
                 <td className={td}>{u.directoryDepartment}</td>
                 <td className={`${td} ${u.status === 'enabled' ? 'text-ok' : 'text-text-3'}`}>{t(`users.status.${u.status}`)}</td>
-                <td className={td}>{[...new Set(u.identities.map((i) => i.kind))].map((k) => t(`users.identity.${k}`)).join(' · ')}</td>
+                <td className={td}>{[...new Set(u.identities.map((i) => i.kind))].map((k) => t(`users.identity.${k}`)).join(' · ')}
+                  {u.identities.some((i) => i.invitePending) && <span className="ml-2 text-[13px] text-text-3">{t('users.invite.pending')}</span>}
+                </td>
                 <td className={`${td} whitespace-nowrap`}>
                   <span className="inline-flex gap-2">
                     <Button small onClick={() => setDialog(u)}>
@@ -156,6 +176,11 @@ export function UsersPage() {
                     {missingKinds(u).length > 0 && (
                       <Button small onClick={() => setBindFor(u)}>
                         {t('users.bindIdentity')}
+                      </Button>
+                    )}
+                    {u.status === 'enabled' && u.identities.some((i) => i.invitePending) && (
+                      <Button small onClick={() => sendInvitation(u)}>
+                        {t('users.invite.send')}
                       </Button>
                     )}
                     <Button small onClick={() => changeStatus(u)}>

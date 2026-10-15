@@ -38,6 +38,7 @@ type App struct {
 func (a *App) Close() {
 	a.stop()
 	a.workers.Wait()
+	a.Service.WaitBackground()
 	_ = a.db.Close()
 }
 

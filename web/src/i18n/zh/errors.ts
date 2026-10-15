@@ -47,6 +47,11 @@ export default {
   'error.departmentNotEmpty': '这个部门下还有 {members} 个用户和 {children} 个下级部门，请先移走或调整。',
   'error.mailNotConfigured': '邮件服务尚未配置。请联系管理员配置邮件服务。',
   'error.siteUrlRequired': '尚未配置站点外部地址，无法生成邮件中的链接。请联系管理员在“邮件”页设置。',
+  'error.tokenInvalid': '该链接无效，请重新获取。',
+  'error.tokenExpired': '该链接已过期，请重新获取。',
+  'error.tokenUsed': '该链接已被使用。如仍需设置密码，请重新获取。',
+  'error.rateLimited': '请求过于频繁，请稍后再试。',
+  'error.inviteNotPending': '该用户已设置密码，无需再发送邀请。',
   'error.noContactEmail': '你的账号没有联系邮箱，无法发送测试邮件。',
   'error.smtpUnreachable': '无法连接邮件服务器，请检查主机、端口和网络。',
   'error.smtpTlsFailed': '与邮件服务器的加密连接失败。请检查加密方式和服务器证书（私有 CA 请填写自定义 CA）。',
@@ -62,5 +67,4 @@ export default {
   'error.storageUnavailable': '对象存储不可用，请管理员检查“存储”页的配置。',
   'error.avatarTooLarge': '图片超过 2 MB 或像素过多，请换一张小一些的。',
   'error.avatarUnsupportedType': '头像只支持 JPEG、PNG 和 WebP 图片。',
-  'error.rateLimited': '操作过于频繁，请几分钟后再试。',
 };

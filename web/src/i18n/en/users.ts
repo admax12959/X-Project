@@ -62,4 +62,9 @@ export default {
   'users.filter.department': 'Filter by department',
   'users.filter.allDepartments': 'All departments',
   'users.filter.includesBelow': 'Includes sub-departments',
+  'users.hint.invite': 'Mail is set up, so the user is invited: they get an email with a link to choose their own password.',
+  'users.invite.submit': 'Create and invite',
+  'users.invite.pending': 'Invited, no password yet',
+  'users.invite.send': 'Send invitation',
+  'users.invite.sent': 'Invitation sent to {email}. The earlier link no longer works.',
 };

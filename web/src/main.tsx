@@ -17,6 +17,8 @@ import { StorageConfigPage } from './pages/StorageConfigPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { PlatformsPage } from './pages/PlatformsPage.tsx';
 import { RolesPage } from './pages/RolesPage.tsx';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage.tsx';
+import { SetPasswordPage } from './pages/SetPasswordPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 import { UsersPage } from './pages/UsersPage.tsx';
 import { VersionsPage } from './pages/VersionsPage.tsx';
@@ -35,11 +37,13 @@ function NotFound() {
   );
 }
 
-// Routes: /login is public; everything else is inside RequireSession + Shell.
+// Routes: /login, /forgot-password and /set-password/:token are public; everything else is inside RequireSession + Shell.
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/set-password/:token" element={<SetPasswordPage />} />
       <Route
         element={
           <RequireSession>

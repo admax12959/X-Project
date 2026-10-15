@@ -68,8 +68,9 @@ func (s *Service) listUsers(ctx context.Context, departmentID string) ([]UserWit
 }
 
 // CreateEmailUserInput is the administrator's request to create a user with an email
-// identity. The login email is also the user's contact email; Password is a temporary
-// one the user must change at the first login.
+// identity. The login email is also the user's contact email. Password is a temporary
+// one the user must change at the first login; it is used only while mail is not configured.
+// With mail configured the user is invited instead and Password is ignored (#21).
 type CreateEmailUserInput struct {
 	Username     string
 	DisplayName  string
@@ -82,6 +83,10 @@ type CreateEmailUserInput struct {
 // CreateEmailUser creates a user with an email identity bound by the administrator. The
 // administrator typed the login email, so it counts as verified. It is the single entry
 // point for creating users that do not come from the directory.
+//
+// When mail is configured the user is created without a password and an invitation mail
+// with a one-time link is queued in the same transaction; the user chooses the password on
+// the set-password page. Without mail the administrator's temporary password is used.
 func (s *Service) CreateEmailUser(ctx context.Context, actor Actor, in CreateEmailUserInput) (UserWithIdentities, error) {
 	if err := requirePermission(actor, PermUserManage); err != nil {
 		return UserWithIdentities{}, err
@@ -94,7 +99,13 @@ func (s *Service) CreateEmailUser(ctx context.Context, actor Actor, in CreateEma
 	checkUsername(&c, in.Username)
 	checkLoginEmail(&c, "loginEmail", in.LoginEmail)
 	checkProfile(&c, in.DisplayName, "", in.Phone)
-	checkNewPassword(&c, in.Password)
+	invite, err := s.MailConfigured(ctx)
+	if err != nil {
+		return UserWithIdentities{}, err
+	}
+	if !invite {
+		checkNewPassword(&c, in.Password)
+	}
 	departmentID := parseDepartmentRef(&c, "departmentId", in.DepartmentID)
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
@@ -105,9 +116,11 @@ func (s *Service) CreateEmailUser(ctx context.Context, actor Actor, in CreateEma
 	if err := s.CheckUsernameFreeInDirectory(ctx, "username", in.Username); err != nil {
 		return UserWithIdentities{}, err
 	}
-	hash, err := hashPassword(in.Password)
-	if err != nil {
-		return UserWithIdentities{}, err
+	hash := "" // an invited user has no password until the link is used
+	if !invite {
+		if hash, err = hashPassword(in.Password); err != nil {
+			return UserWithIdentities{}, err
+		}
 	}
 	var created UserWithIdentities
 	err = s.repo.InTx(ctx, func(tx Repository) error {
@@ -139,7 +152,7 @@ func (s *Service) CreateEmailUser(ctx context.Context, actor Actor, in CreateEma
 		u.ID = id
 		ident := LoginIdentity{
 			UserID: id, Kind: IdentityEmail, LoginName: in.LoginEmail,
-			PasswordHash: hash, BoundAt: now, BoundVia: BoundViaAdmin, MustChangePassword: true,
+			PasswordHash: hash, PasswordSet: hash != "", BoundAt: now, BoundVia: BoundViaAdmin, MustChangePassword: !invite,
 		}
 		created = UserWithIdentities{User: u, Identities: []LoginIdentity{ident}}
 		err = tx.CreateIdentity(ctx, ident)
@@ -151,6 +164,11 @@ func (s *Service) CreateEmailUser(ctx context.Context, actor Actor, in CreateEma
 		}
 		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), userCreatedAudit(id, in.LoginEmail)); err != nil {
 			return err
+		}
+		if invite {
+			if err := s.inviteWithin(ctx, tx, id, in.LoginEmail); err != nil {
+				return err
+			}
 		}
 		if departmentID != 0 {
 			return s.recordAudit(ctx, tx, AuditActorOf(actor), userDepartmentChangedAudit(id, nil, departmentRef(dept)))
@@ -359,6 +377,10 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 			if err := tx.RenameEmailLogin(ctx, id, newLoginEmail); errors.Is(err, ErrIdentityTaken) {
 				return loginEmailTaken("loginEmail")
 			} else if err != nil {
+				return err
+			}
+			// A link mailed to the old address must not work any more.
+			if err := tx.UseUserAuthTokens(ctx, id, passwordTokenPurposes, s.nowUTC()); err != nil {
 				return err
 			}
 			for i := range cur.Identities {

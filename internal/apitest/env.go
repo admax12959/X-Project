@@ -46,6 +46,9 @@ type Env struct {
 	// configurations it was asked to build a store for.
 	Objects      *fakes.ObjectStore
 	ObjectStores *fakes.ObjectStoreFactory
+	// Clock is the application's clock: real time, plus whatever the test added with
+	// env.Clock.Advance(d) (token expiry, rate-limit windows, session expiry). It survives Restart.
+	Clock *fakes.Clock
 
 	server *httptest.Server
 	app    *app.App
@@ -82,7 +85,7 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 	dir := fakes.NewDirectory()
 	objects := fakes.NewObjectStore()
 	e := &Env{t: t, DSN: cfg.Database.DSN, Config: cfg, Directory: dir, Directories: fakes.NewDirectoryFactory(dir), CodePlatforms: fakes.NewCodePlatform(),
-		Mailer: fakes.NewMailer(), Objects: objects, ObjectStores: fakes.NewObjectStoreFactory(objects)}
+		Mailer: fakes.NewMailer(), Objects: objects, ObjectStores: fakes.NewObjectStoreFactory(objects), Clock: fakes.NewClock()}
 	e.start()
 	return e
 }
@@ -116,7 +119,7 @@ func defaultLDAP(cfg *app.Config) {
 
 func (e *Env) start() {
 	e.t.Helper()
-	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms, MailSenders: e.Mailer, ObjectStores: e.ObjectStores})
+	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms, MailSenders: e.Mailer, ObjectStores: e.ObjectStores, Now: e.Clock.Now})
 	if err != nil {
 		e.t.Fatalf("app.Start: %v", err)
 	}
@@ -127,6 +130,13 @@ func (e *Env) start() {
 		a.Close()
 	})
 }
+
+// SettleBackground waits until the mail preparation that password recovery requests started in
+// the background has finished, so a test can assert that something was NOT queued.
+func (e *Env) SettleBackground() { e.app.Service.WaitBackground() }
+
+// URL is the address of the test server, for requests a Client cannot make (a custom Host header).
+func (e *Env) URL() string { return e.server.URL }
 
 // Restart simulates a process restart on the same database. mutate adjusts the
 // configuration for the new process (for example a different admin password).

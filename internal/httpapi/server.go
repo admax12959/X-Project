@@ -49,6 +49,8 @@ func (s *server) routes() {
 	})
 	s.publicRoute("GET /api/login-methods", s.loginMethods)
 	s.publicRoute("POST /api/session", s.login)
+	s.publicRoute("POST /api/password-recovery", s.requestPasswordRecovery)
+	s.publicRoute("POST /api/password-setup", s.setPassword)
 	s.route("GET /api/session", s.currentSession)
 	s.route("DELETE /api/session", s.logout)
 

@@ -64,9 +64,13 @@ type LoginIdentity struct {
 	UserID       UserID
 	Kind         IdentityKind
 	LoginName    string // LDAP: the directory login name; email: the login email, lower case
-	PasswordHash string // email only: bcrypt (salted); empty for LDAP
-	BoundAt      time.Time
-	BoundVia     BoundVia
+	PasswordHash string // email only: bcrypt (salted); empty for LDAP and for an invited user who has not chosen a password. Loaded only where a password is checked.
+	// PasswordSet (email only) is whether the identity has a password. Unlike PasswordHash it is
+	// loaded everywhere, including the user lists; false means the user was invited and the link
+	// has not been used yet.
+	PasswordSet bool
+	BoundAt     time.Time
+	BoundVia    BoundVia
 	// MustChangePassword (email only) is set while the password is one an administrator
 	// chose: a session opened with it can do nothing but change the password and log out.
 	MustChangePassword bool
@@ -91,6 +95,7 @@ type Repository interface {
 	SystemConfigRepository
 	AvatarRepository
 	MailOutboxRepository
+	AuthTokenRepository
 
 	// InTx runs fn in one transaction; fn receives a Repository bound to it.
 	InTx(ctx context.Context, fn func(tx Repository) error) error

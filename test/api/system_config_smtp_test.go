@@ -72,12 +72,13 @@ func TestMailIsNotConfiguredUntilAnAdministratorSavesAnEnabledConfiguration(t *t
 		t.Fatal("mail reported as configured before anything was saved")
 	}
 
+	bob := plainUserClient(t, env, "bob") // created first: once mail is configured, new users are invited instead
 	admin.Put(smtpConfigPath, smtpForm(nil)).ExpectStatus(http.StatusOK)
 	if !mailConfigured(t, admin) {
 		t.Fatal("mail not reported as configured after saving an enabled configuration")
 	}
 	// Any logged-in user may ask (other features decide from it whether they are available).
-	if bob := plainUserClient(t, env, "bob"); !mailConfigured(t, bob) {
+	if !mailConfigured(t, bob) {
 		t.Fatal("a plain user does not see mail as configured")
 	}
 

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -29,6 +30,7 @@ type Service struct {
 	sessionTTL    time.Duration
 	tokens        tokenCipher // encrypts stored secrets; zero value when no SecretKey
 	avatarLimits  uploadLimiter
+	background    sync.WaitGroup // mail preparation after a password recovery request (auth_tokens.go)
 }
 
 // Options configures a Service.
@@ -125,7 +127,7 @@ func (s *Service) Bootstrap(ctx context.Context, admin InitialAdmin) error {
 		}
 		if err := tx.CreateIdentity(ctx, LoginIdentity{
 			UserID: id, Kind: IdentityEmail, LoginName: admin.Email,
-			PasswordHash: hash, BoundAt: now, BoundVia: BoundViaBootstrap,
+			PasswordHash: hash, PasswordSet: true, BoundAt: now, BoundVia: BoundViaBootstrap,
 		}); err != nil {
 			return err
 		}
@@ -199,7 +201,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 		return LoginResult{}, err
 	}
 	hash := dummyHash
-	if found {
+	if found && ident.PasswordHash != "" { // an invited user has no password yet: compare against the dummy, as for an unknown email
 		hash = []byte(ident.PasswordHash)
 	}
 	if bcrypt.CompareHashAndPassword(hash, []byte(in.Password)) != nil || !found {

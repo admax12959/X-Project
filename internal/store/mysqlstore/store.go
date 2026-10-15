@@ -166,7 +166,7 @@ func (s *Store) FindIdentityByUser(ctx context.Context, userID domain.UserID, ki
 	if err != nil {
 		return i, false, err
 	}
-	i.Kind, i.BoundVia, i.PasswordHash = domain.IdentityKind(k), domain.BoundVia(via), hash.String
+	i.Kind, i.BoundVia, i.PasswordHash, i.PasswordSet = domain.IdentityKind(k), domain.BoundVia(via), hash.String, hash.Valid
 	return i, true, nil
 }
 
@@ -194,7 +194,7 @@ func (s *Store) FindIdentity(ctx context.Context, kind domain.IdentityKind, logi
 	if err != nil {
 		return i, false, err
 	}
-	i.Kind, i.BoundVia, i.PasswordHash = domain.IdentityKind(k), domain.BoundVia(via), hash.String
+	i.Kind, i.BoundVia, i.PasswordHash, i.PasswordSet = domain.IdentityKind(k), domain.BoundVia(via), hash.String, hash.Valid
 	return i, true, nil
 }
 

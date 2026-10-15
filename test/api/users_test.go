@@ -22,6 +22,8 @@ type userBody struct {
 		Kind      string `json:"kind"`
 		LoginName string `json:"loginName"`
 		BoundVia  string `json:"boundVia"`
+		// InvitePending: invited by mail, no password chosen yet.
+		InvitePending bool `json:"invitePending"`
 	} `json:"identities"`
 }
 

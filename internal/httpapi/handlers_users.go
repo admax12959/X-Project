@@ -31,6 +31,8 @@ type identityJSON struct {
 	LoginName string `json:"loginName"`
 	BoundAt   string `json:"boundAt"`
 	BoundVia  string `json:"boundVia"`
+	// InvitePending (email identity only): the user was invited and has not set a password yet.
+	InvitePending bool `json:"invitePending,omitempty"`
 }
 
 func toAdminUserJSON(v domain.UserWithIdentities) adminUserJSON {
@@ -47,6 +49,7 @@ func toAdminUserJSON(v domain.UserWithIdentities) adminUserJSON {
 	for _, i := range v.Identities {
 		out.Identities = append(out.Identities, identityJSON{
 			Kind: string(i.Kind), LoginName: i.LoginName, BoundAt: formatTime(i.BoundAt), BoundVia: string(i.BoundVia),
+			InvitePending: i.Kind == domain.IdentityEmail && !i.PasswordSet,
 		})
 	}
 	return out
@@ -56,6 +59,7 @@ func (s *server) userRoutes() {
 	s.route("GET /api/users", s.listUsers)
 	s.route("POST /api/users", s.createUser)
 	s.route("PATCH /api/users/{id}", s.updateUser)
+	s.route("POST /api/users/{id}/invitation", s.sendInvitation)
 	s.route("POST /api/users/{id}/disable", s.statusHandler(s.svc.DisableUser))
 	s.route("POST /api/users/{id}/enable", s.statusHandler(s.svc.EnableUser))
 	// Deliberately no DELETE: users can only be disabled.
@@ -153,4 +157,17 @@ func (s *server) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, toAdminUserJSON(u))
+}
+
+// sendInvitation (re)sends the invitation mail of a user who has not set a password yet.
+func (s *server) sendInvitation(w http.ResponseWriter, r *http.Request) {
+	id, ok := userIDParam(w, r)
+	if !ok {
+		return
+	}
+	if err := s.svc.SendInvitation(r.Context(), actorOf(r), id); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
 }

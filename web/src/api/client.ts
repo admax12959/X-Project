@@ -34,7 +34,7 @@ import type {
   UpdateLineInput,
   List,
   LoginInput,
-  LoginMethod,
+  LoginMethods,
   Repo,
   Role,
   RecentActivity,
@@ -95,7 +95,11 @@ async function request<T>(method: string, path: string, opts: Options = {}): Pro
 export const api = {
   session: {
     /** Public: which login methods the login page may offer. */
-    methods: () => request<List<LoginMethod>>('GET', '/api/login-methods', { expect401: true }),
+    methods: () => request<LoginMethods>('GET', '/api/login-methods', { expect401: true }),
+    /** Public. Always 202 whether or not the address belongs to an account; 422 on a malformed address, 429 rateLimited, 503 mailNotConfigured. */
+    requestPasswordRecovery: (email: string) => request<void>('POST', '/api/password-recovery', { body: { email }, expect401: true }),
+    /** Public: the set-password page of invitations and recovery. 422 on token (tokenInvalid / tokenExpired / tokenUsed) or password (rules). Opens no session. */
+    setPassword: (token: string, password: string) => request<void>('POST', '/api/password-setup', { body: { token, password }, expect401: true }),
     /** Current session; 401 (ApiError) when logged out. */
     get: () => request<SessionInfo>('GET', '/api/session', { expect401: true }),
     /** 401 invalidCredentials, 422 field errors (e.g. usernameTakenByLocal) or 503 ldapUnreachable on failure. A session with mustChangePassword can only change the password and log out. */
@@ -255,6 +259,8 @@ export const api = {
     update: (id: string, input: UpdateUserInput) => request<AdminUser>('PATCH', `/api/users/${id}`, { body: input }),
     disable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/disable`),
     enable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/enable`),
+    /** Sends the invitation mail again; the earlier link stops working. 422 inviteNotPending, 503 mailNotConfigured. */
+    sendInvitation: (id: string) => request<void>('POST', `/api/users/${id}/invitation`),
     /** 422 field errors (identityKindBound, identityTaken, loginEmailTaken, ldapLoginNotFound, password rules); 503 ldapUnreachable. */
     bindIdentity: (id: string, input: BindIdentityInput) => request<AdminUser>('POST', `/api/users/${id}/identities`, { body: input }),
   },

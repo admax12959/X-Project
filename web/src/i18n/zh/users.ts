@@ -62,4 +62,9 @@ export default {
   'users.filter.department': '按部门筛选',
   'users.filter.allDepartments': '所有部门',
   'users.filter.includesBelow': '含下级部门',
+  'users.hint.invite': '邮件服务已配置，所以会向用户发送邀请：用户收到带链接的邮件，自己设置密码。',
+  'users.invite.submit': '创建并邀请',
+  'users.invite.pending': '已邀请，尚未设置密码',
+  'users.invite.send': '发送邀请',
+  'users.invite.sent': '邀请已发送到 {email}，之前的链接已失效。',
 };
