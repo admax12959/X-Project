@@ -60,4 +60,7 @@ export default {
   'error.storageBucketNotFound': '找不到存储桶（或本地目录），请检查存储桶名称、地域和寻址方式。',
   'error.storageFailed': '对象存储不可用，详情见服务器日志。',
   'error.storageUnavailable': '对象存储不可用，请管理员检查“存储”页的配置。',
+  'error.avatarTooLarge': '图片超过 2 MB 或像素过多，请换一张小一些的。',
+  'error.avatarUnsupportedType': '头像只支持 JPEG、PNG 和 WebP 图片。',
+  'error.rateLimited': '操作过于频繁，请几分钟后再试。',
 };

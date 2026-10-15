@@ -1,11 +1,12 @@
 // Personal settings: profile, login identities (bind / unbind), password, interface language.
 import { Dialog } from '@base-ui/react/dialog';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { api } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
 import type { AdminUser, IdentityKind, LoginMethod } from '../api/types.ts';
 import { LOCALES, setLocale, useT, type Locale } from '../i18n/index.ts';
 import { useSession } from '../session/session.tsx';
+import { Avatar } from '../ui/Avatar.tsx';
 import { Button, Empty, Field, Input, Segmented } from '../ui/controls.tsx';
 import { BindIdentityDialog } from './BindIdentityDialog.tsx';
 import { ChangePasswordForm } from './ChangePassword.tsx';
@@ -50,13 +51,14 @@ export function SettingsPage() {
   // Keep the page and the session (top bar name, language) in step with what the server saved.
   const saved = (u: AdminUser) => {
     setLoad({ status: 'ok', me: u });
-    setUser({ id: u.id, username: u.username, displayName: u.displayName, email: u.email, directoryDepartment: u.directoryDepartment, language: u.language, isAdmin: u.isAdmin });
+    setUser({ id: u.id, username: u.username, displayName: u.displayName, email: u.email, directoryDepartment: u.directoryDepartment, language: u.language, isAdmin: u.isAdmin, avatarUrl: u.avatarUrl });
   };
 
   return (
     <>
       <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
       <ProfileSection me={me} onSaved={saved} />
+      <AvatarSection me={me} onSaved={saved} />
       <IdentitiesSection me={me} methods={methods} onChanged={saved} />
       {me.identities.some((i) => i.kind === 'email') && <PasswordSection />}
       <LanguageSection onSaved={saved} />
@@ -142,6 +144,73 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
           )}
         </div>
       </form>
+    </Section>
+  );
+}
+
+// ---------------------------------------------------------------- avatar
+
+// The server accepts 2 MB; checking here only saves a pointless upload. Everything else about
+// the file (type, pixels, orientation) is the server's decision and comes back as an error code.
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+function AvatarSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser) => void }) {
+  const { t } = useT();
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [tooBig, setTooBig] = useState(false);
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
+  const run = async (action: () => Promise<AdminUser>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(await action());
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const choose = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // the same file can be chosen again
+    if (!file) return;
+    setError(null);
+    setTooBig(file.size > AVATAR_MAX_BYTES);
+    if (file.size > AVATAR_MAX_BYTES) return;
+    setPreview(URL.createObjectURL(file)); // shown while uploading
+    await run(() => api.me.uploadAvatar(file));
+    setPreview(null);
+  };
+
+  const message = tooBig ? t('error.avatarTooLarge') : error ? (errorsByField(error).avatar ?? errorsByField(error)[''] ?? '') : '';
+  return (
+    <Section title={t('settings.avatar.title')}>
+      <div className="flex items-center gap-5">
+        <Avatar size="xl" name={me.displayName} url={preview ?? me.avatarUrl} />
+        <div className="grid gap-2">
+          <div className="flex items-center gap-2">
+            <label className={`inline-flex h-8 cursor-pointer items-center rounded border border-line bg-white px-3.5 font-semibold hover:bg-subtle has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent ${busy ? 'pointer-events-none opacity-60' : ''}`}>
+              {busy ? t('settings.avatar.uploading') : me.avatarUrl ? t('settings.avatar.change') : t('settings.avatar.upload')}
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={busy} onChange={choose} />
+            </label>
+            {me.avatarUrl && (
+              <Button disabled={busy} onClick={() => run(() => api.me.removeAvatar())}>
+                {t('settings.avatar.remove')}
+              </Button>
+            )}
+          </div>
+          <p className="text-[12px] text-text-3">{t('settings.avatar.hint')}</p>
+          {message && (
+            <p role="alert" className="text-[13px] text-danger">
+              {message}
+            </p>
+          )}
+        </div>
+      </div>
     </Section>
   );
 }
