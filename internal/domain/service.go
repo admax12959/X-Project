@@ -21,6 +21,7 @@ type Service struct {
 	repo          Repository
 	directories   DirectoryFactory // nil: LDAP is not available; the directory is built from the stored configuration (ldap_config.go)
 	codePlatforms CodePlatformAdapter
+	mailSenders   MailSenderFactory // nil: mail cannot be sent; the sender is built from the stored mail configuration (mail_config.go)
 	now           func() time.Time
 	sessionTTL    time.Duration
 	tokens        tokenCipher // encrypts stored secrets; zero value when no SecretKey
@@ -30,7 +31,8 @@ type Service struct {
 type Options struct {
 	DirectoryFactory DirectoryFactory
 	CodePlatforms    CodePlatformAdapter
-	Now              func() time.Time // defaults to time.Now
+	MailSenders      MailSenderFactory
+	Now            func() time.Time // defaults to time.Now
 	SessionTTL       time.Duration
 	SecretKey        string // the master key: encrypts stored secrets; the app refuses to start without it
 	SecretKeyVersion int    // version of the master key, recorded with every stored secret; default 1
@@ -47,7 +49,7 @@ func NewService(repo Repository, o Options) *Service {
 	if o.SecretKeyVersion > 0 {
 		tokens.version = o.SecretKeyVersion
 	}
-	return &Service{repo: repo, directories: o.DirectoryFactory, codePlatforms: o.CodePlatforms, now: o.Now, sessionTTL: o.SessionTTL, tokens: tokens}
+	return &Service{repo: repo, directories: o.DirectoryFactory, codePlatforms: o.CodePlatforms, mailSenders: o.MailSenders, now: o.Now, sessionTTL: o.SessionTTL, tokens: tokens}
 }
 
 func (s *Service) nowUTC() time.Time { return s.now().UTC().Truncate(time.Microsecond) }

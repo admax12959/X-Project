@@ -19,6 +19,7 @@ import (
 type Deps struct {
 	Directories   domain.DirectoryFactory    // builds the LDAP directory from the stored configuration; nil = LDAP unavailable
 	CodePlatforms domain.CodePlatformAdapter // nil = no platform adapter available
+	MailSenders   domain.MailSenderFactory   // builds the SMTP sender from the stored mail configuration; nil = mail cannot be sent
 	Now           func() time.Time           // nil = time.Now
 }
 
@@ -46,7 +47,7 @@ func Start(ctx context.Context, cfg Config, deps Deps) (*App, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	svc := domain.NewService(mysqlstore.New(db), domain.Options{
-		DirectoryFactory: deps.Directories, CodePlatforms: deps.CodePlatforms, Now: deps.Now, SessionTTL: cfg.Session.TTL,
+		DirectoryFactory: deps.Directories, CodePlatforms: deps.CodePlatforms, MailSenders: deps.MailSenders, Now: deps.Now, SessionTTL: cfg.Session.TTL,
 		SecretKey: masterKey, SecretKeyVersion: cfg.SecretKeyVersion,
 	})
 	if err := svc.Bootstrap(ctx, domain.InitialAdmin{

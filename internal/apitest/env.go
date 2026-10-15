@@ -35,6 +35,9 @@ type Env struct {
 	// configuration; it always returns Directory and records the configurations it was given.
 	Directories   *fakes.DirectoryFactory
 	CodePlatforms *fakes.CodePlatform
+	// Mailer is the fake SMTP side: the application builds its sender from the saved mail
+	// configuration through it, and it records the messages that would have been delivered.
+	Mailer *fakes.Mailer
 
 	server *httptest.Server
 }
@@ -55,7 +58,7 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 		m(&cfg)
 	}
 	dir := fakes.NewDirectory()
-	e := &Env{t: t, DSN: cfg.Database.DSN, Config: cfg, Directory: dir, Directories: fakes.NewDirectoryFactory(dir), CodePlatforms: fakes.NewCodePlatform()}
+	e := &Env{t: t, DSN: cfg.Database.DSN, Config: cfg, Directory: dir, Directories: fakes.NewDirectoryFactory(dir), CodePlatforms: fakes.NewCodePlatform(), Mailer: fakes.NewMailer()}
 	e.start()
 	return e
 }
@@ -89,7 +92,7 @@ func defaultLDAP(cfg *app.Config) {
 
 func (e *Env) start() {
 	e.t.Helper()
-	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms})
+	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms, MailSenders: e.Mailer})
 	if err != nil {
 		e.t.Fatalf("app.Start: %v", err)
 	}
