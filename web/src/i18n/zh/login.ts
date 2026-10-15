@@ -8,4 +8,6 @@ export default {
   'login.method': '登录方式',
   'login.method.ldap': 'LDAP',
   'login.method.email': '邮箱和密码',
+  'login.forgot': '忘记密码？',
+  'login.forgot.unavailable': '找回密码需要邮件服务，当前系统尚未配置。请联系管理员处理。',
 };

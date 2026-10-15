@@ -27,6 +27,9 @@ export type SessionInfo = { user: User; mustChangePassword: boolean };
 
 export type LoginMethod = 'email' | 'ldap';
 
+/** What the login page needs to know: the methods it may offer, and whether "forgot password" can work (it needs mail). */
+export type LoginMethods = { items: LoginMethod[]; passwordRecovery: boolean };
+
 /** email: the login email (not the username). ldap: the directory login name. */
 export type LoginInput = { method: 'email'; email: string; password: string } | { method: 'ldap'; username: string; password: string };
 
@@ -195,7 +198,14 @@ export type IdentityKind = 'email' | 'ldap';
 /** How an identity got attached to its user. */
 export type BoundVia = 'firstLogin' | 'self' | 'admin' | 'bootstrap';
 
-export type LoginIdentity = { kind: IdentityKind; loginName: string; boundAt: string; boundVia: BoundVia };
+export type LoginIdentity = {
+  kind: IdentityKind;
+  loginName: string;
+  boundAt: string;
+  boundVia: BoundVia;
+  /** Email identity only: invited by mail and no password chosen yet. */
+  invitePending?: boolean;
+};
 
 /**
  * Bind a login identity. ldap: loginName (+ password when binding your own: you
@@ -218,7 +228,8 @@ export type CreateUserInput = {
   displayName: string;
   loginEmail: string;
   phone: string;
-  password: string;
+  /** The temporary password; used only while mail is not configured. With mail the user is invited and the password is ignored. */
+  password?: string;
   /** Empty or left out = no department. */
   departmentId?: string;
 };

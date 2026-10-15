@@ -8,4 +8,6 @@ export default {
   'login.method': 'Sign-in method',
   'login.method.ldap': 'LDAP',
   'login.method.email': 'Email and password',
+  'login.forgot': 'Forgot password?',
+  'login.forgot.unavailable': 'Password recovery needs email, which is not set up on this system. Ask an administrator to reset your access.',
 };

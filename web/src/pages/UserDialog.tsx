@@ -1,6 +1,6 @@
 // Create-user and edit-user dialog for the administrator's user page.
 import { Dialog } from '@base-ui/react/dialog';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
 import type { AdminUser, UpdateUserInput } from '../api/types.ts';
@@ -25,6 +25,15 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
     password: '',
   });
   const [isAdmin, setIsAdmin] = useState(user?.isAdmin ?? false);
+  // Whether mail can be sent: then a new user is invited by mail instead of getting a temporary password. null = not known yet.
+  const [mailOn, setMailOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (editing) return;
+    api.mail.status().then(
+      (r) => setMailOn(r.configured),
+      () => setMailOn(false),
+    );
+  }, [editing]);
   const departments = useDepartments();
   const [departmentId, setDepartmentId] = useState(user?.departmentId ?? '');
   // Keep the raw error and render at render time so messages follow a language switch.
@@ -50,7 +59,8 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
         if (isAdmin !== user.isAdmin) changes.isAdmin = isAdmin;
         saved = await api.users.update(user.id, changes);
       } else {
-        saved = await api.users.create(departmentId ? { ...form, departmentId } : form);
+        const { password, ...rest } = form;
+        saved = await api.users.create({ ...rest, ...(mailOn ? {} : { password }), ...(departmentId ? { departmentId } : {}) });
       }
       onSaved(saved);
     } catch (err) {
@@ -117,7 +127,8 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
                 <Hint>{t('users.hint.isAdmin')}</Hint>
               </Field>
             )}
-            {!editing && (
+            {!editing && mailOn === true && <Hint>{t('users.hint.invite')}</Hint>}
+            {!editing && mailOn === false && (
               <Field label={t('users.field.password')} error={errors.password}>
                 <Input name="password" type="password" autoComplete="new-password" value={form.password} onChange={set('password')} />
                 <Hint>{t('users.hint.tempPassword')}</Hint>
@@ -127,8 +138,8 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
               <Button type="button" onClick={onClose}>
                 {t('users.cancel')}
               </Button>
-              <Button kind="primary" type="submit" disabled={busy}>
-                {busy ? t('users.saving') : t('users.save')}
+              <Button kind="primary" type="submit" disabled={busy || (!editing && mailOn === null)}>
+                {busy ? t('users.saving') : !editing && mailOn ? t('users.invite.submit') : t('users.save')}
               </Button>
             </div>
           </form>

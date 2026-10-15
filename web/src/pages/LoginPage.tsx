@@ -1,6 +1,6 @@
 // Login page: email + password, or LDAP when the server has a directory configured.
 import { useEffect, useState, type FormEvent } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
 import type { LoginMethod } from '../api/types.ts';
@@ -22,6 +22,8 @@ export function LoginPage() {
   const next = safeNext(params.get('next'));
   // null until GET /api/login-methods answers; if it fails, offer email login only.
   const [methods, setMethods] = useState<LoginMethod[] | null>(null);
+  // Whether "forgot password" can work (it needs mail).
+  const [recovery, setRecovery] = useState(false);
   const [chosen, setChosen] = useState<LoginMethod | null>(null);
   // The login email for the email method, the directory login name for LDAP.
   const [identifier, setIdentifier] = useState('');
@@ -33,7 +35,7 @@ export function LoginPage() {
 
   useEffect(() => {
     api.session.methods().then(
-      (r) => setMethods(r.items),
+      (r) => (setMethods(r.items), setRecovery(r.passwordRecovery)),
       () => setMethods(['email']),
     );
   }, []);
@@ -103,6 +105,16 @@ export function LoginPage() {
             <Button kind="primary" type="submit" disabled={busy}>
               {busy ? t('login.submitting') : t('login.submit')}
             </Button>
+            {method === 'email' &&
+              (recovery ? (
+                <Link to="/forgot-password" className="justify-self-start text-[13px] text-accent hover:underline">
+                  {t('login.forgot')}
+                </Link>
+              ) : (
+                <p className="text-[13px] text-text-3">
+                  {t('login.forgot')} {t('login.forgot.unavailable')}
+                </p>
+              ))}
           </div>
         )}
       </form>
