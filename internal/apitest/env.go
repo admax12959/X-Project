@@ -9,8 +9,10 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/admax12959/X-Project/internal/app"
+	"github.com/admax12959/X-Project/internal/domain"
 	"github.com/admax12959/X-Project/internal/fakes"
 )
 
@@ -40,6 +42,15 @@ type Env struct {
 	Mailer *fakes.Mailer
 
 	server *httptest.Server
+	app    *app.App
+}
+
+// EnqueueMail puts a mail into the outgoing mail queue, as a feature of the application does
+// when it needs to send one (domain.Service.EnqueueMail). TEST ONLY FIXTURE: the features that
+// send mail (invitations, password recovery, ...) are tested through their own API; this
+// exists for the tests of the queue itself and of the templates.
+func (e *Env) EnqueueMail(req domain.MailRequest) error {
+	return e.app.Service.EnqueueMail(context.Background(), req)
 }
 
 // New starts a backend on a fresh database through the production startup path.
@@ -54,6 +65,10 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 	cfg.Admin.Password = AdminPassword
 	cfg.Admin.DisplayName = "Initial Admin"
 	defaultLDAP(&cfg)
+	// Mail is delivered by a background worker: look at the queue often and retry quickly, so
+	// tests wait milliseconds, not minutes. Four delivery attempts in all.
+	cfg.Mail.PollInterval = 25 * time.Millisecond
+	cfg.Mail.RetryBackoff = []time.Duration{25 * time.Millisecond, 25 * time.Millisecond, 25 * time.Millisecond}
 	for _, m := range mutate {
 		m(&cfg)
 	}
@@ -96,6 +111,7 @@ func (e *Env) start() {
 	if err != nil {
 		e.t.Fatalf("app.Start: %v", err)
 	}
+	e.app = a
 	e.server = httptest.NewServer(a.Handler)
 	e.t.Cleanup(func() {
 		e.server.Close()
