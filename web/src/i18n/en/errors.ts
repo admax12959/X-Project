@@ -64,4 +64,8 @@ export default {
   'error.avatarTooLarge': 'The picture is larger than 2 MB, or has too many pixels. Choose a smaller one.',
   'error.avatarUnsupportedType': 'Only JPEG, PNG and WebP pictures can be used as an avatar.',
   'error.rateLimited': 'Too many attempts. Please try again in a few minutes.',
+  'error.totpInvalid': 'The code is wrong or was already used. Wait for the next code and try again.',
+  'error.totpLocked': 'Too many wrong codes. Two-step verification is locked for a while; try again later.',
+  'error.totpAlreadyEnabled': 'Two-step verification is already on.',
+  'error.secondFactorUnreadable': 'The stored authenticator cannot be read (the master key changed). An administrator has to reset it.',
 };
