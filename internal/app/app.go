@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/admax12959/X-Project/internal/domain"
@@ -19,6 +20,7 @@ import (
 type Deps struct {
 	Directories   domain.DirectoryFactory    // builds the LDAP directory from the stored configuration; nil = LDAP unavailable
 	CodePlatforms domain.CodePlatformAdapter // nil = no platform adapter available
+	MailSenders   domain.MailSenderFactory   // builds the SMTP sender from the stored mail configuration; nil = mail cannot be sent
 	ObjectStores  domain.ObjectStoreFactory  // builds the object store from the stored configuration; nil = object storage unavailable
 	Now           func() time.Time           // nil = time.Now
 }
@@ -26,11 +28,18 @@ type Deps struct {
 // App is a started application.
 type App struct {
 	Handler http.Handler
-	Service *domain.Service // the domain service behind Handler, for callers that are not HTTP (tests, CLI commands)
+	Service *domain.Service // the domain service behind Handler, for callers that are not HTTP (tests such as env.EnqueueMail, CLI commands)
 	db      *sql.DB
+	stop    context.CancelFunc
+	workers sync.WaitGroup
 }
 
-func (a *App) Close() { _ = a.db.Close() }
+// Close stops the background tasks and closes the database.
+func (a *App) Close() {
+	a.stop()
+	a.workers.Wait()
+	_ = a.db.Close()
+}
 
 // Start connects to the database (retrying while it starts), runs migrations,
 // creates the initial administrator on first start, and builds the handler.
@@ -48,8 +57,8 @@ func Start(ctx context.Context, cfg Config, deps Deps) (*App, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	svc := domain.NewService(mysqlstore.New(db), domain.Options{
-		DirectoryFactory: deps.Directories, CodePlatforms: deps.CodePlatforms, Now: deps.Now, SessionTTL: cfg.Session.TTL,
-		SecretKey: masterKey, SecretKeyVersion: cfg.SecretKeyVersion,
+		DirectoryFactory: deps.Directories, CodePlatforms: deps.CodePlatforms, MailSenders: deps.MailSenders, Now: deps.Now, SessionTTL: cfg.Session.TTL,
+		SecretKey: masterKey, SecretKeyVersion: cfg.SecretKeyVersion, MailRetryBackoff: cfg.Mail.RetryBackoff,
 		ObjectStoreFactory: deps.ObjectStores, LocalStorageDir: cfg.Storage.LocalDir,
 	})
 	if err := svc.Bootstrap(ctx, domain.InitialAdmin{
@@ -70,5 +79,13 @@ func Start(ctx context.Context, cfg Config, deps Deps) (*App, error) {
 		return nil, err
 	}
 	h := httpapi.New(svc, httpapi.Options{CookieSecure: cfg.Session.CookieSecure, WebDir: cfg.WebDir})
-	return &App{Handler: h, Service: svc, db: db}, nil
+	// Background tasks run until Close. The mail worker delivers the outgoing mail queue.
+	workCtx, stop := context.WithCancel(context.Background())
+	a := &App{Handler: h, Service: svc, db: db, stop: stop}
+	a.workers.Add(1)
+	go func() {
+		defer a.workers.Done()
+		svc.RunMailWorker(workCtx, cfg.Mail.PollInterval)
+	}()
+	return a, nil
 }

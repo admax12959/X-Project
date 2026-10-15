@@ -11,8 +11,9 @@ internal/domain/           domain service: ALL business rules, error codes, adap
 internal/store/mysqlstore/ MySQL repository (used only by the domain service) + migrations/
 internal/httpapi/          HTTP layer: parse, authenticate, call the service, serialize
 internal/codeplatform/     real GitLab / GitHub adapters (one API call each; tests use httptest)
+internal/mailer/           real SMTP sender (implicit TLS / STARTTLS / none; tests use an in-process SMTP server)
 internal/objectstore/      real object storage adapters (local disk, S3-compatible) + storetest, the shared contract
-internal/fakes/            test doubles for the directory (LDAP), code platform and object storage adapters
+internal/fakes/            test doubles for the directory (LDAP), code platform, SMTP (mail) and object storage adapters
 internal/apitest/          API test harness (MySQL container, fresh DB per test, HTTP client)
 test/api/                  the HTTP API tests (all in this one package)
 web/                       React + Vite + TypeScript + Base UI + Tailwind SPA
@@ -67,6 +68,7 @@ Optional YAML file named by `XP_CONFIG` (see `config.example.yaml`); environment
 | `XP_LDAP_LOGIN_ATTR` / `XP_LDAP_NAME_ATTR` / `XP_LDAP_EMAIL_ATTR` / `XP_LDAP_DEPARTMENT_ATTR` | `ldap.login_attr` / `name_attr` / `email_attr` / `department_attr` | `uid` / `displayName` / `mail` / `department` | Attributes read from the directory. The login attribute is the canonical login name and becomes the username. |
 | `XP_LDAP_DISABLED_FILTER` | `ldap.disabled_filter` | empty | Optional filter that matches a user entry when the account is disabled, for example Active Directory `(userAccountControl:1.2.840.113556.1.4.803:=2)`. Empty = never disabled. |
 | `XP_LDAP_START_TLS` / `XP_LDAP_SKIP_VERIFY` / `XP_LDAP_TIMEOUT` | `ldap.start_tls` / `skip_verify` / `timeout` | `false` / `false` / `10s` | |
+| `XP_MAIL_POLL_INTERVAL` / `XP_MAIL_RETRY_BACKOFF` | `mail.poll_interval` / `mail.retry_backoff` | `5s` / `1m,5m,30m,2h,6h` | Delivery side of the outgoing mail queue (see "Mail" below). The SMTP server itself is configured on the Email page, not here. |
 | `XP_STORAGE_DIR` | `storage.local_dir` | `data/storage` (image: `/var/lib/xproject/storage`) | Directory of the local-disk object store, used while no S3-compatible storage is configured on the Storage page. Must be writable and persistent. |
 | `XP_SESSION_TTL` | `session.ttl` | `12h` | Session lifetime. |
 | `XP_COOKIE_SECURE` | `session.cookie_secure` | `false` | Set `true` behind HTTPS. |
@@ -89,7 +91,7 @@ How the API tests work (`internal/apitest`):
 - `TestMain` in `test/api` calls `apitest.Main`. It starts one `mysql:8.4` container per test process with a unique name (`xproj-test-<random>`), a dynamic host port (`127.0.0.1::3306`), tmpfs storage and the label `xproj-test`. Parallel runs on one machine never collide.
 - `apitest.New(t)` creates a fresh database for the test and starts the app on it through `app.Start`, the same path production uses (migrate, then bootstrap). It serves the app with `httptest`. Tests are independent and call `t.Parallel()`.
 - `env.Client()` is a browser-like client with its own cookie jar. `env.AdminClient()` is already logged in as the initial admin.
-- `env.Directory` and `env.CodePlatforms` are the fakes wired into the app. Configure them in the test, for example `env.Directory.AddAccount(...)` or `env.CodePlatforms.AddRepo(...)`.
+- `env.Directory`, `env.CodePlatforms` and `env.Mailer` are the fakes wired into the app. Configure them in the test, for example `env.Directory.AddAccount(...)` or `env.CodePlatforms.AddRepo(...)`.
 - Test helpers in `test/api/helpers_test.go` and `application_create_test.go` (same package, reuse them): `registerPlatform(t, admin, "gitlab", glURL)` returns a platform ID; `env.CodePlatforms.AddRepo(glURL, "group/repo", "1182")` makes a repo resolvable; `createUser(t, admin, over)` makes a user through the API; `createApp(t, admin, platformID, ownerIDs, over)` creates an application through the API; `newAppFixture(t)` bundles env, admin, platform, a known repo `payments/payments-core` and an Owner candidate (`f.post(over)` posts a create request). Plain-user clients: `plainUserClient(t, env, "bob")` (creates the user through the API and logs in), or log in as a user created with `createUser` (`LoginAs(username, "initial-pw-1")`; the login email of a test user is `<username>@example.com`, `apitest.Email(username)`). `createUser` also completes the user's first login (temporary password → the password in the body), so the user can use the API; `createUserRaw` leaves the temporary password in place for tests of the first login.
 - The test config sets `SecretKey` for you.
 - `env.Restart(mutate)` simulates a process restart on the same database.
@@ -324,9 +326,45 @@ Real adapter details worth knowing: GitLab gets `GET {base}/api/v4/projects/{pat
 
 ### System configuration in the database (ADR-0005, #19)
 
-- Table `system_config` holds one row per section (first section: `ldap`); secret fields are sealed with the master key and carry its version. `GET/PUT /api/system-config/ldap` (permission `config.manage`) never return a secret, only whether it is set; a PUT with an empty password keeps the stored one. `POST /api/system-config/ldap/test` tries the unsaved form and saves nothing.
+- Table `system_config` holds one row per section (sections: `ldap`, `smtp` — see "Mail" below); secret fields are sealed with the master key and carry its version. `GET/PUT /api/system-config/ldap` (permission `config.manage`) never return a secret, only whether it is set; a PUT with an empty password keeps the stored one. `POST /api/system-config/ldap/test` tries the unsaved form and saves nothing.
 - A saved change is in effect at once, without restart, and is audited with the changed field names and never values.
 - New sections follow `system_config.go`: add a section name, a typed struct, an audit entry, and the permission check.
+
+### Mail: SMTP configuration and the mail queue (#20)
+
+The second system-configuration section (`smtp`, `internal/domain/mail_config.go`), plus the queue and worker (`mail_queue.go`), the bundled templates (`mail_templates.go`, `mailtemplates/`) and the SMTP adapter (`internal/mailer`).
+
+**Configuration** (administrators, `config.manage`; the page is "Email" in the admin navigation):
+
+| Route | Meaning |
+|---|---|
+| `GET /api/system-config/smtp` | `{enabled, host, port, security, allowPlaintext, username, passwordSet, from, caCert, siteUrl, secretsUnreadable, configured, updatedAt}`. The password is never returned. |
+| `PUT /api/system-config/smtp` | The whole form; `password` empty keeps the stored one (an empty `username` drops it). `security` is `tls` (465), `starttls` (587, STARTTLS is *required*) or `none` (25); `none` needs `allowPlaintext: true` (`422 required`), which is dropped for the other two. `port` 0 = the default of the chosen `security`. `caCert` is optional PEM trusted in addition to the system roots. `siteUrl` is required when `enabled` (http(s), no query, trailing slash dropped). There is **no way to skip certificate verification**: no field, no flag in `domain.SMTPConfig`. Audited as `configChanged` with section `smtp` (field names only; the password is listed as `password`). |
+| `POST /api/system-config/smtp/test` | Sends one test email with the **unsaved** form (an empty password falls back to the stored one; `siteUrl` is not needed) to the signed-in administrator's contact email, in the administrator's language. Saves, queues and audits nothing. Always `200 {ok, code?, detail?, to}`: on failure `code` is a stable code (`smtpUnreachable`, `smtpTlsFailed`, `smtpStartTlsMissing`, `smtpAuthFailed`, `smtpSenderRejected`, `smtpRecipientRejected`, `smtpRejected`; the SPA shows `error.<code>`) and `detail` the server's own words. An invalid form is `422` as for `PUT`. |
+| `GET /api/mail/status` | **Any signed-in user:** `{configured}`. Domain code asks `Service.MailConfigured(ctx)`. Features that need mail (invitations by mail, password recovery, email verification) are available only when it is true; without it, tell the user why instead of failing. |
+| `GET /api/mail-outbox?status=pending\|sent\|failed` | Administrators. `{items, counts: {pending, sent, failed}}`, newest 100 first. An item has `to, template, subject, status, attempts, lastErrorCode, lastError, createdAt, nextAttemptAt, sentAt, failedAt`, never the content of the mail. |
+
+**Sending mail from a feature.** Put it in the queue in the same transaction as the change that causes it:
+
+```go
+_, err := s.enqueueMail(ctx, tx, MailRequest{
+    Template: MailTemplateInvite, Recipient: userID, // language and .Name come from the user
+    LinkPath: "/invite/" + token,                    // becomes {{.Link}}: siteUrl + path, never the Host header
+})
+```
+
+`Service.EnqueueMail(ctx, req)` is the same in its own transaction. It refuses (`503 mailNotConfigured`, `503 siteUrlRequired`) when mail is not configured, and fails at once when the template, its data or the address is wrong, so everything queued is deliverable. `Recipient` (a user ID) decides the language (`users.language`; never chosen = `zh`); for an address that is not a user's yet, set `Lang`. Extra template data goes in `Data` (for example `{"Code": "482913"}`).
+
+**Queue and worker.** Table `mail_outbox`: `pending` → `sent` or `failed`. The rendered bodies exist only while pending (they may hold one-time links and codes); delivery or giving up clears them. `RunMailWorker` runs in every process (started by `app.Start`, stopped by `App.Close`); workers share the queue through the database (`SELECT … FOR UPDATE SKIP LOCKED` plus a 10 minute lease), so several instances are safe. A failed delivery waits `mail.retry_backoff[n-1]` (default `1m,5m,30m,2h,6h`) and delivery is tried `len+1` times (6); then the mail is `failed` and listed on the Email page. While mail is not configured (or the stored password cannot be decrypted) the queue just waits. Pending mail survives restarts; sent and failed rows are kept (without content).
+
+| Env var | YAML | Default | Meaning |
+|---|---|---|---|
+| `XP_MAIL_POLL_INTERVAL` | `mail.poll_interval` | `5s` | How often the worker looks at the queue. |
+| `XP_MAIL_RETRY_BACKOFF` | `mail.retry_backoff` | `1m,5m,30m,2h,6h` | Waits after the 1st, 2nd, ... failed delivery (comma separated durations in the env var, a list in YAML). |
+
+**Templates** are packaged in the binary (`go:embed`): `internal/domain/mailtemplates/<zh|en>/<name>.txt` (first line `Subject: …`, blank line, plain-text body) and `<name>.html`, both Go templates over `.Name`, `.Link`, and the request's `Data`; HTML is auto-escaped; a value the request did not provide is an error. To add one: a `MailTemplate` constant in `mail_templates.go`, add it to `mailTemplates`, then the four files. The API test `TestMailIsWrittenInTheRecipientsLanguageInBothFormatsForEveryTemplate` renders every template in both languages and checks the language; it needs the template's data in its request (add it there). Templates today: `test`, `invite`, `passwordReset`, `verifyCode`.
+
+**Tests.** `env.Mailer` (`internal/fakes/mailer.go`) is the fake SMTP side: `Sent()`, `SentTo(addr)`, `Configs()`/`LastConfig()` (what the sender was built with, password decrypted), `Attempts()`, `FailWith(err)`, `FailNext(n, err)`; errors that should show a specific code are `&domain.MailSendError{Code, Detail}`. The test environment polls every 25ms and retries after 25ms three times (four attempts); change `c.Mail.PollInterval` / `c.Mail.RetryBackoff` in `apitest.New`'s mutate function. `env.EnqueueMail(domain.MailRequest{...})` is a fixture for the tests of the queue and templates only (the features that send mail are tested through their own API). Tests wait with the `eventually` helper in `test/api/mail_queue_test.go`, never with a fixed sleep. The real adapter (`internal/mailer`) is tested against a small in-process SMTP server with generated certificates (`go test ./internal/mailer`), so there is no real mail server in the default suite.
 
 ### Object storage (ADR-0007, #24)
 

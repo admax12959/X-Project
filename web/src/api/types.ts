@@ -342,6 +342,57 @@ export type StorageConfigInput = Pick<StorageConfig, 'driver' | 'endpoint' | 're
 /** Answer of every "test connection" route: ok, or ok=false with the error code (message "error.<code>"). A failed test is HTTP 200. */
 export type ConnectionTest = { ok: boolean; code?: string };
 
+export type SmtpSecurity = 'tls' | 'starttls' | 'none';
+
+/**
+ * GET/PUT /api/system-config/smtp (administrators only): the mail service and the site's external address
+ * the links in mail are built from. The password is write-only: the response only says whether one is set.
+ * There is deliberately no option to skip certificate verification. configured: mail can be sent (enabled, host, sender).
+ */
+export type SmtpConfig = {
+  enabled: boolean;
+  host: string;
+  port: number;
+  security: SmtpSecurity;
+  /** The administrator's explicit confirmation that mail may travel unencrypted; required for security "none". */
+  allowPlaintext: boolean;
+  username: string;
+  passwordSet: boolean;
+  from: string;
+  /** Optional PEM bundle trusted in addition to the system roots. */
+  caCert: string;
+  siteUrl: string;
+  secretsUnreadable: boolean;
+  configured: boolean;
+  updatedAt?: string;
+};
+
+/** The whole mail form as sent by PUT and by "send test email". password empty/absent keeps the stored one. */
+export type SmtpConfigInput = Omit<SmtpConfig, 'passwordSet' | 'secretsUnreadable' | 'configured' | 'updatedAt'> & { password?: string };
+
+/** Answer of "send test email": ok, or ok=false with the failure code (message "error.<code>") and the server's own words. HTTP 200 either way. */
+export type MailTestResult = { ok: boolean; code?: string; detail?: string; to: string };
+
+export type MailStatus = 'pending' | 'sent' | 'failed';
+
+/** A mail of the outgoing queue (never its content). */
+export type OutboxItem = {
+  id: string;
+  to: string;
+  template: string;
+  subject: string;
+  status: MailStatus;
+  attempts: number;
+  lastErrorCode?: string;
+  lastError?: string;
+  createdAt: string;
+  nextAttemptAt?: string;
+  sentAt?: string;
+  failedAt?: string;
+};
+
+export type Outbox = { items: OutboxItem[]; counts: { pending: number; sent: number; failed: number } };
+
 /** Every collection endpoint returns {items: [...]}. */
 export type List<T> = { items: T[] };
 

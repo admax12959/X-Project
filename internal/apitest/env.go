@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/admax12959/X-Project/internal/app"
 	"github.com/admax12959/X-Project/internal/domain"
@@ -37,6 +38,9 @@ type Env struct {
 	// configuration; it always returns Directory and records the configurations it was given.
 	Directories   *fakes.DirectoryFactory
 	CodePlatforms *fakes.CodePlatform
+	// Mailer is the fake SMTP side: the application builds its sender from the saved mail
+	// configuration through it, and it records the messages that would have been delivered.
+	Mailer *fakes.Mailer
 	// Objects is the in-memory object store the application uses whatever the saved storage
 	// configuration says; ObjectStores is the factory that hands it out and records the
 	// configurations it was asked to build a store for.
@@ -45,6 +49,14 @@ type Env struct {
 
 	server *httptest.Server
 	app    *app.App
+}
+
+// EnqueueMail puts a mail into the outgoing mail queue, as a feature of the application does
+// when it needs to send one (domain.Service.EnqueueMail). TEST ONLY FIXTURE: the features that
+// send mail (invitations, password recovery, ...) are tested through their own API; this
+// exists for the tests of the queue itself and of the templates.
+func (e *Env) EnqueueMail(req domain.MailRequest) error {
+	return e.app.Service.EnqueueMail(context.Background(), req)
 }
 
 // New starts a backend on a fresh database through the production startup path.
@@ -60,13 +72,17 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 	cfg.Admin.DisplayName = "Initial Admin"
 	cfg.Storage.LocalDir = filepath.Join(t.TempDir(), "storage")
 	defaultLDAP(&cfg)
+	// Mail is delivered by a background worker: look at the queue often and retry quickly, so
+	// tests wait milliseconds, not minutes. Four delivery attempts in all.
+	cfg.Mail.PollInterval = 25 * time.Millisecond
+	cfg.Mail.RetryBackoff = []time.Duration{25 * time.Millisecond, 25 * time.Millisecond, 25 * time.Millisecond}
 	for _, m := range mutate {
 		m(&cfg)
 	}
 	dir := fakes.NewDirectory()
 	objects := fakes.NewObjectStore()
 	e := &Env{t: t, DSN: cfg.Database.DSN, Config: cfg, Directory: dir, Directories: fakes.NewDirectoryFactory(dir), CodePlatforms: fakes.NewCodePlatform(),
-		Objects: objects, ObjectStores: fakes.NewObjectStoreFactory(objects)}
+		Mailer: fakes.NewMailer(), Objects: objects, ObjectStores: fakes.NewObjectStoreFactory(objects)}
 	e.start()
 	return e
 }
@@ -100,7 +116,7 @@ func defaultLDAP(cfg *app.Config) {
 
 func (e *Env) start() {
 	e.t.Helper()
-	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms, ObjectStores: e.ObjectStores})
+	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms, MailSenders: e.Mailer, ObjectStores: e.ObjectStores})
 	if err != nil {
 		e.t.Fatalf("app.Start: %v", err)
 	}
