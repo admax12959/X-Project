@@ -111,3 +111,51 @@ func (s *Store) DeleteExpiredLoginChallenges(ctx context.Context, at time.Time) 
 	_, err := s.q.ExecContext(ctx, "DELETE FROM login_challenges WHERE expires_at < ?", at)
 	return err
 }
+
+// ---------------------------------------------------------------- recovery codes (#31)
+
+func (s *Store) ReplaceRecoveryCodes(ctx context.Context, userID domain.UserID, hashes []string, at time.Time) error {
+	if _, err := s.q.ExecContext(ctx, "DELETE FROM user_recovery_codes WHERE user_id = ?", userID); err != nil {
+		return err
+	}
+	for _, h := range hashes {
+		if _, err := s.q.ExecContext(ctx, "INSERT INTO user_recovery_codes (user_id, code_hash, created_at) VALUES (?, ?, ?)", userID, h, at); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) ListUnusedRecoveryCodes(ctx context.Context, userID domain.UserID) ([]domain.RecoveryCode, error) {
+	rows, err := s.q.QueryContext(ctx, "SELECT id, code_hash FROM user_recovery_codes WHERE user_id = ? AND used_at IS NULL ORDER BY id", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.RecoveryCode
+	for rows.Next() {
+		var c domain.RecoveryCode
+		if err := rows.Scan(&c.ID, &c.Hash); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) ClaimRecoveryCode(ctx context.Context, id int64, at time.Time) (bool, error) {
+	res, err := s.q.ExecContext(ctx, "UPDATE user_recovery_codes SET used_at = ? WHERE id = ? AND used_at IS NULL", at, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
+}
+
+func (s *Store) DeleteAuthenticatorsAndRecoveryCodes(ctx context.Context, userID domain.UserID) error {
+	if _, err := s.q.ExecContext(ctx, "DELETE FROM user_recovery_codes WHERE user_id = ?", userID); err != nil {
+		return err
+	}
+	_, err := s.q.ExecContext(ctx, "DELETE FROM user_authenticators WHERE user_id = ?", userID)
+	return err
+}

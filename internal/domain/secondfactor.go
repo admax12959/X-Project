@@ -79,6 +79,17 @@ type SecondFactorRepository interface {
 	DeleteLoginChallenge(ctx context.Context, tokenHash string) error
 	// DeleteExpiredLoginChallenges removes the challenges that expired before at.
 	DeleteExpiredLoginChallenges(ctx context.Context, at time.Time) error
+
+	// ReplaceRecoveryCodes drops all of the user's recovery codes, used ones included, and
+	// stores hashes as the new set. Call inside InTx.
+	ReplaceRecoveryCodes(ctx context.Context, userID UserID, hashes []string, at time.Time) error
+	// ListUnusedRecoveryCodes returns the user's recovery codes that are not spent yet.
+	ListUnusedRecoveryCodes(ctx context.Context, userID UserID) ([]RecoveryCode, error)
+	// ClaimRecoveryCode spends a code, atomically. false: it was spent already.
+	ClaimRecoveryCode(ctx context.Context, id int64, at time.Time) (bool, error)
+	// DeleteAuthenticatorsAndRecoveryCodes removes the user's second factor altogether
+	// (pending authenticators included). Call inside InTx.
+	DeleteAuthenticatorsAndRecoveryCodes(ctx context.Context, userID UserID) error
 }
 
 const (
@@ -103,6 +114,9 @@ func totpAlreadyEnabled() error { return Validation(Invalid("", CodeTotpAlreadyE
 type SecondFactorStatus struct {
 	Enabled        bool
 	Authenticators []Authenticator // the enabled ones
+	// RecoveryCodesRemaining counts the recovery codes that are not spent yet. The codes
+	// themselves are shown once, when they are made.
+	RecoveryCodesRemaining int
 }
 
 func (s *Service) SecondFactorStatus(ctx context.Context, actor Actor) (SecondFactorStatus, error) {
@@ -117,6 +131,11 @@ func (s *Service) SecondFactorStatus(ctx context.Context, actor Actor) (SecondFa
 			st.Authenticators = append(st.Authenticators, a)
 		}
 	}
+	codes, err := s.repo.ListUnusedRecoveryCodes(ctx, actor.User.ID)
+	if err != nil {
+		return SecondFactorStatus{}, err
+	}
+	st.RecoveryCodesRemaining = len(codes)
 	return st, nil
 }
 
@@ -233,15 +252,17 @@ func (s *Service) openAuthenticatorSecret(a Authenticator) ([]byte, error) {
 	return secret, err
 }
 
-// ConfirmTOTP enables the pending authenticator if code is right for it. The code's time
-// step is used up, so the same code cannot log in right after.
-func (s *Service) ConfirmTOTP(ctx context.Context, actor Actor, code string) error {
+// ConfirmTOTP enables the pending authenticator if code is right for it, and makes the
+// user's recovery codes, returned this once. The code's time step is used up, so the same
+// code cannot log in right after.
+func (s *Service) ConfirmTOTP(ctx context.Context, actor Actor, code string) ([]string, error) {
 	var c Collector
 	if !c.Required("code", code) {
-		return c.Err()
+		return nil, c.Err()
 	}
 	u := actor.User
-	return s.repo.InTx(ctx, func(tx Repository) error {
+	var recovery []string
+	err := s.repo.InTx(ctx, func(tx Repository) error {
 		all, err := tx.ListAuthenticators(ctx, u.ID)
 		if err != nil {
 			return err
@@ -271,8 +292,15 @@ func (s *Service) ConfirmTOTP(ctx context.Context, actor Actor, code string) err
 		} else if !on {
 			return newKind(KindNotFound, CodeNotFound)
 		}
+		if recovery, err = s.replaceRecoveryCodes(ctx, tx, u.ID); err != nil {
+			return err
+		}
 		return s.recordAudit(ctx, tx, AuditActorOf(actor), secondFactorEnabledAudit(u.ID, AuthenticatorTOTP))
 	})
+	if err != nil {
+		return nil, err
+	}
+	return recovery, nil
 }
 
 // ---------------------------------------------------------------- the login's second step
