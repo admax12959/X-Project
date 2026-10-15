@@ -26,5 +26,6 @@ export default {
   'perm.repo.verify': 'Verify code repositories',
   'perm.platform.manage': 'Manage code platforms',
   'perm.user.manage': 'Manage users and login identities',
+  'perm.audit.view': 'View the audit log',
   'perm.role.view': 'View roles and their permissions',
 };

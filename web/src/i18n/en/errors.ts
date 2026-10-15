@@ -21,6 +21,7 @@ export default {
   'error.ldapManaged': 'This field is managed by LDAP and cannot be changed here.',
   'error.emailManaged': 'The contact email is the login email and cannot be changed on its own. Change the login email.',
   'error.loginEmailTaken': 'Another user already uses this login email.',
+  'error.lastAdmin': 'This is the last enabled administrator. Make someone else an administrator first.',
   'error.noEmailIdentity': 'This user has no email login identity, so there is no login email to change.',
   'error.passwordChangeRequired': 'Change the temporary password an administrator set for you first.',
   'error.passwordUnchanged': 'The new password must differ from the current one.',

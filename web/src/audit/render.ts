@@ -1,0 +1,76 @@
+// Audit-log rendering: the API sends {action, target, params}; the sentence is built here in the
+// current UI language from the message "audit.event.<action>", the action's short name comes from
+// "audit.action.<action>". User input inside params (login names, emails, application names) is shown
+// verbatim, never translated.
+//
+// To add an audit action: see "Audit log" in docs/dev.md. One entry in `renderers` below is all the
+// frontend code it needs; the filter on the audit page lists these entries.
+import type { AuditActor, AuditEntry } from '../api/types.ts';
+import { hasKey, translate, type MessageKey, type Params } from '../i18n/index.ts';
+import { userName } from '../history/render.ts';
+
+type Renderer = (e: AuditEntry) => Params;
+
+/** The user the entry is about: the target when it is a user, otherwise whoever params name. */
+function targetUser(e: AuditEntry): string {
+  return userName(e.target.type === 'user' ? e.target : undefined);
+}
+
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
+function kindName(kind: unknown): string {
+  return translate(kind === 'ldap' ? 'audit.kind.ldap' : 'audit.kind.email');
+}
+
+function roleName(role: unknown): string {
+  return translate(role === 'pe' ? 'term.pe' : 'term.owner');
+}
+
+/** One entry per backend AuditAction (internal/domain/audit.go): maps the entry to message placeholders. */
+const renderers: Record<string, Renderer> = {
+  userCreated: (e) => ({ user: targetUser(e), loginEmail: str(e.params.loginEmail) }),
+  loginEmailChanged: (e) => ({ user: targetUser(e), from: str(e.params.from), to: str(e.params.to) }),
+  identityBound: (e) => ({
+    user: targetUser(e),
+    kind: kindName(e.params.kind),
+    loginName: str(e.params.loginName),
+    via: translate(e.params.via === 'self' ? 'audit.via.self' : 'audit.via.admin'),
+  }),
+  identityUnbound: (e) => ({ user: targetUser(e), kind: kindName(e.params.kind), loginName: str(e.params.loginName) }),
+  appMemberAdded: (e) => appMember(e),
+  appMemberRemoved: (e) => appMember(e),
+  adminFlagChanged: (e) => ({
+    user: targetUser(e),
+    change: translate(e.params.to === true ? 'audit.adminFlag.granted' : 'audit.adminFlag.revoked'),
+  }),
+};
+
+function appMember(e: AuditEntry): Params {
+  const app = e.params.application as { key?: string; name?: string } | undefined;
+  return {
+    user: userName(e.params.user),
+    role: roleName(e.params.role),
+    application: `${app?.name ?? e.target.id} (${app?.key ?? e.target.id})`,
+  };
+}
+
+/** Every action the page can render, for the action filter. */
+export const auditActions: string[] = Object.keys(renderers);
+
+export function renderAuditEvent(e: AuditEntry): string {
+  const key = `audit.event.${e.action}`;
+  const render = renderers[e.action];
+  if (!render || !hasKey(key)) return translate('audit.event.unknown', { action: e.action });
+  return translate(key, render(e));
+}
+
+export function auditActionName(action: string): string {
+  const key = `audit.action.${action}`;
+  return hasKey(key) ? translate(key as MessageKey) : action;
+}
+
+export function auditOperatorName(actor: AuditActor): string {
+  return actor.kind === 'cli' ? translate('audit.operator.cli') : userName(actor);
+}

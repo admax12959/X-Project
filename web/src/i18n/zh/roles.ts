@@ -26,5 +26,6 @@ export default {
   'perm.repo.verify': '验证代码仓库',
   'perm.platform.manage': '管理代码平台',
   'perm.user.manage': '管理用户和登录身份',
+  'perm.audit.view': '查看审计日志',
   'perm.role.view': '查看角色及其权限点',
 };

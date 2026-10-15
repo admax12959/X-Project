@@ -94,6 +94,28 @@ func (s *Store) SetUserStatus(ctx context.Context, id domain.UserID, status doma
 	return err
 }
 
+func (s *Store) SetUserAdmin(ctx context.Context, id domain.UserID, isAdmin bool, at time.Time) error {
+	_, err := s.q.ExecContext(ctx, "UPDATE users SET is_admin = ?, updated_at = ? WHERE id = ?", isAdmin, at, id)
+	return err
+}
+
+func (s *Store) LockEnabledAdmins(ctx context.Context) ([]domain.UserID, error) {
+	rows, err := s.q.QueryContext(ctx, "SELECT id FROM users WHERE is_admin AND status = 'enabled' ORDER BY id FOR UPDATE")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []domain.UserID
+	for rows.Next() {
+		var id domain.UserID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 func (s *Store) ListUsers(ctx context.Context) ([]domain.UserWithIdentities, error) {
 	rows, err := s.q.QueryContext(ctx, "SELECT "+userCols+" FROM users ORDER BY id")
 	if err != nil {

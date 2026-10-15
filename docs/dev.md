@@ -256,6 +256,30 @@ The append-only log of key operations (`change_events`). An event is a type plus
 
 `go test ./internal/domain` fails if an event type has no `history.event.<type>` message or no renderer entry.
 
+### Audit log (#27)
+
+An append-only record of identity and security related operations (`audit_log`), shown on the administrator's "Audit log" page (`GET /api/audit-log`, permission `audit.view`, so administrators only: 403 for everyone else). Like the change history, an entry is an action type plus structured params; the frontend renders the sentence. Unlike the change history it is not tied to an application: deleting an application keeps its entries (there is no foreign key; application events carry `application: {key, name}` in params).
+
+- An entry has an **operator** (`actor`: `{kind: "user", id, username, displayName}` or `{kind: "cli"}` for the command line in the container), a **time**, an **action** (the type), an **object** (`target: {type: "user" | "application", id}`; for users also the current `username`/`displayName`; the id of an application is its key) and **params**.
+- The repository port only has `AppendAudit` and `ListAudit`: no update, no delete, and no HTTP route other than the `GET`.
+- **Recording an event** (this is the one entry point): inside the `InTx` of the change, call
+  `s.recordAudit(ctx, tx, by AuditActor, ev auditEvent) error` (`internal/domain/audit.go`).
+  `by` is `AuditActorOf(actor)` for a request (`actor` is the `domain.Actor`), or `AuditActorCLI` for the command line. The entry is written in the same transaction, so a refused or rolled-back operation leaves no entry, and a failed write fails the operation.
+- Never put secrets in params. For configuration changes record which fields changed, not their values (`changes: ["host", "port"]`).
+- Reference users in params with `userParam(id)` (expanded to current names on read, like the history). The target of a user event is `userTargetID(id)` with type `AuditTargetUser`.
+- `GET /api/audit-log?actor=<user id|cli>&targetType=<user|application>&targetId=<id or key>&action=<type>&from=<RFC 3339>&to=<RFC 3339>&page=<n>&pageSize=<n>`: newest first (`occurred_at`, then id), `{items, total, page, pageSize}` like `GET /api/versions` (20 per page, at most 100); `from` and `to` are inclusive; a malformed value is `422 invalid` on that parameter. `action` is an exact match and is not validated against a list.
+- Recorded today: `userCreated`, `loginEmailChanged`, `identityBound` / `identityUnbound` (both by the user and by an administrator; `via` = `self` | `admin`), `appMemberAdded` / `appMemberRemoved` (one entry per person, same moment as the change-history event), `adminFlagChanged` (`PATCH /api/users/{id}` with `isAdmin`; `422 lastAdmin` when it would leave no enabled administrator). The first LDAP login creating a user is not audited.
+
+**Adding an audit action**
+
+1. `internal/domain/audit.go`: add a constant `AuditFoo AuditAction = "foo"` (document target and params next to it) and a constructor `fooAudit(...) auditEvent`.
+2. Call `s.recordAudit(ctx, tx, by, fooAudit(...))` in the transaction of the change.
+3. Frontend messages, in both `web/src/i18n/en/audit.ts` and `zh/audit.ts`: `'audit.event.foo'` (the sentence) and `'audit.action.foo'` (a short name, used by the action filter).
+4. Frontend renderer: add `foo: (e) => ({ ... })` to `renderers` in `web/src/audit/render.ts`; it turns the entry into the sentence's placeholder values. The action filter is built from these entries.
+5. Test through the API: act as an administrator, then read `/api/audit-log?action=foo` (helpers `auditOf` / `auditLog` in `test/api/audit_log_test.go`).
+
+`go test ./internal/domain` fails if an action has no `audit.event.*` / `audit.action.*` message in either language or no renderer entry.
+
 ### Migrations
 
 Files live in `internal/store/mysqlstore/migrations/` and are embedded into the binary. They run at every startup, under a MySQL named lock.

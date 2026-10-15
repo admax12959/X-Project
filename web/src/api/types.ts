@@ -219,7 +219,43 @@ export type CreateUserInput = {
 };
 
 /** Fields left out are unchanged. */
-export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displayName' | 'loginEmail' | 'phone' | 'department'>>;
+export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displayName' | 'loginEmail' | 'phone' | 'department'>> & {
+  /** Grants or revokes the administrator role; 422 lastAdmin when it would leave no enabled administrator. */
+  isAdmin?: boolean;
+};
+
+/** Operator of an audit entry: a user, or the command line in the container (kind "cli", no user). */
+export type AuditActor = { kind: 'user' | 'cli'; id?: string; username?: string; displayName?: string };
+
+/** Object of an audit entry: a user (id = user ID, with the user's name) or an application (id = application key). */
+export type AuditTarget = { type: 'user' | 'application'; id: string; username?: string; displayName?: string };
+
+/**
+ * GET /api/audit-log: an action type plus params, rendered in the UI language (src/audit/render.ts).
+ * User references inside params are {userId, username, displayName}.
+ */
+export type AuditEntry = {
+  id: string;
+  at: string;
+  action: string;
+  actor: AuditActor;
+  target: AuditTarget;
+  params: Record<string, unknown>;
+};
+
+export type AuditPage = List<AuditEntry> & { total: number; page: number; pageSize: number };
+
+/** actor: a user ID or "cli". from / to: RFC 3339 instants, both inclusive. */
+export type AuditQuery = {
+  actor?: string;
+  targetType?: 'user' | 'application';
+  targetId?: string;
+  action?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+};
 
 export type PlatformKind = 'gitlab' | 'github';
 

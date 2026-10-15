@@ -172,14 +172,17 @@ func (s *Service) UpdateMembers(ctx context.Context, actor Actor, key string, in
 			old, new []UserID
 		}{{RoleOwner, oldOwners, owners}, {RolePE, oldPEs, pes}}
 		var events []event
+		var audits []auditEvent
 		for _, l := range lists { // removals first, then additions
 			for _, id := range without(l.old, l.new) {
 				events = append(events, memberRemovedEvent(l.role, id))
+				audits = append(audits, appMemberAudit(AuditAppMemberRemoved, app, l.role, id))
 			}
 		}
 		for _, l := range lists {
 			for _, id := range without(l.new, l.old) {
 				events = append(events, memberAddedEvent(l.role, id))
+				audits = append(audits, appMemberAudit(AuditAppMemberAdded, app, l.role, id))
 			}
 		}
 		for _, l := range lists {
@@ -191,6 +194,11 @@ func (s *Service) UpdateMembers(ctx context.Context, actor Actor, key string, in
 		}
 		for _, ev := range events {
 			if err := s.recordEvent(ctx, tx, app.ID, actor, ev); err != nil {
+				return err
+			}
+		}
+		for _, ev := range audits {
+			if err := s.recordAudit(ctx, tx, AuditActorOf(actor), ev); err != nil {
 				return err
 			}
 		}

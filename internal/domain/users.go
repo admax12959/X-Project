@@ -34,6 +34,11 @@ type UserRepository interface {
 	// the must-change flag on the identity and on the user's sessions.
 	ChangePassword(ctx context.Context, id UserID, hash string) error
 	SetUserStatus(ctx context.Context, id UserID, status UserStatus, at time.Time) error
+	// SetUserAdmin sets the administrator flag.
+	SetUserAdmin(ctx context.Context, id UserID, isAdmin bool, at time.Time) error
+	// LockEnabledAdmins locks the rows of every enabled administrator, in ID order, for the
+	// rest of the transaction and returns their IDs. Call inside InTx, before locking a user.
+	LockEnabledAdmins(ctx context.Context) ([]UserID, error)
 	// ReadUsersLocked reads the given users (those that exist) under a shared lock, taken
 	// in ID order, so that none of them can be disabled until the transaction ends.
 	ReadUsersLocked(ctx context.Context, ids []UserID) (map[UserID]User, error)
@@ -113,7 +118,10 @@ func (s *Service) CreateEmailUser(ctx context.Context, actor Actor, in CreateEma
 		if errors.Is(err, ErrIdentityTaken) {
 			return loginEmailTaken("loginEmail")
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		return s.recordAudit(ctx, tx, AuditActorOf(actor), userCreatedAudit(id, in.LoginEmail))
 	})
 	return created, err
 }
@@ -127,6 +135,7 @@ type UpdateUserInput struct {
 	LoginEmail  *string // the login email of the user's email identity
 	Phone       *string
 	Department  *string
+	IsAdmin     *bool // grants or revokes the administrator role; the last enabled administrator cannot lose it
 }
 
 func (u UserWithIdentities) hasIdentity(kind IdentityKind) bool {
@@ -231,6 +240,15 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 	}
 	var result UserWithIdentities
 	err := s.repo.InTx(ctx, func(tx Repository) error {
+		// Revoking the administrator role: the administrators are locked first (in ID order)
+		// so that two of them revoking each other at the same time cannot both succeed.
+		var admins []UserID
+		if in.IsAdmin != nil && !*in.IsAdmin {
+			var err error
+			if admins, err = tx.LockEnabledAdmins(ctx); err != nil {
+				return err
+			}
+		}
 		cur, found, err := tx.LockUserWithIdentities(ctx, id)
 		if err != nil {
 			return err
@@ -250,7 +268,10 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 				u.Username = v
 			}
 		}
-		newLoginEmail := ""
+		if in.IsAdmin != nil && *in.IsAdmin != u.IsAdmin && !*in.IsAdmin && u.Status == UserEnabled && len(admins) <= 1 {
+			c.Add("isAdmin", CodeLastAdmin, nil)
+		}
+		newLoginEmail, oldLoginEmail := "", ""
 		if in.LoginEmail != nil {
 			v := normalizeLoginEmail(*in.LoginEmail)
 			if !cur.hasIdentity(IdentityEmail) {
@@ -258,7 +279,7 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 			} else {
 				checkLoginEmail(&c, "loginEmail", v)
 				if ident, _ := cur.identity(IdentityEmail); v != ident.LoginName {
-					newLoginEmail = v
+					newLoginEmail, oldLoginEmail = v, ident.LoginName
 				}
 			}
 		}
@@ -286,6 +307,18 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 					cur.Identities[i].LoginName = newLoginEmail
 				}
 			}
+			if err := s.recordAudit(ctx, tx, AuditActorOf(actor), loginEmailChangedAudit(id, oldLoginEmail, newLoginEmail)); err != nil {
+				return err
+			}
+		}
+		if in.IsAdmin != nil && *in.IsAdmin != u.IsAdmin {
+			if err := tx.SetUserAdmin(ctx, id, *in.IsAdmin, s.nowUTC()); err != nil {
+				return err
+			}
+			if err := s.recordAudit(ctx, tx, AuditActorOf(actor), adminFlagChangedAudit(id, u.IsAdmin, *in.IsAdmin)); err != nil {
+				return err
+			}
+			u.IsAdmin = *in.IsAdmin
 		}
 		result = UserWithIdentities{User: u, Identities: cur.Identities}
 		return nil

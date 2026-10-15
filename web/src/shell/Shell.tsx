@@ -74,6 +74,7 @@ export function Shell() {
               <NavItem to="/admin/platforms" label="platforms.title" />
               <NavItem to="/admin/users" label="users.title" />
               <NavItem to="/admin/roles" label="roles.title" />
+              <NavItem to="/admin/audit" label="audit.title" />
             </>
           )}
         </nav>
