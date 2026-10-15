@@ -13,6 +13,9 @@ func (s *server) systemConfigRoutes() {
 	s.route("GET /api/system-config/ldap", s.getLDAPConfig)
 	s.route("PUT /api/system-config/ldap", s.putLDAPConfig)
 	s.route("POST /api/system-config/ldap/test", s.testLDAPConfig)
+	s.route("GET /api/system-config/storage", s.getStorageConfig)
+	s.route("PUT /api/system-config/storage", s.putStorageConfig)
+	s.route("POST /api/system-config/storage/test", s.testStorageConfig)
 }
 
 // ldapConfigBody is the request of PUT and POST .../test: the whole form. bindPassword empty

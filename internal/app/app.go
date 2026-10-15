@@ -19,12 +19,14 @@ import (
 type Deps struct {
 	Directories   domain.DirectoryFactory    // builds the LDAP directory from the stored configuration; nil = LDAP unavailable
 	CodePlatforms domain.CodePlatformAdapter // nil = no platform adapter available
+	ObjectStores  domain.ObjectStoreFactory  // builds the object store from the stored configuration; nil = object storage unavailable
 	Now           func() time.Time           // nil = time.Now
 }
 
 // App is a started application.
 type App struct {
 	Handler http.Handler
+	Service *domain.Service // the domain service behind Handler, for callers that are not HTTP (tests, CLI commands)
 	db      *sql.DB
 }
 
@@ -48,6 +50,7 @@ func Start(ctx context.Context, cfg Config, deps Deps) (*App, error) {
 	svc := domain.NewService(mysqlstore.New(db), domain.Options{
 		DirectoryFactory: deps.Directories, CodePlatforms: deps.CodePlatforms, Now: deps.Now, SessionTTL: cfg.Session.TTL,
 		SecretKey: masterKey, SecretKeyVersion: cfg.SecretKeyVersion,
+		ObjectStoreFactory: deps.ObjectStores, LocalStorageDir: cfg.Storage.LocalDir,
 	})
 	if err := svc.Bootstrap(ctx, domain.InitialAdmin{
 		Username: cfg.Admin.Username, Password: cfg.Admin.Password,
@@ -67,5 +70,5 @@ func Start(ctx context.Context, cfg Config, deps Deps) (*App, error) {
 		return nil, err
 	}
 	h := httpapi.New(svc, httpapi.Options{CookieSecure: cfg.Session.CookieSecure, WebDir: cfg.WebDir})
-	return &App{Handler: h, db: db}, nil
+	return &App{Handler: h, Service: svc, db: db}, nil
 }

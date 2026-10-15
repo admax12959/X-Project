@@ -50,6 +50,11 @@ type Config struct {
 		DisabledFilter string        `yaml:"disabled_filter"` // XP_LDAP_DISABLED_FILTER, matches an account when disabled; empty = never disabled
 		Timeout        time.Duration `yaml:"timeout"`         // XP_LDAP_TIMEOUT, default 10s
 	} `yaml:"ldap"`
+	// Storage: until an administrator configures an S3-compatible object storage (admin page
+	// "Storage"), objects (avatars) live in a directory on the local disk. Mount a volume here.
+	Storage struct {
+		LocalDir string `yaml:"local_dir"` // XP_STORAGE_DIR, default data/storage
+	} `yaml:"storage"`
 	Session struct {
 		TTL          time.Duration `yaml:"ttl"`           // XP_SESSION_TTL, default 12h
 		CookieSecure bool          `yaml:"cookie_secure"` // XP_COOKIE_SECURE, set true behind HTTPS
@@ -63,6 +68,7 @@ func DefaultConfig() Config {
 	c.Database.ConnectTimeout = 90 * time.Second
 	c.Session.TTL = 12 * time.Hour
 	c.SecretKeyVersion = 1
+	c.Storage.LocalDir = "data/storage"
 	return c
 }
 
@@ -101,6 +107,7 @@ func Load() (Config, error) {
 	}
 	str("XP_LISTEN", &c.Listen)
 	str("XP_WEB_DIR", &c.WebDir)
+	str("XP_STORAGE_DIR", &c.Storage.LocalDir)
 	str("XP_DB_DSN", &c.Database.DSN)
 	str("XP_SECRET_KEY", &c.SecretKey)
 	str("XP_SECRET_KEY_FILE", &c.SecretKeyFile)

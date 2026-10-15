@@ -19,11 +19,14 @@ COPY internal/ internal/
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/xproject ./cmd/xproject
 
 FROM alpine:3.22
-RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 xproject
+RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 xproject \
+    && mkdir -p /var/lib/xproject/storage && chown -R xproject /var/lib/xproject
 COPY --from=server /out/xproject /usr/local/bin/xproject
 COPY --from=web /src/web/dist /srv/web
 ENV XP_LISTEN=:8080 \
-    XP_WEB_DIR=/srv/web
+    XP_WEB_DIR=/srv/web \
+    XP_STORAGE_DIR=/var/lib/xproject/storage
+VOLUME /var/lib/xproject/storage
 USER xproject
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --start-period=120s CMD wget -qO- http://127.0.0.1:8080/api/healthz || exit 1

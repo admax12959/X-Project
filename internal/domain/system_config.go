@@ -25,7 +25,8 @@ import (
 
 // Section names are stored in system_config.section and appear as the audit target id.
 const (
-	SectionLDAP = "ldap"
+	SectionLDAP    = "ldap"
+	SectionStorage = "storage"
 )
 
 // StoredSecret is an encrypted secret as the repository keeps it.

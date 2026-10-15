@@ -26,6 +26,9 @@ services:
       XP_ADMIN_EMAIL: admin@example.com
       XP_ADMIN_PASSWORD: change-me-now
       XP_ADMIN_DISPLAY_NAME: Administrator
+    volumes:
+      - storage-data:/var/lib/xproject/storage
 
 volumes:
   db-data:
+  storage-data:
