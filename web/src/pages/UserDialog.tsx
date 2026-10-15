@@ -23,6 +23,7 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
     department: user?.department ?? '',
     password: '',
   });
+  const [isAdmin, setIsAdmin] = useState(user?.isAdmin ?? false);
   // Keep the raw error and render at render time so messages follow a language switch.
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -42,6 +43,7 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
           if (form[k] !== user[k]) changes[k] = form[k];
         }
         if (loginEmail !== undefined && form.loginEmail !== loginEmail) changes.loginEmail = form.loginEmail;
+        if (isAdmin !== user.isAdmin) changes.isAdmin = isAdmin;
         saved = await api.users.update(user.id, changes);
       } else {
         saved = await api.users.create(form);
@@ -96,6 +98,15 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
               <Input name="phone" type="tel" value={form.phone} onChange={set('phone')} />
               <Hint>{t('users.hint.optional')}</Hint>
             </Field>
+            {editing && (
+              <Field label={t('term.administrator')} error={errors.isAdmin}>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" name="isAdmin" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
+                  {t('users.field.isAdmin')}
+                </label>
+                <Hint>{t('users.hint.isAdmin')}</Hint>
+              </Field>
+            )}
             {!editing && (
               <Field label={t('users.field.password')} error={errors.password}>
                 <Input name="password" type="password" autoComplete="new-password" value={form.password} onChange={set('password')} />

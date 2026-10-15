@@ -1,6 +1,8 @@
 // Typed API client. Pages call api.<resource>.<action>(); nothing else calls fetch.
 import type {
   AdminUser,
+  AuditPage,
+  AuditQuery,
   ApiFieldError,
   Application,
   ApplicationListItem,
@@ -179,6 +181,14 @@ export const api = {
     list: () => request<List<CodePlatform>>('GET', '/api/code-platforms'),
     /** 422 field errors on kind / baseUrl / token. */
     create: (input: CodePlatformInput) => request<CodePlatform>('POST', '/api/code-platforms', { body: input }),
+  },
+  /** Administrators only (403 otherwise). Read-only: the audit log is append-only. Newest first; 422 invalid on a malformed filter. */
+  audit: {
+    list: (params: AuditQuery = {}) => {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') qs.set(k, String(v));
+      return request<AuditPage>('GET', `/api/audit-log${qs.size ? `?${qs}` : ''}`);
+    },
   },
   /** Administrators only (403 otherwise). Read-only: built-in roles cannot be changed. */
   roles: {

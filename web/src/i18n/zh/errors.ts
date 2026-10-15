@@ -20,6 +20,7 @@ export default {
   'error.ldapManaged': '该字段由 LDAP 管理，不能在此修改。',
   'error.emailManaged': '联系邮箱就是登录邮箱，不能单独修改。请修改登录邮箱。',
   'error.loginEmailTaken': '该登录邮箱已被其他用户使用。',
+  'error.lastAdmin': '这是最后一位已启用的管理员。请先指定另一位管理员。',
   'error.noEmailIdentity': '该用户没有邮箱登录身份，没有登录邮箱可改。',
   'error.passwordChangeRequired': '请先修改管理员为你设置的临时密码。',
   'error.passwordUnchanged': '新密码不能和当前密码相同。',

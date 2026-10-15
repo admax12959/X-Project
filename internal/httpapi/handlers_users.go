@@ -91,13 +91,14 @@ func (s *server) updateUser(w http.ResponseWriter, r *http.Request) {
 		LoginEmail  *string `json:"loginEmail"`
 		Phone       *string `json:"phone"`
 		Department  *string `json:"department"`
+		IsAdmin     *bool   `json:"isAdmin"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
 	u, err := s.svc.UpdateUser(r.Context(), actorOf(r), id, domain.UpdateUserInput{
 		Username: body.Username, DisplayName: body.DisplayName, Email: body.Email, LoginEmail: body.LoginEmail,
-		Phone: body.Phone, Department: body.Department,
+		Phone: body.Phone, Department: body.Department, IsAdmin: body.IsAdmin,
 	})
 	if err != nil {
 		writeError(w, r, err)

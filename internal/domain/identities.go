@@ -31,6 +31,7 @@ type bindSpec struct {
 	loginName string
 	hash      string // email only
 	via       BoundVia
+	by        AuditActor // who is doing the binding, for the audit log
 	// entry, when non-nil, is the directory entry the user's display name, email and
 	// department are synced from right away (the directory owns them once bound).
 	entry *DirectoryEntry
@@ -78,7 +79,7 @@ func (s *Service) BindOwnIdentity(ctx context.Context, actor Actor, in BindIdent
 	if login == "" {
 		login = in.LoginName
 	}
-	return s.bindIdentity(ctx, actor.User.ID, bindSpec{kind: IdentityLDAP, loginName: login, via: BoundViaSelf, entry: &entry})
+	return s.bindIdentity(ctx, actor.User.ID, bindSpec{kind: IdentityLDAP, loginName: login, via: BoundViaSelf, by: AuditActorOf(actor), entry: &entry})
 }
 
 // UnbindOwnIdentity removes the actor's login identity of the given kind. The last
@@ -96,7 +97,11 @@ func (s *Service) UnbindOwnIdentity(ctx context.Context, actor Actor, kind strin
 		if len(cur.Identities) <= 1 {
 			return Validation(Invalid("kind", CodeLastIdentity, nil))
 		}
+		removed, _ := cur.identity(IdentityKind(kind))
 		if err := tx.DeleteIdentity(ctx, cur.User.ID, IdentityKind(kind)); err != nil {
+			return err
+		}
+		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), identityUnboundAudit(cur.User.ID, removed.Kind, removed.LoginName)); err != nil {
 			return err
 		}
 		cur.Identities = slices.DeleteFunc(cur.Identities, func(i LoginIdentity) bool { return i.Kind == IdentityKind(kind) })
@@ -108,7 +113,7 @@ func (s *Service) UnbindOwnIdentity(ctx context.Context, actor Actor, kind strin
 
 // bindEmailIdentity gives the user an email identity with a temporary password chosen by
 // an administrator. The administrator typed the login email, so it counts as verified.
-func (s *Service) bindEmailIdentity(ctx context.Context, userID UserID, loginEmail, password string) (UserWithIdentities, error) {
+func (s *Service) bindEmailIdentity(ctx context.Context, by AuditActor, userID UserID, loginEmail, password string) (UserWithIdentities, error) {
 	var c Collector
 	loginEmail = normalizeLoginEmail(loginEmail)
 	checkLoginEmail(&c, "loginName", loginEmail)
@@ -120,7 +125,7 @@ func (s *Service) bindEmailIdentity(ctx context.Context, userID UserID, loginEma
 	if err != nil {
 		return UserWithIdentities{}, err
 	}
-	return s.bindIdentity(ctx, userID, bindSpec{kind: IdentityEmail, loginName: loginEmail, hash: hash, via: BoundViaAdmin})
+	return s.bindIdentity(ctx, userID, bindSpec{kind: IdentityEmail, loginName: loginEmail, hash: hash, via: BoundViaAdmin, by: by})
 }
 
 // BindIdentityForUser is the administrator's bind. Unlike a user binding for themselves,
@@ -140,14 +145,14 @@ func (s *Service) BindIdentityForUser(ctx context.Context, actor Actor, id UserI
 		return UserWithIdentities{}, err
 	}
 	if in.Kind == string(IdentityEmail) {
-		return s.bindEmailIdentity(ctx, id, in.LoginName, in.Password)
+		return s.bindEmailIdentity(ctx, AuditActorOf(actor), id, in.LoginName, in.Password)
 	}
 	if !c.Required("loginName", in.LoginName) {
 		return UserWithIdentities{}, c.Err()
 	}
 
 	res := s.directory.Lookup(ctx, in.LoginName)
-	spec := bindSpec{kind: IdentityLDAP, loginName: in.LoginName, via: BoundViaAdmin}
+	spec := bindSpec{kind: IdentityLDAP, loginName: in.LoginName, via: BoundViaAdmin, by: AuditActorOf(actor)}
 	switch res.Outcome {
 	case DirectoryOK:
 		spec.entry = &res.Entry
@@ -203,6 +208,9 @@ func (s *Service) bindIdentity(ctx context.Context, userID UserID, sp bindSpec) 
 			if err := s.syncFromDirectory(ctx, tx, &cur.User, *sp.entry); err != nil {
 				return err
 			}
+		}
+		if err := s.recordAudit(ctx, tx, sp.by, identityBoundAudit(userID, sp.kind, sp.loginName, sp.via)); err != nil {
+			return err
 		}
 		result = cur
 		return nil

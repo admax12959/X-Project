@@ -15,6 +15,8 @@ export default {
   'users.field.displayName': 'Display name',
   'users.field.email': 'Contact email',
   'users.field.loginEmail': 'Login email',
+  'users.field.isAdmin': 'Is an administrator',
+  'users.hint.isAdmin': 'Administrators manage applications, code platforms and users. Granting or revoking the role is recorded in the audit log.',
   'users.field.phone': 'Phone',
   'users.field.department': 'Department',
   'users.field.password': 'Temporary password',

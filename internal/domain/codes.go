@@ -35,6 +35,9 @@ const (
 	CodeLoginEmailTaken   = "loginEmailTaken"   // another email identity already uses this login email
 	CodeNoEmailIdentity   = "noEmailIdentity"   // the user has no email identity to change
 
+	// administrator role
+	CodeLastAdmin = "lastAdmin" // field "isAdmin"; the last enabled administrator cannot lose the role
+
 	// passwords of email identities
 	CodePasswordChangeRequired = "passwordChangeRequired" // HTTP 403; the user must change the administrator-set password first
 	CodePasswordUnchanged      = "passwordUnchanged"      // the new password equals the current one

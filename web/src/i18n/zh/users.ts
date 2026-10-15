@@ -15,6 +15,8 @@ export default {
   'users.field.displayName': '显示名',
   'users.field.email': '联系邮箱',
   'users.field.loginEmail': '登录邮箱',
+  'users.field.isAdmin': '是管理员',
+  'users.hint.isAdmin': '管理员负责管理应用、代码平台和用户。授予或撤销该角色会记入审计日志。',
   'users.field.phone': '手机号',
   'users.field.department': '部门',
   'users.field.password': '临时密码',

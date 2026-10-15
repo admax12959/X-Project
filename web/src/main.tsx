@@ -9,6 +9,7 @@ import { ApplicationOverview } from './pages/ApplicationOverview.tsx';
 import { ApplicationPage } from './pages/ApplicationPage.tsx';
 import { ApplicationsPage } from './pages/ApplicationsPage.tsx';
 import { ApplicationVersions } from './pages/ApplicationVersions.tsx';
+import { AuditLogPage } from './pages/AuditLogPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { PlatformsPage } from './pages/PlatformsPage.tsx';
 import { RolesPage } from './pages/RolesPage.tsx';
@@ -54,6 +55,7 @@ function App() {
         <Route path="admin/platforms" element={<PlatformsPage />} />
         <Route path="admin/users" element={<UsersPage />} />
         <Route path="admin/roles" element={<RolesPage />} />
+        <Route path="admin/audit" element={<AuditLogPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
