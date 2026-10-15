@@ -55,4 +55,11 @@ export default {
   'users.bind.password': 'Password',
   'users.bind.submit': 'Bind',
   'users.bind.submitting': 'Binding…',
+  'users.col.department': 'Department',
+  'users.field.department': 'Department',
+  'users.department.none': '(no department)',
+  'users.hint.department': 'Set by an administrator; a user belongs to at most one department.',
+  'users.filter.department': 'Filter by department',
+  'users.filter.allDepartments': 'All departments',
+  'users.filter.includesBelow': 'Includes sub-departments',
 };

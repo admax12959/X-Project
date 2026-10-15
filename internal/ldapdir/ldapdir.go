@@ -202,3 +202,19 @@ func (d *Directory) dial(ctx context.Context) (*ldap.Conn, error) {
 	}
 	return conn, nil
 }
+
+// Factory implements domain.DirectoryFactory: it builds the adapter for a configuration the
+// administrator saved (or is about to test) on the LDAP page.
+type Factory struct{}
+
+var _ domain.DirectoryFactory = Factory{}
+
+// Build validates cfg and returns the adapter. It does not connect.
+func (Factory) Build(cfg domain.LDAPConfig) (domain.Directory, error) {
+	return New(Config{
+		URL: cfg.URL, StartTLS: cfg.StartTLS, SkipVerify: cfg.SkipVerify,
+		BindDN: cfg.BindDN, BindPassword: cfg.BindPassword, BaseDN: cfg.BaseDN,
+		UserFilter: cfg.UserFilter, LoginAttr: cfg.LoginAttr, NameAttr: cfg.NameAttr,
+		EmailAttr: cfg.EmailAttr, DeptAttr: cfg.DepartmentAttr, DisabledFilter: cfg.DisabledFilter, Timeout: cfg.Timeout,
+	})
+}

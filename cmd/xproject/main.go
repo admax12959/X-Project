@@ -13,6 +13,7 @@ import (
 
 	"github.com/admax12959/X-Project/internal/app"
 	"github.com/admax12959/X-Project/internal/codeplatform"
+	"github.com/admax12959/X-Project/internal/ldapdir"
 )
 
 func main() {
@@ -30,12 +31,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// A nil Directory means LDAP is not configured.
-	dir, err := app.NewDirectory(cfg)
-	if err != nil {
-		return err
-	}
-	a, err := app.Start(ctx, cfg, app.Deps{Directory: dir, CodePlatforms: codeplatform.New()})
+	a, err := app.Start(ctx, cfg, app.Deps{Directories: ldapdir.Factory{}, CodePlatforms: codeplatform.New()})
 	if err != nil {
 		return err
 	}

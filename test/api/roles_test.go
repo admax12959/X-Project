@@ -67,7 +67,7 @@ func TestRolesListTheirPermissionPoints(t *testing.T) {
 	roles := listRoles(t, env.AdminClient())
 
 	want := map[string][]string{
-		"administrator": {"app.create", "app.delete", "app.members.manage", "audit.view", "department.manage", "platform.manage", "repo.verify", "role.view", "user.manage"},
+		"administrator": {"app.create", "app.delete", "app.members.manage", "audit.view", "config.manage", "department.manage", "platform.manage", "repo.verify", "role.view", "user.manage"},
 		"owner":         {"app.deploy.edit", "app.edit", "app.members.manage", "line.edit", "line.fork", "line.status.set", "version.register"},
 		"pe":            {"app.deploy.edit"},
 	}

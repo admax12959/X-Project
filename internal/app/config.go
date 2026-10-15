@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -19,14 +20,21 @@ type Config struct {
 		DSN            string        `yaml:"dsn"`             // XP_DB_DSN, go-sql-driver DSN, e.g. user:pw@tcp(host:3306)/xproject
 		ConnectTimeout time.Duration `yaml:"connect_timeout"` // XP_DB_CONNECT_TIMEOUT, default 90s
 	} `yaml:"database"`
-	SecretKey string   `yaml:"secret_key"` // XP_SECRET_KEY, required: encrypts stored secrets (code platform tokens); keep it stable
-	Admin     struct { // initial administrator, used only on the very first start
+	// The master key encrypts every secret stored in the database (ADR-0005). It comes from
+	// SecretKey (XP_SECRET_KEY) or from the file SecretKeyFile (XP_SECRET_KEY_FILE, a Docker
+	// secret such as /run/secrets/xp_secret_key); exactly one of them is required.
+	SecretKey        string   `yaml:"secret_key"`
+	SecretKeyFile    string   `yaml:"secret_key_file"`
+	SecretKeyVersion int      `yaml:"secret_key_version"` // XP_SECRET_KEY_VERSION, recorded with every stored secret; default 1
+	Admin            struct { // initial administrator, used only on the very first start
 		Username    string `yaml:"username"`     // XP_ADMIN_USERNAME
 		Password    string `yaml:"password"`     // XP_ADMIN_PASSWORD
 		DisplayName string `yaml:"display_name"` // XP_ADMIN_DISPLAY_NAME
 		Email       string `yaml:"email"`        // XP_ADMIN_EMAIL
 	} `yaml:"admin"`
-	// LDAP is the one corporate directory. Leaving url empty means LDAP login is not configured.
+	// LDAP is only read once: on a start whose database has no LDAP configuration yet it is
+	// imported into the database, which is the source of truth from then on (ADR-0005; the
+	// administrator edits it on the LDAP page). An empty url means there is nothing to import.
 	LDAP struct {
 		URL            string        `yaml:"url"`             // XP_LDAP_URL, ldap://host:389 or ldaps://host:636
 		StartTLS       bool          `yaml:"start_tls"`       // XP_LDAP_START_TLS
@@ -54,6 +62,7 @@ func DefaultConfig() Config {
 	c.Listen = ":8080"
 	c.Database.ConnectTimeout = 90 * time.Second
 	c.Session.TTL = 12 * time.Hour
+	c.SecretKeyVersion = 1
 	return c
 }
 
@@ -94,6 +103,12 @@ func Load() (Config, error) {
 	str("XP_WEB_DIR", &c.WebDir)
 	str("XP_DB_DSN", &c.Database.DSN)
 	str("XP_SECRET_KEY", &c.SecretKey)
+	str("XP_SECRET_KEY_FILE", &c.SecretKeyFile)
+	if v, ok := os.LookupEnv("XP_SECRET_KEY_VERSION"); ok {
+		if c.SecretKeyVersion, err = strconv.Atoi(v); err != nil {
+			err = fmt.Errorf("XP_SECRET_KEY_VERSION: %w", err)
+		}
+	}
 	dur("XP_DB_CONNECT_TIMEOUT", &c.Database.ConnectTimeout)
 	str("XP_LDAP_URL", &c.LDAP.URL)
 	boolean("XP_LDAP_START_TLS", &c.LDAP.StartTLS)
@@ -120,8 +135,33 @@ func Load() (Config, error) {
 	if c.Database.DSN == "" {
 		return c, fmt.Errorf("database DSN is required (database.dsn or XP_DB_DSN)")
 	}
-	if c.SecretKey == "" {
-		return c, fmt.Errorf("secret key is required (secret_key or XP_SECRET_KEY)")
+	if _, err := c.MasterKey(); err != nil {
+		return c, err
 	}
 	return c, nil
+}
+
+// MasterKey returns the master key: the configured value, or the content of the key file
+// (a Docker secret) without its trailing line break. Exactly one source must be set; a
+// missing source, two sources, an unreadable file and an empty file are all errors that say
+// what to do.
+func (c Config) MasterKey() (string, error) {
+	const hint = "set the master key with XP_SECRET_KEY (secret_key) or, for a Docker secret, with XP_SECRET_KEY_FILE (secret_key_file)"
+	switch {
+	case c.SecretKey != "" && c.SecretKeyFile != "":
+		return "", fmt.Errorf("master key: both a key and a key file are set; %s, not both", hint)
+	case c.SecretKey != "":
+		return c.SecretKey, nil
+	case c.SecretKeyFile == "":
+		return "", fmt.Errorf("master key is required: %s", hint)
+	}
+	b, err := os.ReadFile(c.SecretKeyFile)
+	if err != nil {
+		return "", fmt.Errorf("master key file: %w", err)
+	}
+	key := strings.TrimRight(string(b), "\r\n")
+	if key == "" {
+		return "", fmt.Errorf("master key file %s is empty", c.SecretKeyFile)
+	}
+	return key, nil
 }

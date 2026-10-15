@@ -148,3 +148,53 @@ func (p *CodePlatform) ResolveRepo(_ context.Context, platform domain.PlatformCo
 	}
 	return domain.RepoResult{Outcome: domain.RepoNotFound}
 }
+
+// DirectoryFactory is the fake of domain.DirectoryFactory: whatever LDAP configuration the
+// application builds a directory for, it returns the one fake Directory, and it records every
+// configuration it was asked for (the saved one on each login, the unsaved form on "test
+// connection"), so tests can assert what the application would have connected to.
+type DirectoryFactory struct {
+	dir *Directory
+
+	mu       sync.Mutex
+	configs  []domain.LDAPConfig
+	buildErr error
+}
+
+var _ domain.DirectoryFactory = (*DirectoryFactory)(nil)
+
+func NewDirectoryFactory(dir *Directory) *DirectoryFactory { return &DirectoryFactory{dir: dir} }
+
+func (f *DirectoryFactory) Build(cfg domain.LDAPConfig) (domain.Directory, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.configs = append(f.configs, cfg)
+	if f.buildErr != nil {
+		return nil, f.buildErr
+	}
+	return f.dir, nil
+}
+
+// Configs returns every configuration a directory was built for, oldest first.
+func (f *DirectoryFactory) Configs() []domain.LDAPConfig {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]domain.LDAPConfig(nil), f.configs...)
+}
+
+// LastConfig returns the configuration of the latest Build call.
+func (f *DirectoryFactory) LastConfig() (domain.LDAPConfig, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.configs) == 0 {
+		return domain.LDAPConfig{}, false
+	}
+	return f.configs[len(f.configs)-1], true
+}
+
+// FailBuild makes Build return err (nil = works again), like an adapter refusing a configuration.
+func (f *DirectoryFactory) FailBuild(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.buildErr = err
+}

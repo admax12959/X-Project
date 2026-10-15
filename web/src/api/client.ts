@@ -2,11 +2,13 @@
 import type {
   AdminUser,
   AuditPage,
+  ConnectionTest,
   AuditQuery,
   ApiFieldError,
   Application,
   ApplicationListItem,
   AssignableUser,
+  Department,
   BindIdentityInput,
   ChangePasswordInput,
   ChangeEvent,
@@ -16,6 +18,8 @@ import type {
   CreateUserInput,
   IdentityKind,
   ForkInput,
+  LdapConfig,
+  LdapConfigInput,
   LineDetail,
   LineStatus,
   LineWithLog,
@@ -152,7 +156,8 @@ export const api = {
   },
   /** Any logged-in user: enabled users for the Owner/PE pickers. */
   assignableUsers: {
-    list: () => request<List<AssignableUser>>('GET', '/api/assignable-users'),
+    /** departmentId limits it to the users in that department or below. */
+    list: (departmentId = '') => request<List<AssignableUser>>('GET', `/api/assignable-users${departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : ''}`),
   },
   versions: {
     /**
@@ -190,13 +195,35 @@ export const api = {
       return request<AuditPage>('GET', `/api/audit-log${qs.size ? `?${qs}` : ''}`);
     },
   },
+  /** Administrators only (403 otherwise). Secret fields are write-only. Sections follow this shape: get, update (the whole form), test (the unsaved form). */
+  systemConfig: {
+    ldap: {
+      get: () => request<LdapConfig>('GET', '/api/system-config/ldap'),
+      /** 422 field errors per form field. Saved changes are in effect at once. */
+      update: (input: LdapConfigInput) => request<LdapConfig>('PUT', '/api/system-config/ldap', { body: input }),
+      /** Uses the form values, saves nothing. 422 for an invalid form; a failed connection is 200 {ok: false, code}. */
+      test: (input: LdapConfigInput) => request<ConnectionTest>('POST', '/api/system-config/ldap/test', { body: input }),
+    },
+  },
   /** Administrators only (403 otherwise). Read-only: built-in roles cannot be changed. */
   roles: {
     list: () => request<List<Role>>('GET', '/api/roles'),
   },
+  /**
+   * The department tree. Reading is open to every logged-in user (the Owner/PE pickers filter by it);
+   * changes are administrators only. 422: departmentCycle (parentId), departmentNotEmpty (delete).
+   */
+  departments: {
+    list: () => request<List<Department>>('GET', '/api/departments'),
+    create: (input: { name: string; parentId: string | null }) => request<Department>('POST', '/api/departments', { body: input }),
+    /** Fields left out are unchanged; parentId null = top level. */
+    update: (id: string, input: { name?: string; parentId?: string | null }) => request<Department>('PATCH', `/api/departments/${id}`, { body: input }),
+    remove: (id: string) => request<void>('DELETE', `/api/departments/${id}`),
+  },
   /** Administrator only (403 otherwise). There is no delete: users are disabled. */
   users: {
-    list: () => request<List<AdminUser>>('GET', '/api/users'),
+    /** departmentId limits it to the users in that department or below. */
+    list: (departmentId = '') => request<List<AdminUser>>('GET', `/api/users${departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : ''}`),
     create: (input: CreateUserInput) => request<AdminUser>('POST', '/api/users', { body: input }),
     update: (id: string, input: UpdateUserInput) => request<AdminUser>('PATCH', `/api/users/${id}`, { body: input }),
     disable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/disable`),

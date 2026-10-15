@@ -66,4 +66,6 @@ export default {
   'apps.delete.confirmLabel': '输入应用标识 {key} 以确认',
   'apps.delete.confirm': '删除',
   'apps.delete.deleting': '删除中…',
+  'apps.picker.department': '按部门筛选',
+  'apps.picker.allDepartments': '所有部门（含下级）',
 };

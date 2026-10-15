@@ -55,4 +55,11 @@ export default {
   'users.bind.password': '密码',
   'users.bind.submit': '绑定',
   'users.bind.submitting': '绑定中…',
+  'users.col.department': '部门',
+  'users.field.department': '部门',
+  'users.department.none': '（无部门）',
+  'users.hint.department': '管理员指定；每个用户最多属于一个部门。',
+  'users.filter.department': '按部门筛选',
+  'users.filter.allDepartments': '所有部门',
+  'users.filter.includesBelow': '含下级部门',
 };

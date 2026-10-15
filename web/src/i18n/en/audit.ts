@@ -46,6 +46,8 @@ export default {
   'audit.action.appMemberAdded': 'Add Owner / PE',
   'audit.action.appMemberRemoved': 'Remove Owner / PE',
   'audit.action.adminFlagChanged': 'Change administrator role',
+  'audit.action.configChanged': 'Change system configuration',
+  'audit.section.ldap': 'LDAP',
   'audit.event.userCreated': 'Created user {user} with login email {loginEmail}',
   'audit.event.loginEmailChanged': 'Changed the login email of {user} from {from} to {to}',
   'audit.event.identityBound': 'Bound the {kind} login identity {loginName} to {user} ({via})',
@@ -58,5 +60,6 @@ export default {
   'audit.event.departmentMoved': 'Moved department {name} from {from} to {to}',
   'audit.event.departmentDeleted': 'Deleted department {name} (it was under {parent})',
   'audit.event.userDepartmentChanged': 'Changed the department of {user} from {from} to {to}',
+  'audit.event.configChanged': 'Changed the {section} configuration: {fields}',
   'audit.event.unknown': 'Unknown action ({action})',
 };

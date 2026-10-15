@@ -36,6 +36,7 @@ const (
 	PermRoleView         Permission = "role.view"
 	PermAuditView        Permission = "audit.view"
 	PermDepartmentManage Permission = "department.manage" // the department tree and which department a user belongs to
+	PermConfigManage     Permission = "config.manage"     // system configuration: LDAP now, mail and storage later (ADR-0005)
 )
 
 // RoleScope says what a role is granted over.
@@ -66,7 +67,7 @@ type Role struct {
 var builtInRoles = []Role{
 	{ID: RoleAdministrator, Scope: ScopeGlobal, Permissions: []Permission{
 		PermAppCreate, PermAppDelete, PermAppMembersManage,
-		PermRepoVerify, PermPlatformManage, PermUserManage, PermRoleView, PermAuditView, PermDepartmentManage,
+		PermRepoVerify, PermPlatformManage, PermUserManage, PermRoleView, PermAuditView, PermDepartmentManage, PermConfigManage,
 	}},
 	{ID: RoleOwnerID, Scope: ScopeApplication, Permissions: []Permission{
 		PermAppEdit, PermAppMembersManage, PermAppDeployEdit,

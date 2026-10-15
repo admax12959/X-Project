@@ -5,6 +5,8 @@ import { api, ApiError } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
 import type { AdminUser, LoginMethod } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
+import { DepartmentSelect, useDepartments } from '../org/DepartmentSelect.tsx';
+import { pathLabel } from '../org/tree.ts';
 import { useCurrentUser } from '../session/session.tsx';
 import { Button, Empty } from '../ui/controls.tsx';
 import { BindIdentityDialog } from './BindIdentityDialog.tsx';
@@ -30,6 +32,9 @@ export function UsersPage() {
   const [actionError, setActionError] = useState<unknown>(null);
   const [actionUser, setActionUser] = useState<AdminUser | null>(null);
   const [bindFor, setBindFor] = useState<AdminUser | null>(null);
+  const departments = useDepartments();
+  // Show only the users in this department or below ('' = everyone).
+  const [departmentFilter, setDepartmentFilter] = useState('');
   // Login identity kinds the server offers (ldap only when a directory is configured).
   const [methods, setMethods] = useState<LoginMethod[]>(['email']);
   const missingKinds = (u: AdminUser): LoginMethod[] => methods.filter((m) => !u.identities.some((i) => i.kind === m));
@@ -41,14 +46,14 @@ export function UsersPage() {
       (r) => live && setMethods(r.items),
       () => undefined,
     );
-    api.users.list().then(
+    api.users.list(departmentFilter).then(
       (r) => live && setLoad({ status: 'ok', items: r.items }),
       (error: unknown) => live && setLoad({ status: 'error', error }),
     );
     return () => {
       live = false;
     };
-  }, [me.isAdmin]);
+  }, [me.isAdmin, departmentFilter]);
 
   if (!me.isAdmin) return <Empty title={t('users.forbidden')} />;
 
@@ -77,6 +82,18 @@ export function UsersPage() {
         <Button kind="primary" onClick={() => setDialog('create')}>
           {t('users.create')}
         </Button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <DepartmentSelect
+          aria-label={t('users.filter.department')}
+          className="w-64"
+          departments={departments ?? []}
+          value={departmentFilter}
+          onChange={(id) => (setLoad({ status: 'loading' }), setDepartmentFilter(id))}
+          noneLabel={t('users.filter.allDepartments')}
+        />
+        {departmentFilter && <span className="text-[13px] text-text-3">{t('users.filter.includesBelow')}</span>}
       </div>
 
       {actionError !== null && (
@@ -109,6 +126,7 @@ export function UsersPage() {
               <th className={th}>{t('users.col.username')}</th>
               <th className={th}>{t('users.col.displayName')}</th>
               <th className={th}>{t('users.col.email')}</th>
+              <th className={th}>{t('users.col.department')}</th>
               <th className={th}>{t('users.col.directoryDepartment')}</th>
               <th className={th}>{t('users.col.status')}</th>
               <th className={th}>{t('users.col.identities')}</th>
@@ -124,6 +142,7 @@ export function UsersPage() {
                   {u.isAdmin && <span className="ml-2 text-[13px] text-text-3">{t('term.administrator')}</span>}
                 </td>
                 <td className={td}>{u.email}</td>
+                <td className={td}>{pathLabel(departments ?? [], u.departmentId)}</td>
                 <td className={td}>{u.directoryDepartment}</td>
                 <td className={`${td} ${u.status === 'enabled' ? 'text-ok' : 'text-text-3'}`}>{t(`users.status.${u.status}`)}</td>
                 <td className={td}>{[...new Set(u.identities.map((i) => i.kind))].map((k) => t(`users.identity.${k}`)).join(' · ')}</td>

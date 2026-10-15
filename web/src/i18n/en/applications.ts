@@ -66,4 +66,6 @@ export default {
   'apps.delete.confirmLabel': 'Type the application key {key} to confirm',
   'apps.delete.confirm': 'Delete',
   'apps.delete.deleting': 'Deleting…',
+  'apps.picker.department': 'Filter by department',
+  'apps.picker.allDepartments': 'All departments (including sub-departments)',
 };

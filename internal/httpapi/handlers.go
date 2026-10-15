@@ -75,7 +75,12 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) loginMethods(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, listJSON[string]{Items: s.svc.LoginMethods()})
+	methods, err := s.svc.LoginMethods(r.Context())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, listJSON[string]{Items: methods})
 }
 
 func (s *server) currentSession(w http.ResponseWriter, r *http.Request) {
