@@ -41,6 +41,30 @@ func TestTokenCipherRejectsAWrongKeyAndTampering(t *testing.T) {
 	}
 }
 
+func TestFieldSecretsAreBoundToTheirFieldAndRecordTheKeyVersion(t *testing.T) {
+	c, _ := newTokenCipher("some-secret-key")
+	c.version = 3
+	sealed, version, err := c.sealField("ldap", "bindPassword", []byte("pw-123456"))
+	if err != nil || version != 3 {
+		t.Fatalf("sealField = %v, version %d", err, version)
+	}
+	if bytes.Contains(sealed, []byte("pw-123456")) {
+		t.Fatal("sealed value contains the plaintext")
+	}
+	if got, err := c.openField("ldap", "bindPassword", sealed, 3); err != nil || string(got) != "pw-123456" {
+		t.Fatalf("openField = %q, %v", got, err)
+	}
+	if _, err := c.openField("smtp", "bindPassword", sealed, 3); err == nil {
+		t.Fatal("opened under another section")
+	}
+	if _, err := c.openField("ldap", "password", sealed, 3); err == nil {
+		t.Fatal("opened under another field")
+	}
+	if _, err := c.openField("ldap", "bindPassword", sealed, 2); err == nil {
+		t.Fatal("opened under another key version")
+	}
+}
+
 func TestTokenCipherNeedsAKey(t *testing.T) {
 	if _, err := newTokenCipher(""); err == nil {
 		t.Fatal("empty secret key accepted")

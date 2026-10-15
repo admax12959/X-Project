@@ -73,6 +73,7 @@ export function Shell() {
               <div className="px-5 pb-1 pt-4 text-[13px] font-semibold text-text-3">{t('platforms.navGroup')}</div>
               <NavItem to="/admin/platforms" label="platforms.title" />
               <NavItem to="/admin/users" label="users.title" />
+              <NavItem to="/admin/ldap" label="ldap.title" />
               <NavItem to="/admin/roles" label="roles.title" />
               <NavItem to="/admin/audit" label="audit.title" />
             </>

@@ -39,20 +39,26 @@ type bindSpec struct {
 
 // checkBindableKind checks the kind is one that may be bound: any login method for an
 // administrator, only the directory for a user binding for themselves.
-func (s *Service) checkBindableKind(c *Collector, kind string, byAdmin bool) {
-	allowed := s.LoginMethods()
+func (s *Service) checkBindableKind(ctx context.Context, c *Collector, kind string, byAdmin bool) error {
+	allowed, err := s.LoginMethods(ctx)
+	if err != nil {
+		return err
+	}
 	if !byAdmin {
 		allowed = slices.DeleteFunc(allowed, func(m string) bool { return m == string(IdentityEmail) })
 	}
 	if !slices.Contains(allowed, kind) {
 		c.Add("kind", CodeInvalid, map[string]any{"allowed": allowed})
 	}
+	return nil
 }
 
 // BindOwnIdentity attaches a login identity to the actor after they authenticated with it.
 func (s *Service) BindOwnIdentity(ctx context.Context, actor Actor, in BindIdentityInput) (UserWithIdentities, error) {
 	var c Collector
-	s.checkBindableKind(&c, in.Kind, false)
+	if err := s.checkBindableKind(ctx, &c, in.Kind, false); err != nil {
+		return UserWithIdentities{}, err
+	}
 	in.LoginName = strings.TrimSpace(in.LoginName)
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
@@ -66,7 +72,11 @@ func (s *Service) BindOwnIdentity(ctx context.Context, actor Actor, in BindIdent
 	}
 
 	// The directory is a network call: asked before the transaction.
-	res := s.directory.Authenticate(ctx, in.LoginName, in.Password)
+	dir, err := s.requireDirectory(ctx)
+	if err != nil {
+		return UserWithIdentities{}, err
+	}
+	res := dir.Authenticate(ctx, in.LoginName, in.Password)
 	switch res.Outcome {
 	case DirectoryOK:
 	case DirectoryUnreachable:
@@ -139,7 +149,9 @@ func (s *Service) BindIdentityForUser(ctx context.Context, actor Actor, id UserI
 		return UserWithIdentities{}, err
 	}
 	var c Collector
-	s.checkBindableKind(&c, in.Kind, true)
+	if err := s.checkBindableKind(ctx, &c, in.Kind, true); err != nil {
+		return UserWithIdentities{}, err
+	}
 	in.LoginName = strings.TrimSpace(in.LoginName)
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
@@ -151,7 +163,11 @@ func (s *Service) BindIdentityForUser(ctx context.Context, actor Actor, id UserI
 		return UserWithIdentities{}, c.Err()
 	}
 
-	res := s.directory.Lookup(ctx, in.LoginName)
+	dir, err := s.requireDirectory(ctx)
+	if err != nil {
+		return UserWithIdentities{}, err
+	}
+	res := dir.Lookup(ctx, in.LoginName)
 	spec := bindSpec{kind: IdentityLDAP, loginName: in.LoginName, via: BoundViaAdmin, by: AuditActorOf(actor)}
 	switch res.Outcome {
 	case DirectoryOK:

@@ -30,7 +30,10 @@ type Env struct {
 	DSN    string
 	Config app.Config
 	// Fakes for the adapters. Configure them before the calls that need them.
-	Directory     *fakes.Directory
+	Directory *fakes.Directory
+	// Directories is the factory the application builds its directory with from the saved LDAP
+	// configuration; it always returns Directory and records the configurations it was given.
+	Directories   *fakes.DirectoryFactory
 	CodePlatforms *fakes.CodePlatform
 
 	server *httptest.Server
@@ -47,10 +50,12 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 	cfg.Admin.Email = AdminEmail
 	cfg.Admin.Password = AdminPassword
 	cfg.Admin.DisplayName = "Initial Admin"
+	defaultLDAP(&cfg)
 	for _, m := range mutate {
 		m(&cfg)
 	}
-	e := &Env{t: t, DSN: cfg.Database.DSN, Config: cfg, Directory: fakes.NewDirectory(), CodePlatforms: fakes.NewCodePlatform()}
+	dir := fakes.NewDirectory()
+	e := &Env{t: t, DSN: cfg.Database.DSN, Config: cfg, Directory: dir, Directories: fakes.NewDirectoryFactory(dir), CodePlatforms: fakes.NewCodePlatform()}
 	e.start()
 	return e
 }
@@ -65,17 +70,26 @@ func StartError(t testing.TB, mutate func(*app.Config)) error {
 	cfg.Admin.Username = AdminUsername
 	cfg.Admin.Email = AdminEmail
 	cfg.Admin.Password = AdminPassword
+	defaultLDAP(&cfg)
 	mutate(&cfg)
-	a, err := app.Start(context.Background(), cfg, app.Deps{Directory: fakes.NewDirectory(), CodePlatforms: fakes.NewCodePlatform()})
+	a, err := app.Start(context.Background(), cfg, app.Deps{Directories: fakes.NewDirectoryFactory(fakes.NewDirectory()), CodePlatforms: fakes.NewCodePlatform()})
 	if err == nil {
 		a.Close()
 	}
 	return err
 }
 
+// defaultLDAP puts an LDAP block in the configuration file, as the pre-#19 test environments
+// had a directory: the first start imports it, so LDAP login is on. Tests that want LDAP off
+// (or other file values) clear or change it in their mutate function.
+func defaultLDAP(cfg *app.Config) {
+	cfg.LDAP.URL = "ldap://directory.test:389"
+	cfg.LDAP.BaseDN = "dc=corp,dc=example"
+}
+
 func (e *Env) start() {
 	e.t.Helper()
-	a, err := app.Start(context.Background(), e.Config, app.Deps{Directory: e.Directory, CodePlatforms: e.CodePlatforms})
+	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms})
 	if err != nil {
 		e.t.Fatalf("app.Start: %v", err)
 	}

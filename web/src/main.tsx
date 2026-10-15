@@ -10,6 +10,7 @@ import { ApplicationPage } from './pages/ApplicationPage.tsx';
 import { ApplicationsPage } from './pages/ApplicationsPage.tsx';
 import { ApplicationVersions } from './pages/ApplicationVersions.tsx';
 import { AuditLogPage } from './pages/AuditLogPage.tsx';
+import { LdapConfigPage } from './pages/LdapConfigPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { PlatformsPage } from './pages/PlatformsPage.tsx';
 import { RolesPage } from './pages/RolesPage.tsx';
@@ -54,6 +55,7 @@ function App() {
         <Route path="settings"element={<SettingsPage />} />
         <Route path="admin/platforms" element={<PlatformsPage />} />
         <Route path="admin/users" element={<UsersPage />} />
+        <Route path="admin/ldap" element={<LdapConfigPage />} />
         <Route path="admin/roles" element={<RolesPage />} />
         <Route path="admin/audit" element={<AuditLogPage />} />
         <Route path="*" element={<NotFound />} />

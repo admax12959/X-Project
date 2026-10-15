@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // ---------------------------------------------------------------- Code platform (ADR-0001)
 
@@ -68,8 +71,32 @@ type DirectoryResult struct {
 	Entry   DirectoryEntry
 }
 
-// Directory is the single configured LDAP directory.
-// A nil Directory in Deps means LDAP is not configured.
+// LDAPConfig is everything needed to talk to the directory, with the service account
+// password decrypted. It is built from the stored configuration (ldap_config.go) every
+// time the directory is needed, and from the unsaved form for "test connection".
+type LDAPConfig struct {
+	URL            string
+	StartTLS       bool
+	SkipVerify     bool
+	BindDN         string
+	BindPassword   string
+	BaseDN         string
+	UserFilter     string
+	LoginAttr      string
+	NameAttr       string
+	EmailAttr      string
+	DepartmentAttr string
+	DisabledFilter string
+	Timeout        time.Duration
+}
+
+// DirectoryFactory creates a Directory for a configuration. It does not connect. A nil
+// factory in Deps means LDAP is not available at all.
+type DirectoryFactory interface {
+	Build(cfg LDAPConfig) (Directory, error)
+}
+
+// Directory is the LDAP directory a configuration points to (see DirectoryFactory).
 type Directory interface {
 	// Authenticate checks login + password and returns the account's attributes.
 	Authenticate(ctx context.Context, login, password string) DirectoryResult

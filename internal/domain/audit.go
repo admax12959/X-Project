@@ -49,6 +49,10 @@ const (
 	// AuditAdminFlagChanged: the administrator flag of a user changed. Target: the user.
 	// Params: from, to (booleans).
 	AuditAdminFlagChanged AuditAction = "adminFlagChanged"
+	// AuditConfigChanged: a section of the system configuration was saved with changes
+	// (#19). Target: the section (type systemConfig, id "ldap", ...). Params: section,
+	// changes = the NAMES of the changed fields (a secret is listed by name, never its value).
+	AuditConfigChanged AuditAction = "configChanged"
 )
 
 // AuditTargetType says what kind of object an entry is about.
@@ -57,6 +61,8 @@ type AuditTargetType string
 const (
 	AuditTargetUser        AuditTargetType = "user"
 	AuditTargetApplication AuditTargetType = "application"
+	// AuditTargetSystemConfig: a section of the system configuration; the id is the section name.
+	AuditTargetSystemConfig AuditTargetType = "systemConfig"
 )
 
 // AuditActor is who performed an operation: a user, or the command line in the container.
@@ -108,6 +114,10 @@ func appMemberAudit(action AuditAction, app Application, role MemberRole, user U
 
 func adminFlagChangedAudit(id UserID, from, to bool) auditEvent {
 	return auditEvent{AuditAdminFlagChanged, AuditTargetUser, userTargetID(id), map[string]any{"from": from, "to": to}}
+}
+
+func configChangedAudit(section string, changes []string) auditEvent {
+	return auditEvent{AuditConfigChanged, AuditTargetSystemConfig, section, map[string]any{"section": section, "changes": changes}}
 }
 
 // StoredAuditEntry is an audit row as the repository keeps it.
@@ -219,7 +229,7 @@ func (s *Service) ListAudit(ctx context.Context, actor Actor, q AuditQuery) (Aud
 		f.ActorID = UserID(n)
 	}
 	switch tt := AuditTargetType(strings.TrimSpace(q.TargetType)); tt {
-	case "", AuditTargetUser, AuditTargetApplication:
+	case "", AuditTargetUser, AuditTargetApplication, AuditTargetSystemConfig:
 		f.TargetType = tt
 	default:
 		c.Add("targetType", CodeInvalid, nil)

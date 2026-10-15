@@ -6,8 +6,8 @@
 // To add an audit action: see "Audit log" in docs/dev.md. One entry in `renderers` below is all the
 // frontend code it needs; the filter on the audit page lists these entries.
 import type { AuditActor, AuditEntry } from '../api/types.ts';
-import { hasKey, translate, type MessageKey, type Params } from '../i18n/index.ts';
-import { userName } from '../history/render.ts';
+import { getLocale, hasKey, translate, type MessageKey, type Params } from '../i18n/index.ts';
+import { joinNames, userName } from '../history/render.ts';
 
 type Renderer = (e: AuditEntry) => Params;
 
@@ -41,11 +41,22 @@ const renderers: Record<string, Renderer> = {
   identityUnbound: (e) => ({ user: targetUser(e), kind: kindName(e.params.kind), loginName: str(e.params.loginName) }),
   appMemberAdded: (e) => appMember(e),
   appMemberRemoved: (e) => appMember(e),
+  configChanged: (e) => ({
+    section: hasKey(`audit.section.${str(e.params.section)}`) ? translate(`audit.section.${str(e.params.section)}` as MessageKey) : str(e.params.section),
+    fields: configFields(e),
+  }),
   adminFlagChanged: (e) => ({
     user: targetUser(e),
     change: translate(e.params.to === true ? 'audit.adminFlag.granted' : 'audit.adminFlag.revoked'),
   }),
 };
+
+/** The changed field names of a configuration section, shown with the labels of that section's page. */
+function configFields(e: AuditEntry): string {
+  const names = Array.isArray(e.params.changes) ? e.params.changes.map(str) : [];
+  const label = (f: string) => (hasKey(`${str(e.params.section)}.field.${f}`) ? translate(`${str(e.params.section)}.field.${f}` as MessageKey) : f);
+  return joinNames(names.map(label), getLocale());
+}
 
 function appMember(e: AuditEntry): Params {
   const app = e.params.application as { key?: string; name?: string } | undefined;

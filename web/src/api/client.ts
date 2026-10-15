@@ -2,6 +2,7 @@
 import type {
   AdminUser,
   AuditPage,
+  ConnectionTest,
   AuditQuery,
   ApiFieldError,
   Application,
@@ -16,6 +17,8 @@ import type {
   CreateUserInput,
   IdentityKind,
   ForkInput,
+  LdapConfig,
+  LdapConfigInput,
   LineDetail,
   LineStatus,
   LineWithLog,
@@ -188,6 +191,16 @@ export const api = {
       const qs = new URLSearchParams();
       for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') qs.set(k, String(v));
       return request<AuditPage>('GET', `/api/audit-log${qs.size ? `?${qs}` : ''}`);
+    },
+  },
+  /** Administrators only (403 otherwise). Secret fields are write-only. Sections follow this shape: get, update (the whole form), test (the unsaved form). */
+  systemConfig: {
+    ldap: {
+      get: () => request<LdapConfig>('GET', '/api/system-config/ldap'),
+      /** 422 field errors per form field. Saved changes are in effect at once. */
+      update: (input: LdapConfigInput) => request<LdapConfig>('PUT', '/api/system-config/ldap', { body: input }),
+      /** Uses the form values, saves nothing. 422 for an invalid form; a failed connection is 200 {ok: false, code}. */
+      test: (input: LdapConfigInput) => request<ConnectionTest>('POST', '/api/system-config/ldap/test', { body: input }),
     },
   },
   /** Administrators only (403 otherwise). Read-only: built-in roles cannot be changed. */
