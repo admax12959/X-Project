@@ -112,7 +112,7 @@ make test-storage-contract    # = go test -count=1 -tags objectstorecontract ./i
 
 The local-disk adapter runs the shared suite against a temporary directory; the S3-compatible adapter runs it against a throwaway MinIO container (unique name, dynamic port, label `xproj-test`, one bucket per test). MinIO stopped publishing community images to Docker Hub and Quay in 2025/26, so the default image is Chainguard's `cgr.dev/chainguard/minio:latest`; set `XP_TEST_MINIO_IMAGE` to use another one (for example `pgsty/minio`). To use an existing S3-compatible server (also Aliyun OSS or Tencent COS; the account must be able to create and delete buckets) set `XP_TEST_S3_ENDPOINT`, `XP_TEST_S3_ACCESS_KEY`, `XP_TEST_S3_SECRET_KEY` and optionally `XP_TEST_S3_REGION` and `XP_TEST_S3_ADDRESSING`. `go vet -tags objectstorecontract ./internal/objectstore` checks that they compile. Run them when you change `internal/objectstore`, the port, or the AWS SDK version.
 
-Keep **all** API tests in `test/api`. Every extra test package starts another container. Write tests as user stories through HTTP only: no SQL, no calls into internal functions (the one exception is the fixture helper `env.SeedLineStatus`, see "Lines and lineage (#9)").
+Keep **all** API tests in `test/api`. Every extra test package starts another container. Write tests as user stories through HTTP only: no SQL, no calls into internal functions (the exceptions are the fixture helper `env.SeedLineStatus`, see "Lines and lineage (#9)", and `env.CurrentObjectStore`, which asks the domain service for the object store because no HTTP route uses it until the avatar ticket #32, see "Object storage (#24)").
 
 ## Conventions
 
