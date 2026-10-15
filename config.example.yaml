@@ -14,6 +14,9 @@ admin:                      # initial administrator, used only on the very first
 session:
   ttl: 12h
   cookie_secure: false      # true when served over HTTPS
+# mail:                     # delivery of the outgoing mail queue; the SMTP server itself is set on the Email page
+#   poll_interval: 5s
+#   retry_backoff: [1m, 5m, 30m, 2h, 6h]   # waits after each failed delivery; one more attempt than entries
 # ldap:                     # imported into the database once, on the first start that has none; afterwards edit it on the LDAP page
 #   url: "ldaps://ldap.corp.example:636"
 #   base_dn: "ou=people,dc=corp,dc=example"
