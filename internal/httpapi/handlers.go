@@ -72,8 +72,7 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	s.setSessionCookie(w, res.Token, res.ExpiresAt)
-	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(res.User), MustChangePassword: res.MustChangePassword})
+	s.loginResponse(w, res)
 }
 
 func (s *server) loginMethods(w http.ResponseWriter, r *http.Request) {

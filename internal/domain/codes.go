@@ -99,4 +99,9 @@ const (
 	CodeTokenExpired     = "tokenExpired"     // field "token"; the link has expired
 	CodeTokenUsed        = "tokenUsed"        // field "token"; the link has already been used
 	CodeInviteNotPending = "inviteNotPending" // request-level; the user has set a password already (or cannot log in by email), there is nothing to invite
+	// second factor (#22)
+	CodeTotpInvalid            = "totpInvalid"            // field "code"; wrong code, or one already used
+	CodeTotpLocked             = "totpLocked"             // HTTP 429; too many wrong codes; params {lockedUntil}
+	CodeTotpAlreadyEnabled     = "totpAlreadyEnabled"     // request-level; the user has an authenticator already
+	CodeSecondFactorUnreadable = "secondFactorUnreadable" // HTTP 503; the stored secret cannot be decrypted with the current master key
 )
