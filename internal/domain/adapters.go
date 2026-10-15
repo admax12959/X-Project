@@ -52,6 +52,8 @@ type DirectoryEntry struct {
 	DisplayName string
 	Email       string
 	Department  string
+	// Photo is the directory photo (thumbnailPhoto or jpegPhoto), raw; nil when the account has none.
+	Photo []byte
 }
 
 // DirectoryOutcome is the result kind of a directory call.

@@ -23,6 +23,7 @@ type adminUserJSON struct {
 	Status       string         `json:"status"`
 	IsAdmin      bool           `json:"isAdmin"`
 	Identities   []identityJSON `json:"identities"`
+	AvatarURL    *string        `json:"avatarUrl"`
 }
 
 type identityJSON struct {
@@ -36,7 +37,7 @@ func toAdminUserJSON(v domain.UserWithIdentities) adminUserJSON {
 	u := v.User
 	out := adminUserJSON{
 		ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName,
-		Email: u.Email, Phone: u.Phone, DirectoryDepartment: u.DirectoryDepartment, Language: u.Language, Status: string(u.Status), IsAdmin: u.IsAdmin,
+		Email: u.Email, Phone: u.Phone, DirectoryDepartment: u.DirectoryDepartment, Language: u.Language, Status: string(u.Status), IsAdmin: u.IsAdmin, AvatarURL: avatarURL(u.ID, u.AvatarHash),
 		Identities: make([]identityJSON, 0, len(v.Identities)),
 	}
 	if u.DepartmentID != 0 {

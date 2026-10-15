@@ -3,9 +3,10 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../api/client.ts';
 import { useT } from '../i18n/index.ts';
 import { DepartmentSelect, useDepartments } from '../org/DepartmentSelect.tsx';
+import { Avatar } from '../ui/Avatar.tsx';
 import { Field, Input } from '../ui/controls.tsx';
 
-export type PickerUser = { id: string; username: string; displayName: string; disabled?: boolean };
+export type PickerUser = { id: string; username: string; displayName: string; avatarUrl?: string | null; disabled?: boolean };
 
 /** The enabled users in a department or below (any logged-in user may ask). */
 const assignableInDepartment = (departmentId: string): Promise<PickerUser[]> => api.assignableUsers.list(departmentId).then((r) => r.items);
@@ -79,6 +80,7 @@ export function UserPicker({
             <li key={u.id}>
               <label className="flex cursor-pointer items-center gap-2 px-2.5 py-1 hover:bg-subtle">
                 <input type="checkbox" checked={selected.includes(u.id)} onChange={() => toggle(u.id)} />
+                <Avatar size="sm" name={u.displayName} url={u.avatarUrl} />
                 <span>{u.displayName}</span>
                 <span className="font-mono text-[12.5px] text-text-3">{u.username}</span>
                 {u.disabled && <span className="text-text-3">{t('apps.disabledSuffix')}</span>}

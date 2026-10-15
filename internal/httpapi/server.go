@@ -81,6 +81,7 @@ func (s *server) routes() {
 	s.mailRoutes()
 	s.userRoutes()
 	s.meRoutes()
+	s.avatarRoutes()
 	s.departmentRoutes()
 }
 

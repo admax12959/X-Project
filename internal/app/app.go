@@ -41,6 +41,9 @@ func (a *App) Close() {
 	_ = a.db.Close()
 }
 
+// avatarSweepInterval is how often orphan avatar objects are cleaned up.
+const avatarSweepInterval = 6 * time.Hour
+
 // Start connects to the database (retrying while it starts), runs migrations,
 // creates the initial administrator on first start, and builds the handler.
 func Start(ctx context.Context, cfg Config, deps Deps) (*App, error) {
@@ -86,6 +89,12 @@ func Start(ctx context.Context, cfg Config, deps Deps) (*App, error) {
 	go func() {
 		defer a.workers.Done()
 		svc.RunMailWorker(workCtx, cfg.Mail.PollInterval)
+	}()
+	// The avatar sweeper deletes avatar objects nobody points to (left behind by failures).
+	a.workers.Add(1)
+	go func() {
+		defer a.workers.Done()
+		svc.RunAvatarSweeper(workCtx, avatarSweepInterval)
 	}()
 	return a, nil
 }

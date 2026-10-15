@@ -61,4 +61,7 @@ export default {
   'error.storageBucketNotFound': 'The bucket (or local directory) was not found. Check the bucket name, the region and the addressing style.',
   'error.storageFailed': 'The object storage does not work. The server log has the details.',
   'error.storageUnavailable': 'The object storage is unavailable. An administrator should check the Storage page.',
+  'error.avatarTooLarge': 'The picture is larger than 2 MB, or has too many pixels. Choose a smaller one.',
+  'error.avatarUnsupportedType': 'Only JPEG, PNG and WebP pictures can be used as an avatar.',
+  'error.rateLimited': 'Too many attempts. Please try again in a few minutes.',
 };

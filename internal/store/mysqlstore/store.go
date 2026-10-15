@@ -106,14 +106,17 @@ func (s *Store) MarkBootstrapped(ctx context.Context, at time.Time) error {
 
 // ---------------------------------------------------------------- users
 
-const userCols = "id, username, display_name, email, phone, department, department_id, language, status, is_admin, created_at"
+const userCols = "id, username, display_name, email, phone, department, department_id, language, status, is_admin, created_at, avatar_key, avatar_hash, avatar_source"
 
 func scanUser(row interface{ Scan(...any) error }) (domain.User, error) {
 	var u domain.User
 	var status string
 	var dept sql.NullInt64
-	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Phone, &u.DirectoryDepartment, &dept, &u.Language, &status, &u.IsAdmin, &u.CreatedAt)
+	var avatarKey, avatarHash, avatarSource sql.NullString
+	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Phone, &u.DirectoryDepartment, &dept, &u.Language, &status, &u.IsAdmin, &u.CreatedAt,
+		&avatarKey, &avatarHash, &avatarSource)
 	u.Status, u.DepartmentID = domain.UserStatus(status), domain.DepartmentID(dept.Int64)
+	u.AvatarKey, u.AvatarHash, u.AvatarSource = avatarKey.String, avatarHash.String, domain.AvatarSource(avatarSource.String)
 	return u, err
 }
 

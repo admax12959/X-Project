@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router';
 import type { Member } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
 import { useCurrentUser } from '../session/session.tsx';
+import { Avatar } from '../ui/Avatar.tsx';
 import { Button, Container, KV } from '../ui/controls.tsx';
 import { PLATFORM_LABEL } from '../ui/labels.ts';
 import { DeleteApplicationDialog, EditApplicationDialog, EditDeployInfoDialog, EditMembersDialog } from './ApplicationDialogs.tsx';
@@ -19,6 +20,7 @@ function People({ list }: { list: Member[] }) {
     <ul>
       {list.map((m) => (
         <li key={m.id}>
+          <Avatar size="sm" name={m.displayName} url={m.avatarUrl} className="mr-1.5" />
           {m.displayName} <span className="font-mono text-[12.5px] text-text-3">{m.username}</span>
           {m.status === 'disabled' && <span className="text-text-3"> {t('apps.disabledSuffix')}</span>}
         </li>
