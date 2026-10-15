@@ -145,6 +145,12 @@ func (e *Env) CurrentObjectStore(ctx context.Context) (domain.ObjectStore, error
 	return e.app.Service.ObjectStore(ctx)
 }
 
+// SweepAvatarOrphans runs the avatar cleanup once, deleting every unreferenced avatar object
+// regardless of age (the periodic job only takes old ones). TEST ONLY FIXTURE.
+func (e *Env) SweepAvatarOrphans(ctx context.Context) (int, error) {
+	return e.app.Service.SweepAvatarOrphans(ctx, 0)
+}
+
 // Client returns a new browser-like client with its own cookie jar.
 func (e *Env) Client() *Client {
 	jar, _ := cookiejar.New(nil)

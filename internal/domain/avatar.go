@@ -297,6 +297,24 @@ func (s *Service) restoreDirectoryPhoto(ctx context.Context, id UserID) {
 
 // ---------------------------------------------------------------- cleanup
 
+// RunAvatarSweeper runs SweepAvatarOrphans every interval until ctx ends. The first pass comes one
+// interval after the start. A storage that is down or not configured yet is logged, not fatal.
+func (s *Service) RunAvatarSweeper(ctx context.Context, interval time.Duration) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(interval):
+		}
+		n, err := s.SweepAvatarOrphans(ctx, AvatarOrphanMinAge)
+		if err != nil && ctx.Err() == nil {
+			slog.Error("avatar: sweeping orphan objects", "err", err)
+		} else if n > 0 {
+			slog.Info("avatar: deleted orphan objects", "count", n)
+		}
+	}
+}
+
 // SweepAvatarOrphans deletes the objects under avatars/ that no user points to and that are at
 // least minAge old, and returns how many it deleted. Uploads and removals delete the object they
 // replace, so orphans only come from failures in between (a storage that was down, a crash).

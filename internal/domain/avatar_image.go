@@ -106,8 +106,8 @@ func processAvatar(data []byte) (jpg []byte, hash string, err error) {
 	// crop and shrink first (cheap) and turn the 256px result afterwards.
 	b := src.Bounds()
 	side := min(b.Dx(), b.Dy())
-	crop := image.Rect(b.Min.X+(b.Dx()-side)/2, b.Min.Y+(b.Dy()-side)/2, 0, 0)
-	crop.Max = image.Pt(crop.Min.X+side, crop.Min.Y+side)
+	x0, y0 := b.Min.X+(b.Dx()-side)/2, b.Min.Y+(b.Dy()-side)/2
+	crop := image.Rect(x0, y0, x0+side, y0+side)
 	small := image.NewNRGBA(image.Rect(0, 0, avatarSize, avatarSize))
 	xdraw.CatmullRom.Scale(small, small.Bounds(), src, crop, xdraw.Src, nil)
 

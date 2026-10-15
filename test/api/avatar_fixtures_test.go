@@ -75,7 +75,7 @@ func jpegSegment(marker byte, payload []byte) []byte {
 func withJPEGMetadata(jpg []byte, orientation uint16) []byte {
 	exif := []byte("Exif\x00\x00")
 	tiff := []byte{'M', 'M', 0, 42, 0, 0, 0, 8} // big endian, IFD0 at offset 8
-	tiff = append(tiff, 0, 1)                    // one entry
+	tiff = append(tiff, 0, 1)                   // one entry
 	tiff = append(tiff, 0x01, 0x12, 0, 3, 0, 0, 0, 1, byte(orientation>>8), byte(orientation), 0, 0)
 	tiff = append(tiff, 0, 0, 0, 0) // no next IFD
 	out := append([]byte{}, jpg[:2]...)
