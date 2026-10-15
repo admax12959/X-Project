@@ -75,12 +75,26 @@ func userIDOf(t *testing.T, u userBody) domain.UserID {
 	return domain.UserID(id)
 }
 
+// mailEnv returns an env whose mail is not configured yet (and the admin client). Create the
+// test's users first, then enableMail: once mail is configured, creating a user sends an
+// invitation instead of setting a temporary password (#21).
+func mailEnv(t *testing.T, mutate ...func(*app.Config)) (*apitest.Env, *apitest.Client) {
+	t.Helper()
+	env := apitest.New(t, mutate...)
+	return env, env.AdminClient()
+}
+
+// enableMail saves a working SMTP configuration (site address https://xp.corp.example).
+func enableMail(t *testing.T, admin *apitest.Client) {
+	t.Helper()
+	admin.Put(smtpConfigPath, smtpForm(nil)).ExpectStatus(http.StatusOK)
+}
+
 // configuredMail returns an env whose mail is configured (and the admin client).
 func configuredMail(t *testing.T, mutate ...func(*app.Config)) (*apitest.Env, *apitest.Client) {
 	t.Helper()
-	env := apitest.New(t, mutate...)
-	admin := env.AdminClient()
-	admin.Put(smtpConfigPath, smtpForm(nil)).ExpectStatus(http.StatusOK)
+	env, admin := mailEnv(t, mutate...)
+	enableMail(t, admin)
 	return env, admin
 }
 
