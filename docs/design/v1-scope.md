@@ -2,6 +2,8 @@
 
 术语以 `GLOSSARY.md` 为准；关键取舍见 `docs/adr/`。
 
+> 本文记录第一期的原始范围（已在 PR #17 实现）。第二期起本地身份改为邮箱身份，用登录邮箱登录，不再用用户名登录（#29，见 `docs/design/iam-scope.md`）；`GLOSSARY.md` 已按第二期的术语更新。
+
 ## 技术栈
 
 - 后端：Go，REST API
