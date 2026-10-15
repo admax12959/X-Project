@@ -21,6 +21,11 @@ import type {
   LdapConfig,
   LdapConfigInput,
   LineDetail,
+  MailStatus,
+  MailTestResult,
+  Outbox,
+  SmtpConfig,
+  SmtpConfigInput,
   LineStatus,
   LineWithLog,
   LineageNode,
@@ -204,6 +209,19 @@ export const api = {
       /** Uses the form values, saves nothing. 422 for an invalid form; a failed connection is 200 {ok: false, code}. */
       test: (input: LdapConfigInput) => request<ConnectionTest>('POST', '/api/system-config/ldap/test', { body: input }),
     },
+    smtp: {
+      get: () => request<SmtpConfig>('GET', '/api/system-config/smtp'),
+      /** 422 field errors per form field (plaintext needs allowPlaintext, siteUrl is required when enabled). Saved changes are in effect at once. */
+      update: (input: SmtpConfigInput) => request<SmtpConfig>('PUT', '/api/system-config/smtp', { body: input }),
+      /** Sends a test email with the unsaved form values to the signed-in administrator's contact email; saves nothing. A failed delivery is 200 {ok: false, code, detail}. */
+      test: (input: SmtpConfigInput) => request<MailTestResult>('POST', '/api/system-config/smtp/test', { body: input }),
+    },
+  },
+  mail: {
+    /** Any signed-in user: can mail be sent? Features that depend on mail (invitations, password recovery) are only offered when it can. */
+    status: () => request<{ configured: boolean }>('GET', '/api/mail/status'),
+    /** Administrators only. The newest mail of the outgoing queue, newest first, optionally of one status; counts cover the whole queue. */
+    outbox: (status?: MailStatus) => request<Outbox>('GET', `/api/mail-outbox${status ? `?status=${status}` : ''}`),
   },
   /** Administrators only (403 otherwise). Read-only: built-in roles cannot be changed. */
   roles: {

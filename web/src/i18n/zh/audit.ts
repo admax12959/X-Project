@@ -47,6 +47,7 @@ export default {
   'audit.action.appMemberRemoved': '移除 Owner / PE',
   'audit.action.configChanged': '修改系统配置',
   'audit.section.ldap': 'LDAP',
+  'audit.section.smtp': '邮件',
   'audit.action.adminFlagChanged': '修改管理员角色',
   'audit.event.userCreated': '创建用户 {user}，登录邮箱 {loginEmail}',
   'audit.event.loginEmailChanged': '将 {user} 的登录邮箱从 {from} 改为 {to}',

@@ -12,6 +12,7 @@ import { ApplicationVersions } from './pages/ApplicationVersions.tsx';
 import { AuditLogPage } from './pages/AuditLogPage.tsx';
 import { DepartmentsPage } from './pages/DepartmentsPage.tsx';
 import { LdapConfigPage } from './pages/LdapConfigPage.tsx';
+import { MailConfigPage } from './pages/MailConfigPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { PlatformsPage } from './pages/PlatformsPage.tsx';
 import { RolesPage } from './pages/RolesPage.tsx';
@@ -58,6 +59,7 @@ function App() {
         <Route path="admin/users" element={<UsersPage />} />
         <Route path="admin/departments" element={<DepartmentsPage />} />
         <Route path="admin/ldap" element={<LdapConfigPage />} />
+        <Route path="admin/mail" element={<MailConfigPage />} />
         <Route path="admin/roles" element={<RolesPage />} />
         <Route path="admin/audit" element={<AuditLogPage />} />
         <Route path="*" element={<NotFound />} />
