@@ -126,7 +126,7 @@ func (s *Service) Bootstrap(ctx context.Context, admin InitialAdmin) error {
 		}
 		if err := tx.CreateIdentity(ctx, LoginIdentity{
 			UserID: id, Kind: IdentityEmail, LoginName: admin.Email,
-			PasswordHash: hash, BoundAt: now, BoundVia: BoundViaBootstrap,
+			PasswordHash: hash, PasswordSet: true, BoundAt: now, BoundVia: BoundViaBootstrap,
 		}); err != nil {
 			return err
 		}

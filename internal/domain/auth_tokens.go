@@ -264,7 +264,7 @@ func (s *Service) SendInvitation(ctx context.Context, actor Actor, id UserID) er
 		if err != nil {
 			return err
 		}
-		if !hasEmail || ident.PasswordHash != "" || u.Status != UserEnabled {
+		if !hasEmail || ident.PasswordSet || u.Status != UserEnabled {
 			return newKind(KindValidation, CodeInviteNotPending)
 		}
 		return s.inviteWithin(ctx, tx, u.ID, ident.LoginName)

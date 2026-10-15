@@ -48,7 +48,7 @@ func toAdminUserJSON(v domain.UserWithIdentities) adminUserJSON {
 	for _, i := range v.Identities {
 		out.Identities = append(out.Identities, identityJSON{
 			Kind: string(i.Kind), LoginName: i.LoginName, BoundAt: formatTime(i.BoundAt), BoundVia: string(i.BoundVia),
-			InvitePending: i.Kind == domain.IdentityEmail && i.PasswordHash == "",
+			InvitePending: i.Kind == domain.IdentityEmail && !i.PasswordSet,
 		})
 	}
 	return out

@@ -152,7 +152,7 @@ func (s *Service) CreateEmailUser(ctx context.Context, actor Actor, in CreateEma
 		u.ID = id
 		ident := LoginIdentity{
 			UserID: id, Kind: IdentityEmail, LoginName: in.LoginEmail,
-			PasswordHash: hash, BoundAt: now, BoundVia: BoundViaAdmin, MustChangePassword: !invite,
+			PasswordHash: hash, PasswordSet: hash != "", BoundAt: now, BoundVia: BoundViaAdmin, MustChangePassword: !invite,
 		}
 		created = UserWithIdentities{User: u, Identities: []LoginIdentity{ident}}
 		err = tx.CreateIdentity(ctx, ident)
@@ -377,6 +377,10 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 			if err := tx.RenameEmailLogin(ctx, id, newLoginEmail); errors.Is(err, ErrIdentityTaken) {
 				return loginEmailTaken("loginEmail")
 			} else if err != nil {
+				return err
+			}
+			// A link mailed to the old address must not work any more.
+			if err := tx.UseUserAuthTokens(ctx, id, passwordTokenPurposes, s.nowUTC()); err != nil {
 				return err
 			}
 			for i := range cur.Identities {

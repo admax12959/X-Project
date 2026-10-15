@@ -380,3 +380,48 @@ func TestWithoutMailTheAdministratorsTemporaryPasswordStillWorks(t *testing.T) {
 	delete(body, "password")
 	admin.Post("/api/users", body).ExpectError(http.StatusUnprocessableEntity, "password", "required")
 }
+
+func pendingInList(t *testing.T, admin *apitest.Client, username string) bool {
+	t.Helper()
+	for _, u := range listUsers(t, admin) {
+		if u.Username == username {
+			return len(u.Identities) == 1 && u.Identities[0].InvitePending
+		}
+	}
+	t.Fatalf("user %s is not in the list", username)
+	return false
+}
+
+func TestTheUserListShowsWhoseInvitationIsStillPending(t *testing.T) {
+	t.Parallel()
+	env, admin := mailEnv(t)
+	temp := createUserRaw(t, admin, map[string]any{"username": "tempo", "password": "temp-password-1"})
+	enableMail(t, admin)
+	carol := createUserRaw(t, admin, map[string]any{"username": "carol"})
+	_ = temp
+
+	if pendingInList(t, admin, "tempo") {
+		t.Fatal("a user with a temporary password is listed as invited")
+	}
+	if !pendingInList(t, admin, "carol") {
+		t.Fatal("an invited user is not listed as pending")
+	}
+	setPassword(env.Client(), tokenFromMail(t, env, carol.Email, 1), "carols-own-pw-1").ExpectStatus(http.StatusNoContent)
+	if pendingInList(t, admin, "carol") {
+		t.Fatal("a user who chose their password is still listed as pending")
+	}
+}
+
+func TestChangingTheLoginEmailKillsLinksSentToTheOldAddress(t *testing.T) {
+	t.Parallel()
+	env, admin := mailEnv(t)
+	enableMail(t, admin)
+	carol := createUserRaw(t, admin, map[string]any{"username": "carol"})
+	token := tokenFromMail(t, env, carol.Email, 1)
+
+	admin.Do(http.MethodPatch, "/api/users/"+carol.ID, map[string]any{"loginEmail": "carol.new@example.com"}).ExpectStatus(http.StatusOK)
+
+	setPassword(env.Client(), token, "carols-own-pw-1").ExpectError(http.StatusUnprocessableEntity, "token", "tokenUsed")
+	admin.Post("/api/users/"+carol.ID+"/invitation", nil).ExpectStatus(http.StatusAccepted)
+	tokenFromMail(t, env, "carol.new@example.com", 1)
+}

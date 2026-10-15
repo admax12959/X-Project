@@ -45,7 +45,7 @@ func (s *Store) userWithIdentities(ctx context.Context, id domain.UserID, lock s
 		return domain.UserWithIdentities{}, false, err
 	}
 	out := domain.UserWithIdentities{User: u, Identities: []domain.LoginIdentity{}}
-	rows, err := s.q.QueryContext(ctx, "SELECT user_id, kind, login_name, bound_at, bound_via FROM login_identities WHERE user_id = ? ORDER BY id", id)
+	rows, err := s.q.QueryContext(ctx, "SELECT user_id, kind, login_name, bound_at, bound_via, password_hash IS NOT NULL FROM login_identities WHERE user_id = ? ORDER BY id", id)
 	if err != nil {
 		return out, false, err
 	}
@@ -53,7 +53,7 @@ func (s *Store) userWithIdentities(ctx context.Context, id domain.UserID, lock s
 	for rows.Next() {
 		var i domain.LoginIdentity
 		var kind, via string
-		if err := rows.Scan(&i.UserID, &kind, &i.LoginName, &i.BoundAt, &via); err != nil {
+		if err := rows.Scan(&i.UserID, &kind, &i.LoginName, &i.BoundAt, &via, &i.PasswordSet); err != nil {
 			return out, false, err
 		}
 		i.Kind, i.BoundVia = domain.IdentityKind(kind), domain.BoundVia(via)
@@ -153,7 +153,7 @@ func (s *Store) listUsers(ctx context.Context, where string, args []any) ([]doma
 		return nil, err
 	}
 
-	idRows, err := s.q.QueryContext(ctx, "SELECT user_id, kind, login_name, bound_at, bound_via FROM login_identities WHERE user_id IN (SELECT id FROM users"+where+") ORDER BY id", args...)
+	idRows, err := s.q.QueryContext(ctx, "SELECT user_id, kind, login_name, bound_at, bound_via, password_hash IS NOT NULL FROM login_identities WHERE user_id IN (SELECT id FROM users"+where+") ORDER BY id", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (s *Store) listUsers(ctx context.Context, where string, args []any) ([]doma
 	for idRows.Next() {
 		var i domain.LoginIdentity
 		var kind, via string
-		if err := idRows.Scan(&i.UserID, &kind, &i.LoginName, &i.BoundAt, &via); err != nil {
+		if err := idRows.Scan(&i.UserID, &kind, &i.LoginName, &i.BoundAt, &via, &i.PasswordSet); err != nil {
 			return nil, err
 		}
 		i.Kind, i.BoundVia = domain.IdentityKind(kind), domain.BoundVia(via)
