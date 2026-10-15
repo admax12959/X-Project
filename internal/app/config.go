@@ -58,6 +58,11 @@ type Config struct {
 		PollInterval time.Duration   `yaml:"poll_interval"` // XP_MAIL_POLL_INTERVAL, how often the queue is looked at, default 5s
 		RetryBackoff []time.Duration `yaml:"retry_backoff"` // XP_MAIL_RETRY_BACKOFF, comma separated waits after the 1st, 2nd, ... failed delivery; delivery is tried len+1 times. Default 1m,5m,30m,2h,6h
 	} `yaml:"mail"`
+	// Storage: until an administrator configures an S3-compatible object storage (admin page
+	// "Storage"), objects (avatars) live in a directory on the local disk. Mount a volume here.
+	Storage struct {
+		LocalDir string `yaml:"local_dir"` // XP_STORAGE_DIR, default data/storage
+	} `yaml:"storage"`
 	Session struct {
 		TTL         time.Duration `yaml:"ttl"`           // XP_SESSION_TTL, default 12h
 		CookieSecure bool          `yaml:"cookie_secure"` // XP_COOKIE_SECURE, set true behind HTTPS
@@ -73,6 +78,7 @@ func DefaultConfig() Config {
 	c.SecretKeyVersion = 1
 	c.Mail.PollInterval = 5 * time.Second
 	c.Mail.RetryBackoff = append([]time.Duration(nil), domain.DefaultMailRetryBackoff...)
+	c.Storage.LocalDir = "data/storage"
 	return c
 }
 
@@ -111,6 +117,7 @@ func Load() (Config, error) {
 	}
 	str("XP_LISTEN", &c.Listen)
 	str("XP_WEB_DIR", &c.WebDir)
+	str("XP_STORAGE_DIR", &c.Storage.LocalDir)
 	str("XP_DB_DSN", &c.Database.DSN)
 	str("XP_SECRET_KEY", &c.SecretKey)
 	str("XP_SECRET_KEY_FILE", &c.SecretKeyFile)

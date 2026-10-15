@@ -15,6 +15,7 @@ import (
 	"github.com/admax12959/X-Project/internal/codeplatform"
 	"github.com/admax12959/X-Project/internal/ldapdir"
 	"github.com/admax12959/X-Project/internal/mailer"
+	"github.com/admax12959/X-Project/internal/objectstore"
 )
 
 func main() {
@@ -32,7 +33,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	a, err := app.Start(ctx, cfg, app.Deps{Directories: ldapdir.Factory{}, CodePlatforms: codeplatform.New(), MailSenders: mailer.Factory{}})
+	a, err := app.Start(ctx, cfg, app.Deps{Directories: ldapdir.Factory{}, CodePlatforms: codeplatform.New(), MailSenders: mailer.Factory{}, ObjectStores: objectstore.Factory{}})
 	if err != nil {
 		return err
 	}

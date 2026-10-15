@@ -55,4 +55,9 @@ export default {
   'error.smtpSenderRejected': '邮件服务器拒绝了发件人地址。',
   'error.smtpRecipientRejected': '邮件服务器拒绝了收件人地址。',
   'error.smtpRejected': '邮件服务器拒绝了这封邮件。',
+  'error.storageUnreachable': '无法连接对象存储，请检查服务地址、网络和证书。',
+  'error.storageAccessDenied': '对象存储拒绝了访问：请检查访问密钥和权限。',
+  'error.storageBucketNotFound': '找不到存储桶（或本地目录），请检查存储桶名称、地域和寻址方式。',
+  'error.storageFailed': '对象存储不可用，详情见服务器日志。',
+  'error.storageUnavailable': '对象存储不可用，请管理员检查“存储”页的配置。',
 };

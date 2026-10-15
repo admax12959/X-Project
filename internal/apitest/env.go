@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -40,6 +41,11 @@ type Env struct {
 	// Mailer is the fake SMTP side: the application builds its sender from the saved mail
 	// configuration through it, and it records the messages that would have been delivered.
 	Mailer *fakes.Mailer
+	// Objects is the in-memory object store the application uses whatever the saved storage
+	// configuration says; ObjectStores is the factory that hands it out and records the
+	// configurations it was asked to build a store for.
+	Objects      *fakes.ObjectStore
+	ObjectStores *fakes.ObjectStoreFactory
 
 	server *httptest.Server
 	app    *app.App
@@ -64,6 +70,7 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 	cfg.Admin.Email = AdminEmail
 	cfg.Admin.Password = AdminPassword
 	cfg.Admin.DisplayName = "Initial Admin"
+	cfg.Storage.LocalDir = filepath.Join(t.TempDir(), "storage")
 	defaultLDAP(&cfg)
 	// Mail is delivered by a background worker: look at the queue often and retry quickly, so
 	// tests wait milliseconds, not minutes. Four delivery attempts in all.
@@ -73,7 +80,9 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 		m(&cfg)
 	}
 	dir := fakes.NewDirectory()
-	e := &Env{t: t, DSN: cfg.Database.DSN, Config: cfg, Directory: dir, Directories: fakes.NewDirectoryFactory(dir), CodePlatforms: fakes.NewCodePlatform(), Mailer: fakes.NewMailer()}
+	objects := fakes.NewObjectStore()
+	e := &Env{t: t, DSN: cfg.Database.DSN, Config: cfg, Directory: dir, Directories: fakes.NewDirectoryFactory(dir), CodePlatforms: fakes.NewCodePlatform(),
+		Mailer: fakes.NewMailer(), Objects: objects, ObjectStores: fakes.NewObjectStoreFactory(objects)}
 	e.start()
 	return e
 }
@@ -90,7 +99,7 @@ func StartError(t testing.TB, mutate func(*app.Config)) error {
 	cfg.Admin.Password = AdminPassword
 	defaultLDAP(&cfg)
 	mutate(&cfg)
-	a, err := app.Start(context.Background(), cfg, app.Deps{Directories: fakes.NewDirectoryFactory(fakes.NewDirectory()), CodePlatforms: fakes.NewCodePlatform()})
+	a, err := app.Start(context.Background(), cfg, app.Deps{Directories: fakes.NewDirectoryFactory(fakes.NewDirectory()), CodePlatforms: fakes.NewCodePlatform(), ObjectStores: fakes.NewObjectStoreFactory(fakes.NewObjectStore())})
 	if err == nil {
 		a.Close()
 	}
@@ -107,7 +116,7 @@ func defaultLDAP(cfg *app.Config) {
 
 func (e *Env) start() {
 	e.t.Helper()
-	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms, MailSenders: e.Mailer})
+	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms, MailSenders: e.Mailer, ObjectStores: e.ObjectStores})
 	if err != nil {
 		e.t.Fatalf("app.Start: %v", err)
 	}
@@ -128,6 +137,12 @@ func (e *Env) Restart(mutate ...func(*app.Config)) {
 	}
 	e.server.Close()
 	e.start()
+}
+
+// CurrentObjectStore asks the application for the object store it would use now, built from
+// the saved storage configuration (what the avatar code does).
+func (e *Env) CurrentObjectStore(ctx context.Context) (domain.ObjectStore, error) {
+	return e.app.Service.ObjectStore(ctx)
 }
 
 // Client returns a new browser-like client with its own cookie jar.

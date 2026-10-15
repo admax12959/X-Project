@@ -21,15 +21,14 @@ type Deps struct {
 	Directories   domain.DirectoryFactory    // builds the LDAP directory from the stored configuration; nil = LDAP unavailable
 	CodePlatforms domain.CodePlatformAdapter // nil = no platform adapter available
 	MailSenders   domain.MailSenderFactory   // builds the SMTP sender from the stored mail configuration; nil = mail cannot be sent
+	ObjectStores  domain.ObjectStoreFactory  // builds the object store from the stored configuration; nil = object storage unavailable
 	Now           func() time.Time           // nil = time.Now
 }
 
 // App is a started application.
 type App struct {
 	Handler http.Handler
-	// Service is the domain service the handler uses. Tests reach the entry points that
-	// have no HTTP route (such as EnqueueMail) through it.
-	Service *domain.Service
+	Service *domain.Service // the domain service behind Handler, for callers that are not HTTP (tests such as env.EnqueueMail, CLI commands)
 	db      *sql.DB
 	stop    context.CancelFunc
 	workers sync.WaitGroup
@@ -60,6 +59,7 @@ func Start(ctx context.Context, cfg Config, deps Deps) (*App, error) {
 	svc := domain.NewService(mysqlstore.New(db), domain.Options{
 		DirectoryFactory: deps.Directories, CodePlatforms: deps.CodePlatforms, MailSenders: deps.MailSenders, Now: deps.Now, SessionTTL: cfg.Session.TTL,
 		SecretKey: masterKey, SecretKeyVersion: cfg.SecretKeyVersion, MailRetryBackoff: cfg.Mail.RetryBackoff,
+		ObjectStoreFactory: deps.ObjectStores, LocalStorageDir: cfg.Storage.LocalDir,
 	})
 	if err := svc.Bootstrap(ctx, domain.InitialAdmin{
 		Username: cfg.Admin.Username, Password: cfg.Admin.Password,

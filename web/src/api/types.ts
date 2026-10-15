@@ -310,6 +310,35 @@ export type LdapConfig = {
 /** The whole LDAP form as sent by PUT and by "test connection". bindPassword empty/absent keeps the stored one. */
 export type LdapConfigInput = Omit<LdapConfig, 'bindPasswordSet' | 'secretsUnreadable' | 'configured' | 'updatedAt'> & { bindPassword?: string };
 
+export type StorageDriver = 'local' | 's3';
+export type StorageAddressing = 'path' | 'virtualHost';
+
+/**
+ * GET/PUT /api/system-config/storage (administrators only). Both parts of the access key are write-only:
+ * the response only says whether they are stored. secretsUnreadable: a stored secret cannot be decrypted with
+ * the current master key, enter the key again. localDir: where the local driver keeps objects (a deployment
+ * setting). configured: saved at least once (false = defaults shown, objects live on the local disk).
+ */
+export type StorageConfig = {
+  driver: StorageDriver;
+  endpoint: string;
+  region: string;
+  bucket: string;
+  addressing: StorageAddressing;
+  accessKeyIdSet: boolean;
+  secretAccessKeySet: boolean;
+  secretsUnreadable: boolean;
+  localDir: string;
+  configured: boolean;
+  updatedAt?: string;
+};
+
+/** The whole storage form as sent by PUT and by "test connection". Empty/absent key fields keep the stored key. */
+export type StorageConfigInput = Pick<StorageConfig, 'driver' | 'endpoint' | 'region' | 'bucket' | 'addressing'> & {
+  accessKeyId?: string;
+  secretAccessKey?: string;
+};
+
 /** Answer of every "test connection" route: ok, or ok=false with the error code (message "error.<code>"). A failed test is HTTP 200. */
 export type ConnectionTest = { ok: boolean; code?: string };
 

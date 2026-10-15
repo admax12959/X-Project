@@ -20,6 +20,8 @@ import type {
   ForkInput,
   LdapConfig,
   LdapConfigInput,
+  StorageConfig,
+  StorageConfigInput,
   LineDetail,
   MailStatus,
   MailTestResult,
@@ -215,6 +217,13 @@ export const api = {
       update: (input: SmtpConfigInput) => request<SmtpConfig>('PUT', '/api/system-config/smtp', { body: input }),
       /** Sends a test email with the unsaved form values to the signed-in administrator's contact email; saves nothing. A failed delivery is 200 {ok: false, code, detail}. */
       test: (input: SmtpConfigInput) => request<MailTestResult>('POST', '/api/system-config/smtp/test', { body: input }),
+    },
+    storage: {
+      get: () => request<StorageConfig>('GET', '/api/system-config/storage'),
+      /** 422 field errors per form field (S3 fields only for driver s3). Saved changes are in effect at once. */
+      update: (input: StorageConfigInput) => request<StorageConfig>('PUT', '/api/system-config/storage', { body: input }),
+      /** Writes, reads back and deletes a probe object using the form values (unsaved). A failed test is 200 {ok: false, code}. */
+      test: (input: StorageConfigInput) => request<ConnectionTest>('POST', '/api/system-config/storage/test', { body: input }),
     },
   },
   mail: {

@@ -21,8 +21,10 @@ type Service struct {
 	repo          Repository
 	directories   DirectoryFactory // nil: LDAP is not available; the directory is built from the stored configuration (ldap_config.go)
 	codePlatforms CodePlatformAdapter
-	mailSenders   MailSenderFactory // nil: mail cannot be sent; the sender is built from the stored mail configuration (mail_config.go)
-	mailBackoff   []time.Duration // wait after the 1st, 2nd, ... failed delivery; len+1 attempts in all (mail_queue.go)
+	mailSenders   MailSenderFactory  // nil: mail cannot be sent; the sender is built from the stored mail configuration (mail_config.go)
+	mailBackoff   []time.Duration    // wait after the 1st, 2nd, ... failed delivery; len+1 attempts in all (mail_queue.go)
+	objectStores  ObjectStoreFactory // nil: object storage is not available; the store is built from the stored configuration (storage_config.go)
+	localDir      string             // directory of the local object store, used until an S3 storage is configured
 	now           func() time.Time
 	sessionTTL    time.Duration
 	tokens        tokenCipher // encrypts stored secrets; zero value when no SecretKey
@@ -30,14 +32,16 @@ type Service struct {
 
 // Options configures a Service.
 type Options struct {
-	DirectoryFactory DirectoryFactory
-	CodePlatforms    CodePlatformAdapter
-	MailSenders      MailSenderFactory
-	MailRetryBackoff []time.Duration // default DefaultMailRetryBackoff
-	Now          func() time.Time // defaults to time.Now
-	SessionTTL       time.Duration
-	SecretKey        string // the master key: encrypts stored secrets; the app refuses to start without it
-	SecretKeyVersion int    // version of the master key, recorded with every stored secret; default 1
+	DirectoryFactory   DirectoryFactory
+	CodePlatforms      CodePlatformAdapter
+	MailSenders        MailSenderFactory
+	MailRetryBackoff   []time.Duration // default DefaultMailRetryBackoff
+	ObjectStoreFactory ObjectStoreFactory
+	LocalStorageDir    string           // directory of the local-disk object store
+	Now                func() time.Time // defaults to time.Now
+	SessionTTL         time.Duration
+	SecretKey          string // the master key: encrypts stored secrets; the app refuses to start without it
+	SecretKeyVersion   int    // version of the master key, recorded with every stored secret; default 1
 }
 
 func NewService(repo Repository, o Options) *Service {
@@ -54,7 +58,10 @@ func NewService(repo Repository, o Options) *Service {
 	if o.SecretKeyVersion > 0 {
 		tokens.version = o.SecretKeyVersion
 	}
-	return &Service{repo: repo, directories: o.DirectoryFactory, codePlatforms: o.CodePlatforms, mailSenders: o.MailSenders, mailBackoff: o.MailRetryBackoff, now: o.Now, sessionTTL: o.SessionTTL, tokens: tokens}
+	return &Service{
+		repo: repo, directories: o.DirectoryFactory, codePlatforms: o.CodePlatforms, mailSenders: o.MailSenders, mailBackoff: o.MailRetryBackoff,
+		objectStores: o.ObjectStoreFactory, localDir: o.LocalStorageDir, now: o.Now, sessionTTL: o.SessionTTL, tokens: tokens,
+	}
 }
 
 func (s *Service) nowUTC() time.Time { return s.now().UTC().Truncate(time.Microsecond) }

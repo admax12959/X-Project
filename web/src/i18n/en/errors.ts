@@ -56,4 +56,9 @@ export default {
   'error.smtpSenderRejected': 'The mail server refused the sender address.',
   'error.smtpRecipientRejected': 'The mail server refused the recipient address.',
   'error.smtpRejected': 'The mail server refused the message.',
+  'error.storageUnreachable': 'Cannot reach the object storage. Check the endpoint, the network and the certificate.',
+  'error.storageAccessDenied': 'The object storage refused access: check the access key and its permissions.',
+  'error.storageBucketNotFound': 'The bucket (or local directory) was not found. Check the bucket name, the region and the addressing style.',
+  'error.storageFailed': 'The object storage does not work. The server log has the details.',
+  'error.storageUnavailable': 'The object storage is unavailable. An administrator should check the Storage page.',
 };

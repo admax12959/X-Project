@@ -49,6 +49,7 @@ export default {
   'audit.action.configChanged': 'Change system configuration',
   'audit.section.ldap': 'LDAP',
   'audit.section.smtp': 'email',
+  'audit.section.storage': 'Object storage',
   'audit.event.userCreated': 'Created user {user} with login email {loginEmail}',
   'audit.event.loginEmailChanged': 'Changed the login email of {user} from {from} to {to}',
   'audit.event.identityBound': 'Bound the {kind} login identity {loginName} to {user} ({via})',

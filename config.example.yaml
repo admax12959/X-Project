@@ -11,6 +11,8 @@ admin:                      # initial administrator, used only on the very first
   password: change-me-now
   display_name: Administrator
   email: admin@example.com  # the login email: the administrator logs in with it, not with the username
+storage:
+  local_dir: data/storage   # where files (avatars) live until an S3-compatible storage is configured on the Storage page; must be persistent
 session:
   ttl: 12h
   cookie_secure: false      # true when served over HTTPS
