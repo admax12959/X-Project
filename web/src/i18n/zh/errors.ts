@@ -43,4 +43,6 @@ export default {
   'error.repoNotFound': '代码平台上找不到这个仓库，请检查仓库路径。',
   'error.repoForbidden': '代码平台的令牌无权访问这个仓库。',
   'error.platformUnreachable': '无法连接代码平台，请稍后再试。',
+  'error.departmentCycle': '部门不能移到自己或自己的下级部门里。',
+  'error.departmentNotEmpty': '这个部门下还有 {members} 个用户和 {children} 个下级部门，请先移走或调整。',
 };

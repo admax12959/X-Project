@@ -44,4 +44,6 @@ export default {
   'error.repoNotFound': 'The code platform has no repository at this path. Check the repository path.',
   'error.repoForbidden': 'The code platform token has no access to this repository.',
   'error.platformUnreachable': 'Cannot reach the code platform. Try again later.',
+  'error.departmentCycle': 'A department cannot be moved into itself or into one of its own sub-departments.',
+  'error.departmentNotEmpty': 'This department still has {members} users and {children} sub-departments. Move or reassign them first.',
 };

@@ -229,7 +229,7 @@ export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displa
 export type AuditActor = { kind: 'user' | 'cli'; id?: string; username?: string; displayName?: string };
 
 /** Object of an audit entry: a user (id = user ID, with the user's name) or an application (id = application key). */
-export type AuditTarget = { type: 'user' | 'application'; id: string; username?: string; displayName?: string };
+export type AuditTarget = { type: 'user' | 'application' | 'department'; id: string; username?: string; displayName?: string };
 
 /**
  * GET /api/audit-log: an action type plus params, rendered in the UI language (src/audit/render.ts).

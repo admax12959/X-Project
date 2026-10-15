@@ -171,7 +171,7 @@ func (s *server) updateApplication(w http.ResponseWriter, r *http.Request) {
 
 // listAssignableUsers serves GET /api/assignable-users: enabled users for the Owner/PE pickers.
 func (s *server) listAssignableUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := s.svc.ListAssignableUsers(r.Context(), actorOf(r))
+	users, err := s.svc.ListAssignableUsers(r.Context(), actorOf(r), r.URL.Query().Get("departmentId"))
 	if err != nil {
 		writeError(w, r, err)
 		return

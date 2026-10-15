@@ -10,15 +10,15 @@ import (
 
 // userBody mirrors the administrator view of a user (GET /api/users items).
 type userBody struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
-	Email       string `json:"email"`
-	Phone       string `json:"phone"`
+	ID                  string `json:"id"`
+	Username            string `json:"username"`
+	DisplayName         string `json:"displayName"`
+	Email               string `json:"email"`
+	Phone               string `json:"phone"`
 	DirectoryDepartment string `json:"directoryDepartment"`
-	Status      string `json:"status"`
-	IsAdmin     bool   `json:"isAdmin"`
-	Identities  []struct {
+	Status              string `json:"status"`
+	IsAdmin             bool   `json:"isAdmin"`
+	Identities          []struct {
 		Kind      string `json:"kind"`
 		LoginName string `json:"loginName"`
 		BoundVia  string `json:"boundVia"`

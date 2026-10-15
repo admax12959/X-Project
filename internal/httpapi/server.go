@@ -79,6 +79,7 @@ func (s *server) routes() {
 	s.route("GET /api/audit-log", s.listAudit) // read-only: the audit log is append-only
 	s.userRoutes()
 	s.meRoutes()
+	s.departmentRoutes()
 }
 
 // mustChangeAllowed are the only routes a session opened with an administrator-chosen
