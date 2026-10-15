@@ -150,6 +150,10 @@ type LoginResult struct {
 	ExpiresAt          time.Time
 	User               User
 	MustChangePassword bool
+	// SecondFactorToken is set instead of Token when the user has a second factor: the first
+	// factor passed, but there is no session until SubmitSecondFactor gets a right code.
+	SecondFactorToken     string
+	SecondFactorExpiresAt time.Time
 }
 
 // A fixed bcrypt hash so unknown login emails cost the same as wrong passwords.
@@ -215,7 +219,20 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	return s.openSession(ctx, u, ident.MustChangePassword)
 }
 
+// openSession is the end of a passed first factor: a session, or, for a user with a second
+// factor, a login challenge to be completed with SubmitSecondFactor (secondfactor.go).
 func (s *Service) openSession(ctx context.Context, u User, mustChange bool) (LoginResult, error) {
+	on, err := hasEnabledTOTP(ctx, s.repo, u.ID)
+	if err != nil {
+		return LoginResult{}, err
+	}
+	if on {
+		return s.issueLoginChallenge(ctx, u, mustChange)
+	}
+	return s.createSession(ctx, u, mustChange)
+}
+
+func (s *Service) createSession(ctx context.Context, u User, mustChange bool) (LoginResult, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return LoginResult{}, err

@@ -93,4 +93,10 @@ const (
 	CodeSmtpSenderRejected    = "smtpSenderRejected"    // the server refused the sender address
 	CodeSmtpRecipientRejected = "smtpRecipientRejected" // the server refused the recipient address
 	CodeSmtpRejected          = "smtpRejected"          // the server refused the message or answered unexpectedly
+
+	// second factor (#22)
+	CodeTotpInvalid            = "totpInvalid"            // field "code"; wrong code, or one already used
+	CodeTotpLocked             = "totpLocked"             // HTTP 429; too many wrong codes; params {lockedUntil}
+	CodeTotpAlreadyEnabled     = "totpAlreadyEnabled"     // request-level; the user has an authenticator already
+	CodeSecondFactorUnreadable = "secondFactorUnreadable" // HTTP 503; the stored secret cannot be decrypted with the current master key
 )
