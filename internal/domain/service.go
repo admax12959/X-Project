@@ -19,7 +19,7 @@ import (
 // Service is the domain service.
 type Service struct {
 	repo          Repository
-	directory     Directory // nil when LDAP is not configured
+	directories   DirectoryFactory // nil: LDAP is not available; the directory is built from the stored configuration (ldap_config.go)
 	codePlatforms CodePlatformAdapter
 	now           func() time.Time
 	sessionTTL    time.Duration
@@ -28,11 +28,12 @@ type Service struct {
 
 // Options configures a Service.
 type Options struct {
-	Directory     Directory
-	CodePlatforms CodePlatformAdapter
-	Now           func() time.Time // defaults to time.Now
-	SessionTTL    time.Duration
-	SecretKey     string // encrypts stored secrets (code platform tokens); the app refuses to start without it
+	DirectoryFactory DirectoryFactory
+	CodePlatforms    CodePlatformAdapter
+	Now              func() time.Time // defaults to time.Now
+	SessionTTL       time.Duration
+	SecretKey        string // the master key: encrypts stored secrets; the app refuses to start without it
+	SecretKeyVersion int    // version of the master key, recorded with every stored secret; default 1
 }
 
 func NewService(repo Repository, o Options) *Service {
@@ -43,7 +44,10 @@ func NewService(repo Repository, o Options) *Service {
 		o.SessionTTL = 12 * time.Hour
 	}
 	tokens, _ := newTokenCipher(o.SecretKey) // zero value on empty key; sealing then fails loudly
-	return &Service{repo: repo, directory: o.Directory, codePlatforms: o.CodePlatforms, now: o.Now, sessionTTL: o.SessionTTL, tokens: tokens}
+	if o.SecretKeyVersion > 0 {
+		tokens.version = o.SecretKeyVersion
+	}
+	return &Service{repo: repo, directories: o.DirectoryFactory, codePlatforms: o.CodePlatforms, now: o.Now, sessionTTL: o.SessionTTL, tokens: tokens}
 }
 
 func (s *Service) nowUTC() time.Time { return s.now().UTC().Truncate(time.Microsecond) }
@@ -139,20 +143,24 @@ var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("x-project-dummy"), bcrypt
 func invalidCredentials() error { return newKind(KindUnauthenticated, CodeInvalidCredentials) }
 
 // LoginMethods lists the login methods the login page may offer: "email" always,
-// "ldap" when a directory is configured.
-func (s *Service) LoginMethods() []string {
+// "ldap" when LDAP is switched on in the system configuration.
+func (s *Service) LoginMethods(ctx context.Context) ([]string, error) {
 	m := []string{string(IdentityEmail)}
-	if s.directory != nil {
+	on, err := s.ldapEnabled(ctx)
+	if on {
 		m = append(m, string(IdentityLDAP))
 	}
-	return m
+	return m, err
 }
 
 // Login authenticates a user and opens a session. Wrong login, wrong password
 // and disabled users all yield the same invalidCredentials error.
 func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error) {
 	var c Collector
-	allowed := s.LoginMethods()
+	allowed, err := s.LoginMethods(ctx)
+	if err != nil {
+		return LoginResult{}, err
+	}
 	if !slices.Contains(allowed, in.Method) {
 		c.Add("method", CodeInvalid, map[string]any{"allowed": allowed})
 	}

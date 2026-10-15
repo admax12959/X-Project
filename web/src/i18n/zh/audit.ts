@@ -38,6 +38,8 @@ export default {
   'audit.action.identityUnbound': '解绑登录身份',
   'audit.action.appMemberAdded': '添加 Owner / PE',
   'audit.action.appMemberRemoved': '移除 Owner / PE',
+  'audit.action.configChanged': '修改系统配置',
+  'audit.section.ldap': 'LDAP',
   'audit.action.adminFlagChanged': '修改管理员角色',
   'audit.event.userCreated': '创建用户 {user}，登录邮箱 {loginEmail}',
   'audit.event.loginEmailChanged': '将 {user} 的登录邮箱从 {from} 改为 {to}',
@@ -46,5 +48,6 @@ export default {
   'audit.event.appMemberAdded': '将 {user} 添加为 {application} 的 {role}',
   'audit.event.appMemberRemoved': '将 {user} 从 {application} 的 {role} 中移除',
   'audit.event.adminFlagChanged': '修改 {user} 的管理员角色：{change}',
+  'audit.event.configChanged': '修改了{section}配置：{fields}',
   'audit.event.unknown': '未知动作（{action}）',
 };

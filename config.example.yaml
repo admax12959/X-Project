@@ -5,7 +5,7 @@ web_dir: ""                 # built frontend dir; the Docker image sets /srv/web
 database:
   dsn: "xproject:xproject-pw@tcp(127.0.0.1:3306)/xproject"
   connect_timeout: 90s      # keep retrying while MySQL starts
-secret_key: "change-me"     # required; encrypts stored secrets (code platform tokens). Keep it stable: changing it makes them unreadable
+secret_key: "change-me"     # the master key (or secret_key_file: /run/secrets/xp_secret_key); exactly one is required. Keep it stable: changing it makes stored secrets unreadable
 admin:                      # initial administrator, used only on the very first start
   username: admin
   password: change-me-now
@@ -14,7 +14,7 @@ admin:                      # initial administrator, used only on the very first
 session:
   ttl: 12h
   cookie_secure: false      # true when served over HTTPS
-# ldap:                     # optional; without ldap.url the login page offers email login only
+# ldap:                     # imported into the database once, on the first start that has none; afterwards edit it on the LDAP page
 #   url: "ldaps://ldap.corp.example:636"
 #   base_dn: "ou=people,dc=corp,dc=example"
 #   bind_dn: "cn=xproject,ou=services,dc=corp,dc=example"   # service account used to search

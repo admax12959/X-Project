@@ -228,7 +228,7 @@ export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displa
 export type AuditActor = { kind: 'user' | 'cli'; id?: string; username?: string; displayName?: string };
 
 /** Object of an audit entry: a user (id = user ID, with the user's name) or an application (id = application key). */
-export type AuditTarget = { type: 'user' | 'application'; id: string; username?: string; displayName?: string };
+export type AuditTarget = { type: 'user' | 'application' | 'systemConfig'; id: string; username?: string; displayName?: string };
 
 /**
  * GET /api/audit-log: an action type plus params, rendered in the UI language (src/audit/render.ts).
@@ -248,7 +248,7 @@ export type AuditPage = List<AuditEntry> & { total: number; page: number; pageSi
 /** actor: a user ID or "cli". from / to: RFC 3339 instants, both inclusive. */
 export type AuditQuery = {
   actor?: string;
-  targetType?: 'user' | 'application';
+  targetType?: 'user' | 'application' | 'systemConfig';
   targetId?: string;
   action?: string;
   from?: string;
@@ -274,6 +274,37 @@ export type RoleScope = 'global' | 'application';
 
 /** A built-in role (GET /api/roles, administrators only): permission keys like "line.fork"; descriptions live in the i18n dictionaries as perm.<key>. */
 export type Role = { id: 'administrator' | 'owner' | 'pe'; scope: RoleScope; permissions: string[] };
+
+/**
+ * GET/PUT /api/system-config/ldap (administrators only). The service account password is write-only:
+ * the response only says whether one is set. secretsUnreadable: a stored secret cannot be decrypted with
+ * the current master key, enter it again. configured: saved at least once (false = defaults shown).
+ */
+export type LdapConfig = {
+  enabled: boolean;
+  url: string;
+  startTls: boolean;
+  skipVerify: boolean;
+  bindDn: string;
+  bindPasswordSet: boolean;
+  baseDn: string;
+  userFilter: string;
+  loginAttr: string;
+  nameAttr: string;
+  emailAttr: string;
+  departmentAttr: string;
+  disabledFilter: string;
+  timeoutSeconds: number;
+  secretsUnreadable: boolean;
+  configured: boolean;
+  updatedAt?: string;
+};
+
+/** The whole LDAP form as sent by PUT and by "test connection". bindPassword empty/absent keeps the stored one. */
+export type LdapConfigInput = Omit<LdapConfig, 'bindPasswordSet' | 'secretsUnreadable' | 'configured' | 'updatedAt'> & { bindPassword?: string };
+
+/** Answer of every "test connection" route: ok, or ok=false with the error code (message "error.<code>"). A failed test is HTTP 200. */
+export type ConnectionTest = { ok: boolean; code?: string };
 
 /** Every collection endpoint returns {items: [...]}. */
 export type List<T> = { items: T[] };

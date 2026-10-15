@@ -77,6 +77,7 @@ type Repository interface {
 	IdentityRepository
 	CodePlatformRepository
 	AuditRepository
+	SystemConfigRepository
 
 	// InTx runs fn in one transaction; fn receives a Repository bound to it.
 	InTx(ctx context.Context, fn func(tx Repository) error) error
