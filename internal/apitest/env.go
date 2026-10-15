@@ -46,6 +46,8 @@ type Env struct {
 	// configurations it was asked to build a store for.
 	Objects      *fakes.ObjectStore
 	ObjectStores *fakes.ObjectStoreFactory
+	// Clock is the application's clock: the real one until a test freezes or advances it.
+	Clock *fakes.Clock
 
 	server *httptest.Server
 	app    *app.App
@@ -82,7 +84,7 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 	dir := fakes.NewDirectory()
 	objects := fakes.NewObjectStore()
 	e := &Env{t: t, DSN: cfg.Database.DSN, Config: cfg, Directory: dir, Directories: fakes.NewDirectoryFactory(dir), CodePlatforms: fakes.NewCodePlatform(),
-		Mailer: fakes.NewMailer(), Objects: objects, ObjectStores: fakes.NewObjectStoreFactory(objects)}
+		Mailer: fakes.NewMailer(), Objects: objects, ObjectStores: fakes.NewObjectStoreFactory(objects), Clock: fakes.NewClock()}
 	e.start()
 	return e
 }
@@ -116,7 +118,7 @@ func defaultLDAP(cfg *app.Config) {
 
 func (e *Env) start() {
 	e.t.Helper()
-	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms, MailSenders: e.Mailer, ObjectStores: e.ObjectStores})
+	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms, MailSenders: e.Mailer, ObjectStores: e.ObjectStores, Now: e.Clock.Now})
 	if err != nil {
 		e.t.Fatalf("app.Start: %v", err)
 	}

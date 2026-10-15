@@ -26,4 +26,5 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.6 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	rsc.io/qr v0.2.0 // indirect
 )
