@@ -81,4 +81,16 @@ const (
 	CodeAvatarTooLarge        = "avatarTooLarge"        // more than 2 MB, or a picture with too many pixels; params {maxBytes, maxPixels}
 	CodeAvatarUnsupportedType = "avatarUnsupportedType" // not a JPEG, PNG or WebP picture (SVG, a renamed file, a broken picture); params {allowed}
 	CodeRateLimited           = "rateLimited"           // HTTP 429; too many requests of this kind from this user, try again later
+
+	// mail (#20)
+	CodeMailNotConfigured     = "mailNotConfigured"     // 503; the feature needs SMTP, and the administrator has not configured it
+	CodeSiteURLRequired       = "siteUrlRequired"       // 503; a mail with a link needs the site's external address, which is not configured
+	CodeNoContactEmail        = "noContactEmail"        // request-level; the administrator has no contact email to send the test mail to
+	CodeSmtpUnreachable       = "smtpUnreachable"       // SMTP failure (test mail, outbox): cannot connect, DNS failure or timeout
+	CodeSmtpTLSFailed         = "smtpTlsFailed"         // the TLS handshake or the server certificate verification failed
+	CodeSmtpStartTLSMissing   = "smtpStartTlsMissing"   // STARTTLS was required but the server does not offer it
+	CodeSmtpAuthFailed        = "smtpAuthFailed"        // the server refused the account or password
+	CodeSmtpSenderRejected    = "smtpSenderRejected"    // the server refused the sender address
+	CodeSmtpRecipientRejected = "smtpRecipientRejected" // the server refused the recipient address
+	CodeSmtpRejected          = "smtpRejected"          // the server refused the message or answered unexpectedly
 )

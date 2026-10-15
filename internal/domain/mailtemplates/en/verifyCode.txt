@@ -1,0 +1,11 @@
+Subject: Your X-Project verification code
+
+Hello{{if .Name}} {{.Name}}{{end}},
+
+Your X-Project verification code is:
+
+{{.Code}}
+
+The code expires. If this was not you, ignore this email.
+
+X-Project

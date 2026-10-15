@@ -90,6 +90,7 @@ type Repository interface {
 	DepartmentRepository
 	SystemConfigRepository
 	AvatarRepository
+	MailOutboxRepository
 
 	// InTx runs fn in one transaction; fn receives a Repository bound to it.
 	InTx(ctx context.Context, fn func(tx Repository) error) error

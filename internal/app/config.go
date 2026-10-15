@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/admax12959/X-Project/internal/domain"
 )
 
 // Config is the whole runtime configuration. Load reads an optional YAML file
@@ -50,13 +52,19 @@ type Config struct {
 		DisabledFilter string        `yaml:"disabled_filter"` // XP_LDAP_DISABLED_FILTER, matches an account when disabled; empty = never disabled
 		Timeout        time.Duration `yaml:"timeout"`         // XP_LDAP_TIMEOUT, default 10s
 	} `yaml:"ldap"`
+	// Mail is the delivery side of the outgoing mail queue (#20). The SMTP server itself is
+	// configured by an administrator on the Email page, not here.
+	Mail struct {
+		PollInterval time.Duration   `yaml:"poll_interval"` // XP_MAIL_POLL_INTERVAL, how often the queue is looked at, default 5s
+		RetryBackoff []time.Duration `yaml:"retry_backoff"` // XP_MAIL_RETRY_BACKOFF, comma separated waits after the 1st, 2nd, ... failed delivery; delivery is tried len+1 times. Default 1m,5m,30m,2h,6h
+	} `yaml:"mail"`
 	// Storage: until an administrator configures an S3-compatible object storage (admin page
 	// "Storage"), objects (avatars) live in a directory on the local disk. Mount a volume here.
 	Storage struct {
 		LocalDir string `yaml:"local_dir"` // XP_STORAGE_DIR, default data/storage
 	} `yaml:"storage"`
 	Session struct {
-		TTL          time.Duration `yaml:"ttl"`           // XP_SESSION_TTL, default 12h
+		TTL         time.Duration `yaml:"ttl"`           // XP_SESSION_TTL, default 12h
 		CookieSecure bool          `yaml:"cookie_secure"` // XP_COOKIE_SECURE, set true behind HTTPS
 	} `yaml:"session"`
 }
@@ -68,6 +76,8 @@ func DefaultConfig() Config {
 	c.Database.ConnectTimeout = 90 * time.Second
 	c.Session.TTL = 12 * time.Hour
 	c.SecretKeyVersion = 1
+	c.Mail.PollInterval = 5 * time.Second
+	c.Mail.RetryBackoff = append([]time.Duration(nil), domain.DefaultMailRetryBackoff...)
 	c.Storage.LocalDir = "data/storage"
 	return c
 }
@@ -134,6 +144,21 @@ func Load() (Config, error) {
 	str("XP_ADMIN_PASSWORD", &c.Admin.Password)
 	str("XP_ADMIN_DISPLAY_NAME", &c.Admin.DisplayName)
 	str("XP_ADMIN_EMAIL", &c.Admin.Email)
+	dur("XP_MAIL_POLL_INTERVAL", &c.Mail.PollInterval)
+	if v, ok := os.LookupEnv("XP_MAIL_RETRY_BACKOFF"); ok && err == nil {
+		c.Mail.RetryBackoff = nil
+		for _, part := range strings.Split(v, ",") {
+			if part = strings.TrimSpace(part); part == "" {
+				continue
+			}
+			d, perr := time.ParseDuration(part)
+			if perr != nil {
+				err = fmt.Errorf("XP_MAIL_RETRY_BACKOFF: %w", perr)
+				break
+			}
+			c.Mail.RetryBackoff = append(c.Mail.RetryBackoff, d)
+		}
+	}
 	dur("XP_SESSION_TTL", &c.Session.TTL)
 	boolean("XP_COOKIE_SECURE", &c.Session.CookieSecure)
 	if err != nil {
@@ -141,6 +166,9 @@ func Load() (Config, error) {
 	}
 	if c.Database.DSN == "" {
 		return c, fmt.Errorf("database DSN is required (database.dsn or XP_DB_DSN)")
+	}
+	if c.Mail.PollInterval <= 0 {
+		return c, fmt.Errorf("mail.poll_interval must be positive")
 	}
 	if _, err := c.MasterKey(); err != nil {
 		return c, err

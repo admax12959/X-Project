@@ -1,0 +1,7 @@
+Subject: X-Project test email
+
+Hello{{if .Name}} {{.Name}}{{end}},
+
+This is a test email from X-Project. If you can read it, the mail service is configured correctly.
+
+X-Project
