@@ -13,6 +13,8 @@ func (s *server) meRoutes() {
 	s.route("PUT /api/me/password", s.changePassword)
 	s.route("POST /api/me/identities", s.bindOwnIdentity)
 	s.route("DELETE /api/me/identities/{kind}", s.unbindOwnIdentity)
+	s.route("POST /api/me/email-identity/code", s.requestBindEmailCode)
+	s.route("POST /api/me/email-identity", s.bindOwnEmailIdentity)
 	s.route("POST /api/users/{id}/identities", s.adminBindIdentity)
 }
 
@@ -105,6 +107,40 @@ func (s *server) bindOwnIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := s.svc.BindOwnIdentity(r.Context(), actorOf(r), body.input())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, toAdminUserJSON(u))
+}
+
+// Self-service email identity (#30). The code is mailed to the new address; confirming it
+// needs the code and, for a new identity, the password to log in with.
+
+func (s *server) requestBindEmailCode(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.svc.RequestBindEmailCode(r.Context(), actorOf(r), body.Email, domain.ClientIP(r.RemoteAddr)); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *server) bindOwnEmailIdentity(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email    string `json:"email"`
+		Code     string `json:"code"`
+		Password string `json:"password"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	u, err := s.svc.BindOwnEmailIdentity(r.Context(), actorOf(r), domain.BindEmailInput{Email: body.Email, Code: body.Code, Password: body.Password})
 	if err != nil {
 		writeError(w, r, err)
 		return

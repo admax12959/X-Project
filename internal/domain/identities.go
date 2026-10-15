@@ -30,8 +30,14 @@ type bindSpec struct {
 	kind      IdentityKind
 	loginName string
 	hash      string // email only
-	via       BoundVia
-	by        AuditActor // who is doing the binding, for the audit log
+	// mustChange makes the user change the password at the first login: the password was
+	// chosen by an administrator.
+	mustChange bool
+	// before runs inside the transaction, after the checks that the identity may be added and
+	// before it is added; an error ends the bind. A self-service email bind spends its code here.
+	before func(tx Repository) error
+	via    BoundVia
+	by     AuditActor // who is doing the binding, for the audit log
 	// entry, when non-nil, is the directory entry the user's display name, email and
 	// department are synced from right away (the directory owns them once bound).
 	entry *DirectoryEntry
@@ -135,7 +141,7 @@ func (s *Service) bindEmailIdentity(ctx context.Context, by AuditActor, userID U
 	if err != nil {
 		return UserWithIdentities{}, err
 	}
-	return s.bindIdentity(ctx, userID, bindSpec{kind: IdentityEmail, loginName: loginEmail, hash: hash, via: BoundViaAdmin, by: by})
+	return s.bindIdentity(ctx, userID, bindSpec{kind: IdentityEmail, loginName: loginEmail, hash: hash, via: BoundViaAdmin, by: by, mustChange: true})
 }
 
 // BindIdentityForUser is the administrator's bind. Unlike a user binding for themselves,
@@ -210,9 +216,14 @@ func (s *Service) bindIdentity(ctx context.Context, userID UserID, sp bindSpec) 
 		} else if held {
 			return taken()
 		}
+		if sp.before != nil {
+			if err := sp.before(tx); err != nil {
+				return err
+			}
+		}
 		ident := LoginIdentity{
 			UserID: userID, Kind: sp.kind, LoginName: sp.loginName, PasswordHash: sp.hash, PasswordSet: sp.hash != "",
-			BoundAt: s.nowUTC(), BoundVia: sp.via, MustChangePassword: sp.kind == IdentityEmail,
+			BoundAt: s.nowUTC(), BoundVia: sp.via, MustChangePassword: sp.mustChange,
 		}
 		if err := tx.CreateIdentity(ctx, ident); errors.Is(err, ErrIdentityTaken) { // lost a race for the login name
 			return taken()
