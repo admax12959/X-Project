@@ -20,6 +20,8 @@ import type {
   ForkInput,
   LdapConfig,
   LdapConfigInput,
+  StorageConfig,
+  StorageConfigInput,
   LineDetail,
   LineStatus,
   LineWithLog,
@@ -203,6 +205,13 @@ export const api = {
       update: (input: LdapConfigInput) => request<LdapConfig>('PUT', '/api/system-config/ldap', { body: input }),
       /** Uses the form values, saves nothing. 422 for an invalid form; a failed connection is 200 {ok: false, code}. */
       test: (input: LdapConfigInput) => request<ConnectionTest>('POST', '/api/system-config/ldap/test', { body: input }),
+    },
+    storage: {
+      get: () => request<StorageConfig>('GET', '/api/system-config/storage'),
+      /** 422 field errors per form field (S3 fields only for driver s3). Saved changes are in effect at once. */
+      update: (input: StorageConfigInput) => request<StorageConfig>('PUT', '/api/system-config/storage', { body: input }),
+      /** Writes, reads back and deletes a probe object using the form values (unsaved). A failed test is 200 {ok: false, code}. */
+      test: (input: StorageConfigInput) => request<ConnectionTest>('POST', '/api/system-config/storage/test', { body: input }),
     },
   },
   /** Administrators only (403 otherwise). Read-only: built-in roles cannot be changed. */

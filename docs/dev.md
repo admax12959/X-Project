@@ -11,7 +11,8 @@ internal/domain/           domain service: ALL business rules, error codes, adap
 internal/store/mysqlstore/ MySQL repository (used only by the domain service) + migrations/
 internal/httpapi/          HTTP layer: parse, authenticate, call the service, serialize
 internal/codeplatform/     real GitLab / GitHub adapters (one API call each; tests use httptest)
-internal/fakes/            test doubles for the directory (LDAP) and code platform adapters
+internal/objectstore/      real object storage adapters (local disk, S3-compatible) + storetest, the shared contract
+internal/fakes/            test doubles for the directory (LDAP), code platform and object storage adapters
 internal/apitest/          API test harness (MySQL container, fresh DB per test, HTTP client)
 test/api/                  the HTTP API tests (all in this one package)
 web/                       React + Vite + TypeScript + Base UI + Tailwind SPA
@@ -66,6 +67,7 @@ Optional YAML file named by `XP_CONFIG` (see `config.example.yaml`); environment
 | `XP_LDAP_LOGIN_ATTR` / `XP_LDAP_NAME_ATTR` / `XP_LDAP_EMAIL_ATTR` / `XP_LDAP_DEPARTMENT_ATTR` | `ldap.login_attr` / `name_attr` / `email_attr` / `department_attr` | `uid` / `displayName` / `mail` / `department` | Attributes read from the directory. The login attribute is the canonical login name and becomes the username. |
 | `XP_LDAP_DISABLED_FILTER` | `ldap.disabled_filter` | empty | Optional filter that matches a user entry when the account is disabled, for example Active Directory `(userAccountControl:1.2.840.113556.1.4.803:=2)`. Empty = never disabled. |
 | `XP_LDAP_START_TLS` / `XP_LDAP_SKIP_VERIFY` / `XP_LDAP_TIMEOUT` | `ldap.start_tls` / `skip_verify` / `timeout` | `false` / `false` / `10s` | |
+| `XP_STORAGE_DIR` | `storage.local_dir` | `data/storage` (image: `/var/lib/xproject/storage`) | Directory of the local-disk object store, used while no S3-compatible storage is configured on the Storage page. Must be writable and persistent. |
 | `XP_SESSION_TTL` | `session.ttl` | `12h` | Session lifetime. |
 | `XP_COOKIE_SECURE` | `session.cookie_secure` | `false` | Set `true` behind HTTPS. |
 
@@ -101,6 +103,14 @@ make test-ldap-contract    # = go test -tags ldapcontract ./internal/ldapdir
 ```
 
 They start a throwaway OpenLDAP container (unique name, dynamic port, label `xproj-test`). To use your own server set `XP_TEST_LDAP_URL`, `XP_TEST_LDAP_BASE_DN`, `XP_TEST_LDAP_ADMIN_DN` and `XP_TEST_LDAP_ADMIN_PASSWORD`; entries are created under `ou=xp-contract`. `go vet -tags ldapcontract ./internal/ldapdir` checks that they compile.
+
+Object storage adapter contract tests (not in the default set; need Docker):
+
+```sh
+make test-storage-contract    # = go test -count=1 -tags objectstorecontract ./internal/objectstore
+```
+
+The local-disk adapter runs the shared suite against a temporary directory; the S3-compatible adapter runs it against a throwaway MinIO container (unique name, dynamic port, label `xproj-test`, one bucket per test). MinIO stopped publishing community images to Docker Hub and Quay in 2025/26, so the default image is Chainguard's `cgr.dev/chainguard/minio:latest`; set `XP_TEST_MINIO_IMAGE` to use another one (for example `pgsty/minio`). To use an existing S3-compatible server (also Aliyun OSS or Tencent COS; the account must be able to create and delete buckets) set `XP_TEST_S3_ENDPOINT`, `XP_TEST_S3_ACCESS_KEY`, `XP_TEST_S3_SECRET_KEY` and optionally `XP_TEST_S3_REGION` and `XP_TEST_S3_ADDRESSING`. `go vet -tags objectstorecontract ./internal/objectstore` checks that they compile. Run them when you change `internal/objectstore`, the port, or the AWS SDK version.
 
 Keep **all** API tests in `test/api`. Every extra test package starts another container. Write tests as user stories through HTTP only: no SQL, no calls into internal functions (the one exception is the fixture helper `env.SeedLineStatus`, see "Lines and lineage (#9)").
 
@@ -317,6 +327,14 @@ Real adapter details worth knowing: GitLab gets `GET {base}/api/v4/projects/{pat
 - Table `system_config` holds one row per section (first section: `ldap`); secret fields are sealed with the master key and carry its version. `GET/PUT /api/system-config/ldap` (permission `config.manage`) never return a secret, only whether it is set; a PUT with an empty password keeps the stored one. `POST /api/system-config/ldap/test` tries the unsaved form and saves nothing.
 - A saved change is in effect at once, without restart, and is audited with the changed field names and never values.
 - New sections follow `system_config.go`: add a section name, a typed struct, an audit entry, and the permission check.
+
+### Object storage (ADR-0007, #24)
+
+- **Port.** `domain.ObjectStore` (`internal/domain/objectstore.go`): `Put(key, body, contentType)`, `Open(key)`, `Delete(key)` (idempotent), `List(prefix)` (ordered by key, complete) and `TestConnection` (writes, reads back and deletes a probe object under `.xp-connection-test/`). Keys are slash-separated, at most 512 bytes, no empty/`.`/`..` segments, no backslash or control characters (`domain.ValidObjectKey`); every adapter answers `ErrInvalidObjectKey` otherwise. Failures use `ErrObjectNotFound`, `ErrStorageUnreachable`, `ErrStorageAccessDenied`, `ErrStorageBucketNotFound` (check with `errors.Is`). Bodies are passed whole (avatars are at most a few MB).
+- **Getting the store.** Code that needs storage (avatars, #32) calls `Service.ObjectStore(ctx)`. It builds the store from the stored configuration on every call (no cache, so a saved change is in effect at once on every instance): the local disk while nothing is configured, else the S3 client. A stored key that cannot be decrypted or a configuration the adapter refuses gives `503 storageUnavailable`. Objects are not moved when the configuration changes.
+- **Adapters** (`internal/objectstore`). `Local` keeps one file per key below `XP_STORAGE_DIR` (default `data/storage`; the image uses the volume `/var/lib/xproject/storage`, compose mounts it), writes via temp file + rename. A key cannot be both an object and the prefix of another key. `S3` (AWS SDK v2) covers Aliyun OSS, Tencent COS and MinIO: configurable endpoint, region, bucket, addressing (`path` or `virtualHost`; OSS and COS need `virtualHost`) and access key. Request and response checksums are switched to "when required" (the SDK's default CRC32 trailer / `aws-chunked` upload is rejected by OSS and COS), and only `PutObject`, `GetObject`, `DeleteObject` and the original `ListObjects` are used (no `DeleteObjects`, no `ListObjectsV2`). No ACL is ever set: keep the bucket private with public access blocked, files go through the backend.
+- **Config.** Section `storage` (`GET/PUT /api/system-config/storage`, `POST .../test`, permission `config.manage`, admin page "Storage"). Form: `driver` (`local` or `s3`, default `local`), `endpoint`, `region` (default `us-east-1`), `bucket`, `addressing` (default `path`); the S3 fields are required only for `s3`. The access key is two write-only secrets, `accessKeyId` and `secretAccessKey`; empty keeps the stored one and they are kept when switching to `local`. The view also returns `localDir` (the deployment setting). "Test connection" builds a store from the unsaved form and answers `200 {ok, code}` with `storageUnreachable`, `storageAccessDenied`, `storageBucketNotFound` or `storageFailed`. Audit: `configChanged` with section `storage` and field names only (a typed secret equal to the stored one is not a change).
+- **Tests.** API tests use `fakes.ObjectStore` (in memory) through `env.Objects` / `env.ObjectStores` (records the configurations it was asked to build) / `env.CurrentObjectStore(ctx)`. The shared adapter contract is `internal/objectstore/storetest`; it runs in the default set against the fake, and against the real adapters under the `objectstorecontract` tag (see "Testing"). `internal/objectstore/s3_request_test.go` (default set, no server) checks the requests the S3 client builds: no checksum headers, no chunked encoding, path vs virtual-host URLs.
 
 ### Personal settings and login identities (ADR-0002)
 

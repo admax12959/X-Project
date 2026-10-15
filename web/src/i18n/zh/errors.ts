@@ -45,4 +45,9 @@ export default {
   'error.platformUnreachable': '无法连接代码平台，请稍后再试。',
   'error.departmentCycle': '部门不能移到自己或自己的下级部门里。',
   'error.departmentNotEmpty': '这个部门下还有 {members} 个用户和 {children} 个下级部门，请先移走或调整。',
+  'error.storageUnreachable': '无法连接对象存储，请检查服务地址、网络和证书。',
+  'error.storageAccessDenied': '对象存储拒绝了访问：请检查访问密钥和权限。',
+  'error.storageBucketNotFound': '找不到存储桶（或本地目录），请检查存储桶名称、地域和寻址方式。',
+  'error.storageFailed': '对象存储不可用，详情见服务器日志。',
+  'error.storageUnavailable': '对象存储不可用，请管理员检查“存储”页的配置。',
 };

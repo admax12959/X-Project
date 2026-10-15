@@ -46,4 +46,9 @@ export default {
   'error.platformUnreachable': 'Cannot reach the code platform. Try again later.',
   'error.departmentCycle': 'A department cannot be moved into itself or into one of its own sub-departments.',
   'error.departmentNotEmpty': 'This department still has {members} users and {children} sub-departments. Move or reassign them first.',
+  'error.storageUnreachable': 'Cannot reach the object storage. Check the endpoint, the network and the certificate.',
+  'error.storageAccessDenied': 'The object storage refused access: check the access key and its permissions.',
+  'error.storageBucketNotFound': 'The bucket (or local directory) was not found. Check the bucket name, the region and the addressing style.',
+  'error.storageFailed': 'The object storage does not work. The server log has the details.',
+  'error.storageUnavailable': 'The object storage is unavailable. An administrator should check the Storage page.',
 };
