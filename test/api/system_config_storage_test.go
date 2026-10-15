@@ -102,7 +102,7 @@ func TestSavedS3ConfigurationIsUsedWithTheDecryptedAccessKey(t *testing.T) {
 	}
 	cfg, _ := env.ObjectStores.LastConfig()
 	want := domain.ObjectStoreConfig{
-		Driver: domain.StorageS3, Endpoint: "https://oss-cn-hangzhou.aliyuncs.com", Region: "oss-cn-hangzhou", Bucket: "xp-avatars",
+		Driver: domain.StorageS3, LocalDir: env.Config.Storage.LocalDir, Endpoint: "https://oss-cn-hangzhou.aliyuncs.com", Region: "oss-cn-hangzhou", Bucket: "xp-avatars",
 		Addressing: domain.AddressingVirtualHost, AccessKeyID: "AKIDEXAMPLE0001", SecretAccessKey: "s3-secret-key-1",
 	}
 	if cfg != want {
