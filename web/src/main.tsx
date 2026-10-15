@@ -11,6 +11,7 @@ import { ApplicationsPage } from './pages/ApplicationsPage.tsx';
 import { ApplicationVersions } from './pages/ApplicationVersions.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { PlatformsPage } from './pages/PlatformsPage.tsx';
+import { RolesPage } from './pages/RolesPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 import { UsersPage } from './pages/UsersPage.tsx';
 import { VersionsPage } from './pages/VersionsPage.tsx';
@@ -52,6 +53,7 @@ function App() {
         <Route path="settings"element={<SettingsPage />} />
         <Route path="admin/platforms" element={<PlatformsPage />} />
         <Route path="admin/users" element={<UsersPage />} />
+        <Route path="admin/roles" element={<RolesPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

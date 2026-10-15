@@ -130,7 +130,7 @@ func (s *Service) bindEmailIdentity(ctx context.Context, userID UserID, loginEma
 // the administrator types the login email and sets a temporary password. The binding
 // source is "admin".
 func (s *Service) BindIdentityForUser(ctx context.Context, actor Actor, id UserID, in BindIdentityInput) (UserWithIdentities, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermUserManage); err != nil {
 		return UserWithIdentities{}, err
 	}
 	var c Collector

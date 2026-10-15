@@ -234,5 +234,10 @@ export type CodePlatform = {
 
 export type CodePlatformInput = { kind: PlatformKind | ''; baseUrl: string; token: string };
 
+export type RoleScope = 'global' | 'application';
+
+/** A built-in role (GET /api/roles, administrators only): permission keys like "line.fork"; descriptions live in the i18n dictionaries as perm.<key>. */
+export type Role = { id: 'administrator' | 'owner' | 'pe'; scope: RoleScope; permissions: string[] };
+
 /** Every collection endpoint returns {items: [...]}. */
 export type List<T> = { items: T[] };

@@ -35,9 +35,6 @@ type ApplicationMaintenanceRepository interface {
 	SetMainBranch(ctx context.Context, applicationID int64, branch string) error
 }
 
-// isOwner reports whether the actor is one of the application's Owners.
-func isOwner(actor Actor, a Application) bool { return containsUser(a.Owners, actor.User.ID) }
-
 func containsUser(list []UserRef, id UserID) bool {
 	for _, u := range list {
 		if u.ID == id {
@@ -66,8 +63,8 @@ func (s *Service) UpdateApplication(ctx context.Context, actor Actor, key string
 		if err != nil {
 			return err
 		}
-		if !isOwner(actor, app) {
-			return forbidden()
+		if err := requireAppPermission(actor, app, PermAppEdit); err != nil {
+			return err
 		}
 		name, description, branch := app.Name, app.Description, app.MainBranch
 		var c Collector
@@ -160,8 +157,8 @@ func (s *Service) UpdateMembers(ctx context.Context, actor Actor, key string, in
 		if err != nil {
 			return err
 		}
-		if !actor.User.IsAdmin && !isOwner(actor, app) {
-			return forbidden()
+		if err := requireAppPermission(actor, app, PermAppMembersManage); err != nil {
+			return err
 		}
 		if err := c.Err(); err != nil {
 			return err
@@ -278,7 +275,7 @@ func (s *Service) ListAssignableUsers(ctx context.Context, _ Actor) ([]UserRef, 
 // history (the database cascades; nothing is deleted by hand). Administrators
 // only, and only after typing the application key.
 func (s *Service) DeleteApplication(ctx context.Context, actor Actor, key, confirmKey string) error {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermAppDelete); err != nil {
 		return err
 	}
 	return s.repo.InTx(ctx, func(tx Repository) error {
@@ -308,8 +305,8 @@ func (s *Service) UpdateDeployInfo(ctx context.Context, actor Actor, key string,
 		if err != nil {
 			return err
 		}
-		if !isOwner(actor, app) && !containsUser(app.PEs, actor.User.ID) {
-			return forbidden()
+		if err := requireAppPermission(actor, app, PermAppDeployEdit); err != nil {
+			return err
 		}
 		if deployInfo == nil {
 			return Validation(Invalid("deployInfo", CodeRequired, nil))

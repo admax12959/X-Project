@@ -75,6 +75,7 @@ func (s *server) routes() {
 
 	s.route("GET /api/code-platforms", s.listCodePlatforms)
 	s.route("POST /api/code-platforms", s.createCodePlatform)
+	s.route("GET /api/roles", s.listRoles) // read-only: built-in roles are not editable
 	s.userRoutes()
 	s.meRoutes()
 }

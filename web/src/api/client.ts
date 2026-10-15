@@ -23,6 +23,7 @@ import type {
   LoginInput,
   LoginMethod,
   Repo,
+  Role,
   RecentActivity,
   RegisterVersionInput,
   RepoInput,
@@ -178,6 +179,10 @@ export const api = {
     list: () => request<List<CodePlatform>>('GET', '/api/code-platforms'),
     /** 422 field errors on kind / baseUrl / token. */
     create: (input: CodePlatformInput) => request<CodePlatform>('POST', '/api/code-platforms', { body: input }),
+  },
+  /** Administrators only (403 otherwise). Read-only: built-in roles cannot be changed. */
+  roles: {
+    list: () => request<List<Role>>('GET', '/api/roles'),
   },
   /** Administrator only (403 otherwise). There is no delete: users are disabled. */
   users: {

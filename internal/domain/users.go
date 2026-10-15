@@ -39,17 +39,9 @@ type UserRepository interface {
 	ReadUsersLocked(ctx context.Context, ids []UserID) (map[UserID]User, error)
 }
 
-// requireAdmin is the permission check for every user-management operation.
-func requireAdmin(actor Actor) error {
-	if !actor.User.IsAdmin {
-		return forbidden()
-	}
-	return nil
-}
-
 // ListUsers returns all users for the administrator's user list.
 func (s *Service) ListUsers(ctx context.Context, actor Actor) ([]UserWithIdentities, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermUserManage); err != nil {
 		return nil, err
 	}
 	return s.repo.ListUsers(ctx)
@@ -71,7 +63,7 @@ type CreateEmailUserInput struct {
 // administrator typed the login email, so it counts as verified. It is the single entry
 // point for creating users that do not come from the directory.
 func (s *Service) CreateEmailUser(ctx context.Context, actor Actor, in CreateEmailUserInput) (UserWithIdentities, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermUserManage); err != nil {
 		return UserWithIdentities{}, err
 	}
 	var c Collector
@@ -219,7 +211,7 @@ func applyProfileEdit(c *Collector, u User, ldapBound bool, e profileEdit) User 
 // keeps all records. An administrator-entered login email counts as verified; for a user
 // without LDAP it is the contact email too.
 func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in UpdateUserInput) (UserWithIdentities, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermUserManage); err != nil {
 		return UserWithIdentities{}, err
 	}
 	// ADR-0004: a new local login name must not exist in the directory. Like at creation,
@@ -316,7 +308,7 @@ func (s *Service) EnableUser(ctx context.Context, actor Actor, id UserID) (UserW
 }
 
 func (s *Service) setUserStatus(ctx context.Context, actor Actor, id UserID, status UserStatus) (UserWithIdentities, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermUserManage); err != nil {
 		return UserWithIdentities{}, err
 	}
 	var result UserWithIdentities

@@ -143,8 +143,8 @@ func (s *Service) UpdateLine(ctx context.Context, actor Actor, appKey, lineID st
 	if err != nil {
 		return LineDetail{}, err
 	}
-	if !isOwner(actor, app) {
-		return LineDetail{}, forbidden()
+	if err := requireAppPermission(actor, app, PermLineEdit); err != nil {
+		return LineDetail{}, err
 	}
 	var c Collector
 	var name, note *string
@@ -238,8 +238,8 @@ func (s *Service) SetLineStatus(ctx context.Context, actor Actor, appKey, lineID
 	if err != nil {
 		return LineDetail{}, err
 	}
-	if !isOwner(actor, app) {
-		return LineDetail{}, forbidden()
+	if err := requireAppPermission(actor, app, PermLineStatusSet); err != nil {
+		return LineDetail{}, err
 	}
 	to := LineStatus(strings.TrimSpace(status))
 	var c Collector

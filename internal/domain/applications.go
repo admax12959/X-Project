@@ -137,7 +137,7 @@ const DefaultMainBranch = "main"
 // supplies the project ID, so an application cannot exist without a passing
 // verification.
 func (s *Service) CreateApplication(ctx context.Context, actor Actor, in CreateApplicationInput) (Application, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermAppCreate); err != nil {
 		return Application{}, err
 	}
 	var c Collector
