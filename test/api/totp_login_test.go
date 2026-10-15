@@ -58,7 +58,7 @@ func TestAUserWithoutASecondFactorLogsInWithThePasswordAlone(t *testing.T) {
 	plainUserClient(t, env, "tina")
 	c := env.Client()
 	r := c.LoginAs("tina", "initial-pw-1").ExpectStatus(http.StatusOK)
-	if cookieNamed(r.Cookies, httpapi.SessionCookie) == nil || (cookieNamed(r.Cookies, httpapi.SecondFactorCookie) != nil && cookieNamed(r.Cookies, httpapi.SecondFactorCookie).MaxAge >= 0) {
+	if cookieNamed(r.Cookies, httpapi.SessionCookie) == nil || cookieNamed(r.Cookies, httpapi.SecondFactorCookie) != nil {
 		t.Fatalf("cookies = %v, want a session and no second-factor token", r.Cookies)
 	}
 }
