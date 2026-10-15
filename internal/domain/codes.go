@@ -66,6 +66,13 @@ const (
 	CodeRepoForbidden       = "repoForbidden"       // the platform token cannot access this repository
 	CodePlatformUnreachable = "platformUnreachable" // the code platform could not be reached; try again later
 
+	// object storage (#24); the first four are the answers of "test connection"
+	CodeStorageUnreachable    = "storageUnreachable"    // the storage could not be reached (network, DNS, TLS, timeout)
+	CodeStorageAccessDenied   = "storageAccessDenied"   // the storage refused the access key or the operation
+	CodeStorageBucketNotFound = "storageBucketNotFound" // the bucket (or local directory) does not exist
+	CodeStorageFailed         = "storageFailed"         // anything else went wrong; the server log has the details
+	CodeStorageUnavailable    = "storageUnavailable"    // HTTP 503; the configured storage cannot be used (the stored key is unreadable or the configuration is refused)
+
 	// organization (#25)
 	CodeDepartmentCycle    = "departmentCycle"    // field "parentId"; a department cannot move under itself or one of its descendants
 	CodeDepartmentNotEmpty = "departmentNotEmpty" // request-level; params {members, children}; the department still has users or child departments
