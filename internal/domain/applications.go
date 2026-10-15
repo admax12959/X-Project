@@ -15,10 +15,11 @@ type UserRef struct {
 	Username    string
 	DisplayName string
 	Status      UserStatus
+	AvatarHash  string // "" = no avatar
 }
 
 func refOf(u User) UserRef {
-	return UserRef{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, Status: u.Status}
+	return UserRef{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, Status: u.Status, AvatarHash: u.AvatarHash}
 }
 
 // Application is one maintained application (GLOSSARY: 应用).

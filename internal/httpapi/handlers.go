@@ -17,13 +17,14 @@ type userJSON struct {
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
 	// DirectoryDepartment is the department text synced from LDAP (read-only).
-	DirectoryDepartment string `json:"directoryDepartment"`
-	Language            string `json:"language"` // "zh", "en", or "" when never chosen
-	IsAdmin             bool   `json:"isAdmin"`
+	DirectoryDepartment string  `json:"directoryDepartment"`
+	Language            string  `json:"language"` // "zh", "en", or "" when never chosen
+	IsAdmin             bool    `json:"isAdmin"`
+	AvatarURL           *string `json:"avatarUrl"` // null = no avatar
 }
 
 func toUserJSON(u domain.User) userJSON {
-	return userJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, DirectoryDepartment: u.DirectoryDepartment, Language: u.Language, IsAdmin: u.IsAdmin}
+	return userJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, DirectoryDepartment: u.DirectoryDepartment, Language: u.Language, IsAdmin: u.IsAdmin, AvatarURL: avatarURL(u.ID, u.AvatarHash)}
 }
 
 type sessionJSON struct {
@@ -35,13 +36,14 @@ type sessionJSON struct {
 
 // memberRefJSON is a user inside another record (Owner/PE lists, event and status-change actors).
 type memberRefJSON struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
+	ID          string  `json:"id"`
+	Username    string  `json:"username"`
+	DisplayName string  `json:"displayName"`
+	AvatarURL   *string `json:"avatarUrl"`
 }
 
 func toMemberRefJSON(u domain.UserRef) memberRefJSON {
-	return memberRefJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName}
+	return memberRefJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, AvatarURL: avatarURL(u.ID, u.AvatarHash)}
 }
 
 // formatDate is a calendar date on the wire (YYYY-MM-DD); formatTime is an instant (RFC 3339, UTC).

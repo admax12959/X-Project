@@ -32,6 +32,12 @@ type User struct {
 	Status       UserStatus
 	IsAdmin      bool
 	CreatedAt    time.Time
+	// Avatar (avatar.go): the object key, the content hash that goes into the URL and who set it
+	// (AvatarUpload or AvatarLDAP). All empty = no avatar. Only the avatar code writes these:
+	// UpdateUser and UpdateUserProfile leave them alone.
+	AvatarKey    string
+	AvatarHash   string
+	AvatarSource AvatarSource
 }
 
 type IdentityKind string
@@ -83,6 +89,7 @@ type Repository interface {
 	AuditRepository
 	DepartmentRepository
 	SystemConfigRepository
+	AvatarRepository
 
 	// InTx runs fn in one transaction; fn receives a Repository bound to it.
 	InTx(ctx context.Context, fn func(tx Repository) error) error

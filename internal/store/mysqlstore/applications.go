@@ -94,7 +94,7 @@ func scanApplication(row interface{ Scan(...any) error }) (domain.Application, e
 
 // membersOf loads Owner and PE lists, keyed by application ID. A nil ids loads all.
 func (s *Store) membersOf(ctx context.Context, ids []int64) (map[int64]map[domain.MemberRole][]domain.UserRef, error) {
-	q := `SELECT m.application_id, m.role, u.id, u.username, u.display_name, u.status
+	q := `SELECT m.application_id, m.role, u.id, u.username, u.display_name, u.status, u.avatar_hash
 FROM application_members m JOIN users u ON u.id = m.user_id`
 	var args []any
 	if ids != nil {
@@ -115,11 +115,12 @@ FROM application_members m JOIN users u ON u.id = m.user_id`
 	for rows.Next() {
 		var appID int64
 		var role, status string
+		var avatarHash sql.NullString
 		var u domain.UserRef
-		if err := rows.Scan(&appID, &role, &u.ID, &u.Username, &u.DisplayName, &status); err != nil {
+		if err := rows.Scan(&appID, &role, &u.ID, &u.Username, &u.DisplayName, &status, &avatarHash); err != nil {
 			return nil, err
 		}
-		u.Status = domain.UserStatus(status)
+		u.Status, u.AvatarHash = domain.UserStatus(status), avatarHash.String
 		if out[appID] == nil {
 			out[appID] = map[domain.MemberRole][]domain.UserRef{}
 		}

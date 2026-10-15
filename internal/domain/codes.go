@@ -76,4 +76,9 @@ const (
 	// organization (#25)
 	CodeDepartmentCycle    = "departmentCycle"    // field "parentId"; a department cannot move under itself or one of its descendants
 	CodeDepartmentNotEmpty = "departmentNotEmpty" // request-level; params {members, children}; the department still has users or child departments
+
+	// avatars (#32); the first two are field "avatar" errors
+	CodeAvatarTooLarge        = "avatarTooLarge"        // more than 2 MB, or a picture with too many pixels; params {maxBytes, maxPixels}
+	CodeAvatarUnsupportedType = "avatarUnsupportedType" // not a JPEG, PNG or WebP picture (SVG, a renamed file, a broken picture); params {allowed}
+	CodeRateLimited           = "rateLimited"           // HTTP 429; too many requests of this kind from this user, try again later
 )

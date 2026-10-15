@@ -161,20 +161,34 @@ type Response struct {
 // Do sends a request. body, if non-nil, is encoded as JSON.
 func (c *Client) Do(method, path string, body any) *Response {
 	c.t.Helper()
+	if body == nil {
+		return c.send(method, path, nil, "")
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	return c.send(method, path, b, "application/json")
+}
+
+// Raw sends a request whose body is sent as is (an uploaded file), with the given Content-Type.
+func (c *Client) Raw(method, path string, body []byte, contentType string) *Response {
+	c.t.Helper()
+	return c.send(method, path, body, contentType)
+}
+
+func (c *Client) send(method, path string, body []byte, contentType string) *Response {
+	c.t.Helper()
 	var r io.Reader
 	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			c.t.Fatal(err)
-		}
-		r = bytes.NewReader(b)
+		r = bytes.NewReader(body)
 	}
 	req, err := http.NewRequest(method, c.env.server.URL+path, r)
 	if err != nil {
 		c.t.Fatal(err)
 	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	res, err := c.http.Do(req)
 	if err != nil {

@@ -80,6 +80,7 @@ func (s *server) routes() {
 	s.systemConfigRoutes()
 	s.userRoutes()
 	s.meRoutes()
+	s.avatarRoutes()
 	s.departmentRoutes()
 }
 

@@ -37,16 +37,17 @@ func toRepoJSON(b domain.RepoBinding) repoJSON {
 }
 
 type memberJSON struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
-	Status      string `json:"status"`
+	ID          string  `json:"id"`
+	Username    string  `json:"username"`
+	DisplayName string  `json:"displayName"`
+	Status      string  `json:"status"`
+	AvatarURL   *string `json:"avatarUrl"`
 }
 
 func toMembersJSON(us []domain.UserRef) []memberJSON {
 	out := make([]memberJSON, 0, len(us))
 	for _, u := range us {
-		out = append(out, memberJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, Status: string(u.Status)})
+		out = append(out, memberJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, Status: string(u.Status), AvatarURL: avatarURL(u.ID, u.AvatarHash)})
 	}
 	return out
 }
@@ -177,13 +178,14 @@ func (s *server) listAssignableUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type userOption struct {
-		ID          string `json:"id"`
-		Username    string `json:"username"`
-		DisplayName string `json:"displayName"`
+		ID          string  `json:"id"`
+		Username    string  `json:"username"`
+		DisplayName string  `json:"displayName"`
+		AvatarURL   *string `json:"avatarUrl"`
 	}
 	out := listJSON[userOption]{Items: make([]userOption, 0, len(users))}
 	for _, u := range users {
-		out.Items = append(out.Items, userOption{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName})
+		out.Items = append(out.Items, userOption{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, AvatarURL: avatarURL(u.ID, u.AvatarHash)})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
