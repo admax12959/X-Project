@@ -34,19 +34,17 @@ func (s *Store) LockAuthToken(ctx context.Context, tokenHash string) (domain.Aut
 	return t, true, nil
 }
 
-func (s *Store) UseUserAuthTokens(ctx context.Context, userID domain.UserID, at time.Time) error {
-	_, err := s.q.ExecContext(ctx, "UPDATE auth_tokens SET used_at = ? WHERE user_id = ? AND used_at IS NULL", at, userID)
-	return err
+func (s *Store) UseUserAuthTokens(ctx context.Context, userID domain.UserID, purposes []domain.TokenPurpose, at time.Time) error {
+	for _, p := range purposes {
+		if _, err := s.q.ExecContext(ctx, "UPDATE auth_tokens SET used_at = ? WHERE user_id = ? AND purpose = ? AND used_at IS NULL", at, userID, string(p)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) DeleteUserSessions(ctx context.Context, userID domain.UserID) error {
 	_, err := s.q.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = ?", userID)
-	return err
-}
-
-func (s *Store) SetPasswordHash(ctx context.Context, userID domain.UserID, hash string) error {
-	_, err := s.q.ExecContext(ctx, "UPDATE login_identities SET password_hash = ?, must_change_password = FALSE WHERE user_id = ? AND kind = ?",
-		hash, userID, string(domain.IdentityEmail))
 	return err
 }
 

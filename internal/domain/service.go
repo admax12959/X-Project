@@ -11,6 +11,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -27,7 +28,8 @@ type Service struct {
 	localDir      string             // directory of the local object store, used until an S3 storage is configured
 	now           func() time.Time
 	sessionTTL    time.Duration
-	tokens        tokenCipher // encrypts stored secrets; zero value when no SecretKey
+	tokens        tokenCipher    // encrypts stored secrets; zero value when no SecretKey
+	background    sync.WaitGroup // mail preparation after a password recovery request (auth_tokens.go)
 }
 
 // Options configures a Service.
@@ -198,7 +200,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 		return LoginResult{}, err
 	}
 	hash := dummyHash
-	if found {
+	if found && ident.PasswordHash != "" { // an invited user has no password yet: compare against the dummy, as for an unknown email
 		hash = []byte(ident.PasswordHash)
 	}
 	if bcrypt.CompareHashAndPassword(hash, []byte(in.Password)) != nil || !found {

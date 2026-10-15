@@ -88,4 +88,11 @@ const (
 	CodeSmtpSenderRejected    = "smtpSenderRejected"    // the server refused the sender address
 	CodeSmtpRecipientRejected = "smtpRecipientRejected" // the server refused the recipient address
 	CodeSmtpRejected          = "smtpRejected"          // the server refused the message or answered unexpectedly
+
+	// one-time tokens and password recovery (#21)
+	CodeTokenInvalid     = "tokenInvalid"     // field "token"; the link is not one this system issued, or its user can no longer use it
+	CodeTokenExpired     = "tokenExpired"     // field "token"; the link has expired
+	CodeTokenUsed        = "tokenUsed"        // field "token"; the link has already been used
+	CodeRateLimited      = "rateLimited"      // 429; too many requests, try again later
+	CodeInviteNotPending = "inviteNotPending" // request-level; the user has set a password already (or cannot log in by email), there is nothing to invite
 )

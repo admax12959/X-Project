@@ -15,6 +15,7 @@ const (
 	KindForbidden                            // 403: authenticated but not allowed
 	KindNotFound                             // 404
 	KindUnavailable                          // 503: a required external system (directory, code platform) cannot be reached
+	KindTooManyRequests                      // 429: a rate limit was hit (password recovery)
 )
 
 // FieldError is one entry of the error envelope {"errors":[{field, code, params}]}.
