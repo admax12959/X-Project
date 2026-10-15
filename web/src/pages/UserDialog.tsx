@@ -20,7 +20,6 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
     displayName: user?.displayName ?? '',
     loginEmail: loginEmail ?? '',
     phone: user?.phone ?? '',
-    department: user?.department ?? '',
     password: '',
   });
   const [isAdmin, setIsAdmin] = useState(user?.isAdmin ?? false);
@@ -39,7 +38,7 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
       if (user) {
         // Send only what changed, so untouched LDAP-managed fields are never submitted.
         const changes: UpdateUserInput = {};
-        for (const k of ['username', 'displayName', 'phone', 'department'] as const) {
+        for (const k of ['username', 'displayName', 'phone'] as const) {
           if (form[k] !== user[k]) changes[k] = form[k];
         }
         if (loginEmail !== undefined && form.loginEmail !== loginEmail) changes.loginEmail = form.loginEmail;
@@ -90,10 +89,12 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
                 <Hint>{ldapBound ? t('users.hint.ldapManaged') : t('users.hint.contactEmail')}</Hint>
               </Field>
             )}
-            <Field label={t('users.field.department')} error={errors.department}>
-              <Input name="department" disabled={ldapBound} value={form.department} onChange={set('department')} />
-              <Hint>{ldapBound ? t('users.hint.ldapManaged') : t('users.hint.optional')}</Hint>
-            </Field>
+            {user && user.directoryDepartment !== '' && (
+              <Field label={t('users.field.directoryDepartment')}>
+                <Input name="directoryDepartment" disabled readOnly value={user.directoryDepartment} />
+                <Hint>{t('users.hint.directoryDepartment')}</Hint>
+              </Field>
+            )}
             <Field label={t('users.field.phone')} error={errors.phone}>
               <Input name="phone" type="tel" value={form.phone} onChange={set('phone')} />
               <Hint>{t('users.hint.optional')}</Hint>

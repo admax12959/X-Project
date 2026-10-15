@@ -111,7 +111,7 @@ const userCols = "id, username, display_name, email, phone, department, language
 func scanUser(row interface{ Scan(...any) error }) (domain.User, error) {
 	var u domain.User
 	var status string
-	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Phone, &u.Department, &u.Language, &status, &u.IsAdmin, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Phone, &u.DirectoryDepartment, &u.Language, &status, &u.IsAdmin, &u.CreatedAt)
 	u.Status = domain.UserStatus(status)
 	return u, err
 }
@@ -119,7 +119,7 @@ func scanUser(row interface{ Scan(...any) error }) (domain.User, error) {
 func (s *Store) CreateUser(ctx context.Context, u domain.User) (domain.UserID, error) {
 	res, err := s.q.ExecContext(ctx,
 		"INSERT INTO users (username, display_name, email, phone, department, status, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		u.Username, u.DisplayName, u.Email, u.Phone, u.Department, string(u.Status), u.IsAdmin, u.CreatedAt, u.CreatedAt)
+		u.Username, u.DisplayName, u.Email, u.Phone, u.DirectoryDepartment, string(u.Status), u.IsAdmin, u.CreatedAt, u.CreatedAt)
 	if err != nil {
 		return 0, mapUsernameConflict(err)
 	}

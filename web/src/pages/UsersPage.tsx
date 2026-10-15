@@ -109,7 +109,7 @@ export function UsersPage() {
               <th className={th}>{t('users.col.username')}</th>
               <th className={th}>{t('users.col.displayName')}</th>
               <th className={th}>{t('users.col.email')}</th>
-              <th className={th}>{t('users.col.department')}</th>
+              <th className={th}>{t('users.col.directoryDepartment')}</th>
               <th className={th}>{t('users.col.status')}</th>
               <th className={th}>{t('users.col.identities')}</th>
               <th className={th}>{t('users.col.actions')}</th>
@@ -124,7 +124,7 @@ export function UsersPage() {
                   {u.isAdmin && <span className="ml-2 text-[13px] text-text-3">{t('term.administrator')}</span>}
                 </td>
                 <td className={td}>{u.email}</td>
-                <td className={td}>{u.department}</td>
+                <td className={td}>{u.directoryDepartment}</td>
                 <td className={`${td} ${u.status === 'enabled' ? 'text-ok' : 'text-text-3'}`}>{t(`users.status.${u.status}`)}</td>
                 <td className={td}>{[...new Set(u.identities.map((i) => i.kind))].map((k) => t(`users.identity.${k}`)).join(' · ')}</td>
                 <td className={`${td} whitespace-nowrap`}>

@@ -26,7 +26,7 @@ func TestLDAPUserWithAnOddDirectoryEmailStillSavesPhoneAndLanguage(t *testing.T)
 	patchMe(odd, map[string]any{"language": "en"}).ExpectStatus(http.StatusOK)
 	// The settings form submits the directory's own values back as well.
 	patchMe(odd, map[string]any{
-		"displayName": "Odd Mail", "email": oddDirectoryEmail, "department": "Payments Platform", "phone": "555-0178",
+		"displayName": "Odd Mail", "email": oddDirectoryEmail, "phone": "555-0178",
 	}).ExpectStatus(http.StatusOK)
 	me := getMe(t, odd)
 	if me.Phone != "555-0178" || me.Language != "en" || me.Email != oddDirectoryEmail {

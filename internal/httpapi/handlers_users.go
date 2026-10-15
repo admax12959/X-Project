@@ -10,16 +10,16 @@ import (
 
 // adminUserJSON is the administrator view of a user.
 type adminUserJSON struct {
-	ID          string         `json:"id"`
-	Username    string         `json:"username"`
-	DisplayName string         `json:"displayName"`
-	Email       string         `json:"email"`
-	Phone       string         `json:"phone"`
-	Department  string         `json:"department"`
-	Language    string         `json:"language"`
-	Status      string         `json:"status"`
-	IsAdmin     bool           `json:"isAdmin"`
-	Identities  []identityJSON `json:"identities"`
+	ID                  string         `json:"id"`
+	Username            string         `json:"username"`
+	DisplayName         string         `json:"displayName"`
+	Email               string         `json:"email"`
+	Phone               string         `json:"phone"`
+	DirectoryDepartment string         `json:"directoryDepartment"`
+	Language            string         `json:"language"`
+	Status              string         `json:"status"`
+	IsAdmin             bool           `json:"isAdmin"`
+	Identities          []identityJSON `json:"identities"`
 }
 
 type identityJSON struct {
@@ -33,7 +33,7 @@ func toAdminUserJSON(v domain.UserWithIdentities) adminUserJSON {
 	u := v.User
 	out := adminUserJSON{
 		ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName,
-		Email: u.Email, Phone: u.Phone, Department: u.Department, Language: u.Language, Status: string(u.Status), IsAdmin: u.IsAdmin,
+		Email: u.Email, Phone: u.Phone, DirectoryDepartment: u.DirectoryDepartment, Language: u.Language, Status: string(u.Status), IsAdmin: u.IsAdmin,
 		Identities: make([]identityJSON, 0, len(v.Identities)),
 	}
 	for _, i := range v.Identities {
@@ -90,7 +90,6 @@ func (s *server) updateUser(w http.ResponseWriter, r *http.Request) {
 		Email       *string `json:"email"`
 		LoginEmail  *string `json:"loginEmail"`
 		Phone       *string `json:"phone"`
-		Department  *string `json:"department"`
 		IsAdmin     *bool   `json:"isAdmin"`
 	}
 	if !decode(w, r, &body) {
@@ -98,7 +97,7 @@ func (s *server) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := s.svc.UpdateUser(r.Context(), actorOf(r), id, domain.UpdateUserInput{
 		Username: body.Username, DisplayName: body.DisplayName, Email: body.Email, LoginEmail: body.LoginEmail,
-		Phone: body.Phone, Department: body.Department, IsAdmin: body.IsAdmin,
+		Phone: body.Phone, IsAdmin: body.IsAdmin,
 	})
 	if err != nil {
 		writeError(w, r, err)
@@ -126,7 +125,6 @@ func (s *server) createUser(w http.ResponseWriter, r *http.Request) {
 		DisplayName string `json:"displayName"`
 		LoginEmail  string `json:"loginEmail"`
 		Phone       string `json:"phone"`
-		Department  string `json:"department"`
 		Password    string `json:"password"` // temporary: the user must change it at the first login
 	}
 	if !decode(w, r, &body) {
@@ -134,7 +132,7 @@ func (s *server) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := s.svc.CreateEmailUser(r.Context(), actorOf(r), domain.CreateEmailUserInput{
 		Username: body.Username, DisplayName: body.DisplayName, LoginEmail: body.LoginEmail,
-		Phone: body.Phone, Department: body.Department, Password: body.Password,
+		Phone: body.Phone, Password: body.Password,
 	})
 	if err != nil {
 		writeError(w, r, err)

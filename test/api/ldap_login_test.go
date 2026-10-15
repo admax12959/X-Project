@@ -14,7 +14,7 @@ type ldapUser struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
-	Department  string `json:"department"`
+	Department  string `json:"directoryDepartment"`
 	IsAdmin     bool   `json:"isAdmin"`
 }
 

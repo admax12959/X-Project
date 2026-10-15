@@ -16,13 +16,14 @@ type userJSON struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
-	Department  string `json:"department"`
-	Language    string `json:"language"` // "zh", "en", or "" when never chosen
-	IsAdmin     bool   `json:"isAdmin"`
+	// DirectoryDepartment is the department text synced from LDAP (read-only).
+	DirectoryDepartment string `json:"directoryDepartment"`
+	Language            string `json:"language"` // "zh", "en", or "" when never chosen
+	IsAdmin             bool   `json:"isAdmin"`
 }
 
 func toUserJSON(u domain.User) userJSON {
-	return userJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, Department: u.Department, Language: u.Language, IsAdmin: u.IsAdmin}
+	return userJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, DirectoryDepartment: u.DirectoryDepartment, Language: u.Language, IsAdmin: u.IsAdmin}
 }
 
 type sessionJSON struct {

@@ -13,7 +13,8 @@ export type User = {
   username: string;
   displayName: string;
   email: string;
-  department: string;
+  /** Department text synced from LDAP; read-only, unrelated to the department tree. */
+  directoryDepartment: string;
   /** Saved interface language; '' = never chosen. */
   language: Language | '';
   isAdmin: boolean;
@@ -179,7 +180,8 @@ export type AdminUser = {
   displayName: string;
   email: string;
   phone: string;
-  department: string;
+  /** Department text synced from LDAP; read-only, unrelated to the department tree. */
+  directoryDepartment: string;
   language: Language | '';
   status: 'enabled' | 'disabled';
   isAdmin: boolean;
@@ -204,7 +206,7 @@ export type BindIdentityInput = { kind: IdentityKind; loginName?: string; passwo
  * What a user may change about themselves (GET/PATCH /api/me answers with the AdminUser shape).
  * The contact email is not here: it is the directory's for LDAP users and the login email otherwise.
  */
-export type UpdateMeInput = Partial<Pick<AdminUser, 'displayName' | 'phone' | 'department' | 'language'>>;
+export type UpdateMeInput = Partial<Pick<AdminUser, 'displayName' | 'phone' | 'language'>>;
 
 export type ChangePasswordInput = { currentPassword: string; newPassword: string };
 
@@ -214,12 +216,11 @@ export type CreateUserInput = {
   displayName: string;
   loginEmail: string;
   phone: string;
-  department: string;
   password: string;
 };
 
 /** Fields left out are unchanged. */
-export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displayName' | 'loginEmail' | 'phone' | 'department'>> & {
+export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displayName' | 'loginEmail' | 'phone'>> & {
   /** Grants or revokes the administrator role; 422 lastAdmin when it would leave no enabled administrator. */
   isAdmin?: boolean;
 };

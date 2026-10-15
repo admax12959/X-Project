@@ -15,7 +15,7 @@ type userBody struct {
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
 	Phone       string `json:"phone"`
-	Department  string `json:"department"`
+	DirectoryDepartment string `json:"directoryDepartment"`
 	Status      string `json:"status"`
 	IsAdmin     bool   `json:"isAdmin"`
 	Identities  []struct {
@@ -35,7 +35,6 @@ func newUser(over map[string]any) map[string]any {
 	m := map[string]any{
 		"username":    "jdoe",
 		"displayName": "Jane Doe",
-		"department":  "Payments",
 		"password":    "initial-pw-1",
 	}
 	for k, v := range over {
@@ -98,7 +97,7 @@ func TestAdminCreatesAnEmailUserWhoCanThenLogInWithTheLoginEmail(t *testing.T) {
 
 	created := createUserRaw(t, admin, nil)
 	if created.ID == "" || created.Username != "jdoe" || created.DisplayName != "Jane Doe" ||
-		created.Email != "jdoe@example.com" || created.Department != "Payments" ||
+		created.Email != "jdoe@example.com" || created.DirectoryDepartment != "" ||
 		created.Status != "enabled" || created.IsAdmin {
 		t.Fatalf("created = %+v", created)
 	}
@@ -124,7 +123,7 @@ func TestUserListShowsFieldsStatusAndLoginIdentityKinds(t *testing.T) {
 		t.Fatalf("users = %+v", users)
 	}
 	jane := findUser(t, users, "jdoe")
-	if jane.DisplayName != "Jane Doe" || jane.Email != "jdoe@example.com" || jane.Department != "Payments" || jane.Status != "enabled" {
+	if jane.DisplayName != "Jane Doe" || jane.Email != "jdoe@example.com" || jane.Status != "enabled" {
 		t.Fatalf("jane = %+v", jane)
 	}
 	if len(jane.Identities) != 1 || jane.Identities[0].Kind != "email" {
@@ -218,9 +217,9 @@ func TestLoginEmailIsRequiredAndMustLookLikeAnEmail(t *testing.T) {
 	admin.Post("/api/users", newUser(map[string]any{"loginEmail": long})).
 		ExpectError(http.StatusUnprocessableEntity, "loginEmail", "tooLong")
 
-	// The department stays optional; the login email is the contact email.
-	u := createUser(t, admin, map[string]any{"loginEmail": "  Jane.Doe@Example.com ", "department": ""})
-	if u.Email != "jane.doe@example.com" || u.Department != "" || u.Identities[0].LoginName != "jane.doe@example.com" {
+	// The login email is the contact email.
+	u := createUser(t, admin, map[string]any{"loginEmail": "  Jane.Doe@Example.com "})
+	if u.Email != "jane.doe@example.com" || u.Identities[0].LoginName != "jane.doe@example.com" {
 		t.Fatalf("created = %+v", u)
 	}
 }
@@ -232,13 +231,12 @@ func TestOverlongFieldsAreRejected(t *testing.T) {
 
 	long := func(n int) string { return strings.Repeat("x", n) }
 	res := admin.Post("/api/users", newUser(map[string]any{
-		"displayName": long(201), "department": long(201), "phone": long(65),
+		"displayName": long(201), "phone": long(65),
 	}))
 	e := res.ExpectError(http.StatusUnprocessableEntity, "displayName", "tooLong")
 	if e.Params["max"] != float64(200) {
 		t.Fatalf("params = %v, want max 200", e.Params)
 	}
-	res.ExpectError(http.StatusUnprocessableEntity, "department", "tooLong")
 	res.ExpectError(http.StatusUnprocessableEntity, "phone", "tooLong")
 }
 
@@ -296,7 +294,7 @@ func patchUser(c *apitest.Client, id string, fields map[string]any) *apitest.Res
 	return c.Do(http.MethodPatch, "/api/users/"+id, fields)
 }
 
-func TestAdminEditsDisplayNameDepartmentAndPhone(t *testing.T) {
+func TestAdminEditsDisplayNameAndPhone(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	admin := env.AdminClient()
@@ -304,10 +302,10 @@ func TestAdminEditsDisplayNameDepartmentAndPhone(t *testing.T) {
 
 	var edited userBody
 	patchUser(admin, jane.ID, map[string]any{
-		"displayName": " Jane Q. Doe ", "department": "Treasury", "phone": "555-0100",
+		"displayName": " Jane Q. Doe ", "phone": "555-0100",
 	}).ExpectStatus(http.StatusOK).JSON(&edited)
 	if edited.ID != jane.ID || edited.DisplayName != "Jane Q. Doe" || edited.Email != "jdoe@example.com" ||
-		edited.Department != "Treasury" || edited.Phone != "555-0100" || edited.Username != "jdoe" {
+		edited.Phone != "555-0100" || edited.Username != "jdoe" {
 		t.Fatalf("edited = %+v", edited)
 	}
 	if got := findUser(t, listUsers(t, admin), "jdoe"); got.DisplayName != "Jane Q. Doe" || got.Phone != "555-0100" {
@@ -315,8 +313,8 @@ func TestAdminEditsDisplayNameDepartmentAndPhone(t *testing.T) {
 	}
 
 	// Fields that are left out stay as they were; optional fields can be cleared.
-	patchUser(admin, jane.ID, map[string]any{"department": ""}).ExpectStatus(http.StatusOK).JSON(&edited)
-	if edited.DisplayName != "Jane Q. Doe" || edited.Phone != "555-0100" || edited.Department != "" {
+	patchUser(admin, jane.ID, map[string]any{"phone": ""}).ExpectStatus(http.StatusOK).JSON(&edited)
+	if edited.DisplayName != "Jane Q. Doe" || edited.Phone != "" {
 		t.Fatalf("after partial edit = %+v", edited)
 	}
 }
@@ -393,7 +391,7 @@ func TestRenameFollowsTheSameRulesAsCreation(t *testing.T) {
 
 	// Nothing changed, and sending the current username is not a rename.
 	env.Client().LoginAs("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
-	patchUser(admin, jane.ID, map[string]any{"username": "jdoe", "department": "Ops"}).ExpectStatus(http.StatusOK)
+	patchUser(admin, jane.ID, map[string]any{"username": "jdoe", "phone": "555-0100"}).ExpectStatus(http.StatusOK)
 }
 
 func TestOnlyAdministratorsMayEditOrDisableUsers(t *testing.T) {

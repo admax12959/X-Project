@@ -23,11 +23,13 @@ type User struct {
 	DisplayName string
 	Email       string
 	Phone       string
-	Department  string
-	Language    string // LanguageZh, LanguageEn, or empty when never chosen
-	Status      UserStatus
-	IsAdmin     bool
-	CreatedAt   time.Time
+	// DirectoryDepartment is the department text synced from LDAP (read-only; GLOSSARY: 目录部门).
+	// It has nothing to do with the organization's departments.
+	DirectoryDepartment string
+	Language            string // LanguageZh, LanguageEn, or empty when never chosen
+	Status              UserStatus
+	IsAdmin             bool
+	CreatedAt           time.Time
 }
 
 type IdentityKind string
