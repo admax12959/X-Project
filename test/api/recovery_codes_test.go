@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/admax12959/X-Project/internal/apitest"
@@ -70,5 +71,40 @@ func TestEnablingTheSecondFactorHandsOutRecoveryCodesOnceAndTheStatusOnlyCountsT
 	st := recoveryStatusOf(t, c)
 	if st.RecoveryCodesRemaining != 10 || len(st.RecoveryCodes) != 0 {
 		t.Fatalf("status = %+v, want a count of 10 and no codes", st)
+	}
+}
+
+// tinaWithCodes creates tina with the second factor on and the clock two steps later, as
+// tinaWithTOTP does, and returns her secret and recovery codes.
+func tinaWithCodes(t *testing.T, env *apitest.Env) (secret string, codes []string, tina *apitest.Client) {
+	t.Helper()
+	tina = plainUserClient(t, env, "tina")
+	secret, codes = enableWithCodes(t, tina, "initial-pw-1")
+	env.Clock.Advance(2 * totpStep)
+	return secret, codes, tina
+}
+
+func TestARecoveryCodeLogsInInPlaceOfTheAuthenticatorCodeAndWorksOnlyOnce(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	frozenMidStep(env)
+	_, codes, _ := tinaWithCodes(t, env)
+
+	c, _ := firstFactor(t, env)
+	c.Post(secondFactorLoginPath, map[string]string{"code": codes[0]}).ExpectStatus(http.StatusOK)
+	c.Get("/api/session").ExpectStatus(http.StatusOK)
+
+	// Spent: the same code does not open another login.
+	c2, _ := firstFactor(t, env)
+	c2.Post(secondFactorLoginPath, map[string]string{"code": codes[0]}).ExpectError(http.StatusUnprocessableEntity, "code", "totpInvalid")
+	c2.Get("/api/session").ExpectStatus(http.StatusUnauthorized)
+
+	// Another code still works, typed the way people type them: lower case, spaces.
+	c3, _ := firstFactor(t, env)
+	typed := strings.ToLower(strings.ReplaceAll(codes[1], "-", " "))
+	c3.Post(secondFactorLoginPath, map[string]string{"code": typed}).ExpectStatus(http.StatusOK)
+
+	if got := recoveryStatusOf(t, c3).RecoveryCodesRemaining; got != 8 {
+		t.Fatalf("remaining = %d, want 8", got)
 	}
 }

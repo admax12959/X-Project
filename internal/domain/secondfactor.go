@@ -349,44 +349,8 @@ func (s *Service) SubmitSecondFactor(ctx context.Context, token, code string) (L
 	if !ok || u.Status != UserEnabled {
 		return LoginResult{}, unauth
 	}
-	var c Collector
-	if !c.Required("code", code) {
-		return LoginResult{}, c.Err()
-	}
-
-	if lock, err := s.repo.GetSecondFactorLockout(ctx, u.ID); err != nil {
+	if err := s.verifySecondFactorCode(ctx, u, code); err != nil {
 		return LoginResult{}, err
-	} else if s.nowUTC().Before(lock.LockedUntil) {
-		return LoginResult{}, secondFactorLocked(lock.LockedUntil)
-	}
-
-	all, err := s.repo.ListAuthenticators(ctx, u.ID)
-	if err != nil {
-		return LoginResult{}, err
-	}
-	good := false
-	for _, a := range all {
-		if a.Type != AuthenticatorTOTP || !a.Enabled {
-			continue
-		}
-		secret, err := s.openAuthenticatorSecret(a)
-		if err != nil {
-			return LoginResult{}, err
-		}
-		step, matched := matchTOTP(secret, code, s.nowUTC(), a.LastUsedStep)
-		if !matched {
-			continue
-		}
-		// Claim the step; of two requests with the same code only one gets it.
-		if claimed, err := s.repo.ClaimAuthenticatorStep(ctx, a.ID, step); err != nil {
-			return LoginResult{}, err
-		} else if claimed {
-			good = true
-		}
-		break
-	}
-	if !good {
-		return LoginResult{}, s.recordSecondFactorFailure(ctx, u.ID)
 	}
 
 	err = s.repo.InTx(ctx, func(tx Repository) error {
@@ -399,6 +363,58 @@ func (s *Service) SubmitSecondFactor(ctx context.Context, token, code string) (L
 		return LoginResult{}, err
 	}
 	return s.createSession(ctx, u, ch.MustChangePassword)
+}
+
+// verifySecondFactorCode checks code as the user's second factor: an authenticator code or an
+// unspent recovery code (any other input than six digits is taken for a recovery code). It is
+// the one place that does that, for the login and for the operations that ask the user to
+// prove themselves again, so they all share the lockout: a wrong code counts against the user,
+// and a locked second step refuses even a right code. A right code is used up (its time step
+// or the recovery code), so it cannot be used twice.
+func (s *Service) verifySecondFactorCode(ctx context.Context, u User, code string) error {
+	var c Collector
+	if !c.Required("code", code) {
+		return c.Err()
+	}
+	if lock, err := s.repo.GetSecondFactorLockout(ctx, u.ID); err != nil {
+		return err
+	} else if s.nowUTC().Before(lock.LockedUntil) {
+		return secondFactorLocked(lock.LockedUntil)
+	}
+	good, err := s.claimSecondFactorCode(ctx, u, code)
+	if err != nil {
+		return err
+	}
+	if !good {
+		return s.recordSecondFactorFailure(ctx, u.ID)
+	}
+	return nil
+}
+
+func (s *Service) claimSecondFactorCode(ctx context.Context, u User, code string) (bool, error) {
+	if isTOTPCode(code) {
+		all, err := s.repo.ListAuthenticators(ctx, u.ID)
+		if err != nil {
+			return false, err
+		}
+		for _, a := range all {
+			if a.Type != AuthenticatorTOTP || !a.Enabled {
+				continue
+			}
+			secret, err := s.openAuthenticatorSecret(a)
+			if err != nil {
+				return false, err
+			}
+			step, matched := matchTOTP(secret, code, s.nowUTC(), a.LastUsedStep)
+			if !matched {
+				continue
+			}
+			// Claim the step; of two requests with the same code only one gets it.
+			return s.repo.ClaimAuthenticatorStep(ctx, a.ID, step)
+		}
+		return false, nil
+	}
+	return s.claimRecoveryCode(ctx, u.ID, code)
 }
 
 func secondFactorLocked(until time.Time) error {
