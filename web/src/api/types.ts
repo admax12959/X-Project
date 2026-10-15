@@ -13,7 +13,8 @@ export type User = {
   username: string;
   displayName: string;
   email: string;
-  department: string;
+  /** Department text synced from LDAP; read-only, unrelated to the department tree. */
+  directoryDepartment: string;
   /** Saved interface language; '' = never chosen. */
   language: Language | '';
   isAdmin: boolean;
@@ -179,7 +180,10 @@ export type AdminUser = {
   displayName: string;
   email: string;
   phone: string;
-  department: string;
+  /** Department text synced from LDAP; read-only, unrelated to the department tree. */
+  directoryDepartment: string;
+  /** The department in the organization (the department tree); null = none. */
+  departmentId: string | null;
   language: Language | '';
   status: 'enabled' | 'disabled';
   isAdmin: boolean;
@@ -204,7 +208,7 @@ export type BindIdentityInput = { kind: IdentityKind; loginName?: string; passwo
  * What a user may change about themselves (GET/PATCH /api/me answers with the AdminUser shape).
  * The contact email is not here: it is the directory's for LDAP users and the login email otherwise.
  */
-export type UpdateMeInput = Partial<Pick<AdminUser, 'displayName' | 'phone' | 'department' | 'language'>>;
+export type UpdateMeInput = Partial<Pick<AdminUser, 'displayName' | 'phone' | 'language'>>;
 
 export type ChangePasswordInput = { currentPassword: string; newPassword: string };
 
@@ -214,12 +218,15 @@ export type CreateUserInput = {
   displayName: string;
   loginEmail: string;
   phone: string;
-  department: string;
   password: string;
+  /** Empty or left out = no department. */
+  departmentId?: string;
 };
 
 /** Fields left out are unchanged. */
-export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displayName' | 'loginEmail' | 'phone' | 'department'>> & {
+export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displayName' | 'loginEmail' | 'phone'>> & {
+  /** Moves the user to a department; null takes the user out of any department. */
+  departmentId?: string | null;
   /** Grants or revokes the administrator role; 422 lastAdmin when it would leave no enabled administrator. */
   isAdmin?: boolean;
 };
@@ -228,7 +235,7 @@ export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displa
 export type AuditActor = { kind: 'user' | 'cli'; id?: string; username?: string; displayName?: string };
 
 /** Object of an audit entry: a user (id = user ID, with the user's name) or an application (id = application key). */
-export type AuditTarget = { type: 'user' | 'application' | 'systemConfig'; id: string; username?: string; displayName?: string };
+export type AuditTarget = { type: 'user' | 'application' | 'department' | 'systemConfig'; id: string; username?: string; displayName?: string };
 
 /**
  * GET /api/audit-log: an action type plus params, rendered in the UI language (src/audit/render.ts).
@@ -308,3 +315,15 @@ export type ConnectionTest = { ok: boolean; code?: string };
 
 /** Every collection endpoint returns {items: [...]}. */
 export type List<T> = { items: T[] };
+
+/** A node of the department tree, sent as a flat list (GET /api/departments): parentId is null for a top-level department. */
+export type Department = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  /** Where the department came from; "manual" today, reserved for a directory sync. */
+  source: string;
+  /** Direct members and direct child departments (a department with either cannot be deleted). */
+  memberCount: number;
+  childCount: number;
+};

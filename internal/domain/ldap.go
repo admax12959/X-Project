@@ -12,7 +12,7 @@ import (
 type IdentityRepository interface {
 	// FindUserByUsername matches the username as stored (MySQL compares case-insensitively).
 	FindUserByUsername(ctx context.Context, username string) (User, bool, error)
-	// UpdateUserProfile overwrites the directory-owned fields (display name, email, department).
+	// UpdateUserProfile overwrites the directory-owned fields (display name, email, directory department).
 	UpdateUserProfile(ctx context.Context, id UserID, displayName, email, department string, at time.Time) error
 	// FindIdentityByUser returns the user's identity of the given kind, if any.
 	FindIdentityByUser(ctx context.Context, userID UserID, kind IdentityKind) (LoginIdentity, bool, error)
@@ -92,7 +92,7 @@ func (s *Service) loginLDAP(ctx context.Context, in LoginInput) (LoginResult, er
 			name = username
 		}
 		u := User{
-			Username: username, DisplayName: name, Email: entry.Email, Department: entry.Department,
+			Username: username, DisplayName: name, Email: entry.Email, DirectoryDepartment: entry.Department,
 			Status: UserEnabled, CreatedAt: now,
 		}
 		id, err := tx.CreateUser(ctx, u)
@@ -128,7 +128,7 @@ func (s *Service) syncFromDirectory(ctx context.Context, tx Repository, u *User,
 	if err := tx.UpdateUserProfile(ctx, u.ID, name, entry.Email, entry.Department, s.nowUTC()); err != nil {
 		return err
 	}
-	u.DisplayName, u.Email, u.Department = name, entry.Email, entry.Department
+	u.DisplayName, u.Email, u.DirectoryDepartment = name, entry.Email, entry.Department
 	return nil
 }
 

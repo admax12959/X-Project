@@ -258,9 +258,10 @@ func without(list, other []UserID) []UserID {
 
 // ListAssignableUsers returns the enabled users who can be chosen as Owner or PE,
 // ordered by display name. Any logged-in user may read it (the Owner/PE pickers
-// are used by Owners, who are not administrators); only names are exposed.
-func (s *Service) ListAssignableUsers(ctx context.Context, _ Actor) ([]UserRef, error) {
-	all, err := s.repo.ListUsers(ctx)
+// are used by Owners, who are not administrators); only names are exposed. A non-empty
+// departmentID limits it to the users in that department or below (see ListUsers).
+func (s *Service) ListAssignableUsers(ctx context.Context, _ Actor, departmentID string) ([]UserRef, error) {
+	all, err := s.listUsers(ctx, departmentID)
 	if err != nil {
 		return nil, err
 	}

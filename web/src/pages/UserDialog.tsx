@@ -5,6 +5,8 @@ import { api } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
 import type { AdminUser, UpdateUserInput } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
+import { DepartmentSelect, useDepartments } from '../org/DepartmentSelect.tsx';
+import { pathLabel } from '../org/tree.ts';
 import { Button, Field, Input } from '../ui/controls.tsx';
 
 /** `user` set = edit that user; `null` = create a user with an email identity. */
@@ -20,10 +22,11 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
     displayName: user?.displayName ?? '',
     loginEmail: loginEmail ?? '',
     phone: user?.phone ?? '',
-    department: user?.department ?? '',
     password: '',
   });
   const [isAdmin, setIsAdmin] = useState(user?.isAdmin ?? false);
+  const departments = useDepartments();
+  const [departmentId, setDepartmentId] = useState(user?.departmentId ?? '');
   // Keep the raw error and render at render time so messages follow a language switch.
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -39,14 +42,15 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
       if (user) {
         // Send only what changed, so untouched LDAP-managed fields are never submitted.
         const changes: UpdateUserInput = {};
-        for (const k of ['username', 'displayName', 'phone', 'department'] as const) {
+        for (const k of ['username', 'displayName', 'phone'] as const) {
           if (form[k] !== user[k]) changes[k] = form[k];
         }
         if (loginEmail !== undefined && form.loginEmail !== loginEmail) changes.loginEmail = form.loginEmail;
+        if (departmentId !== (user.departmentId ?? '')) changes.departmentId = departmentId || null;
         if (isAdmin !== user.isAdmin) changes.isAdmin = isAdmin;
         saved = await api.users.update(user.id, changes);
       } else {
-        saved = await api.users.create(form);
+        saved = await api.users.create(departmentId ? { ...form, departmentId } : form);
       }
       onSaved(saved);
     } catch (err) {
@@ -90,13 +94,19 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
                 <Hint>{ldapBound ? t('users.hint.ldapManaged') : t('users.hint.contactEmail')}</Hint>
               </Field>
             )}
-            <Field label={t('users.field.department')} error={errors.department}>
-              <Input name="department" disabled={ldapBound} value={form.department} onChange={set('department')} />
-              <Hint>{ldapBound ? t('users.hint.ldapManaged') : t('users.hint.optional')}</Hint>
-            </Field>
+            {user && user.directoryDepartment !== '' && (
+              <Field label={t('users.field.directoryDepartment')}>
+                <Input name="directoryDepartment" disabled readOnly value={user.directoryDepartment} />
+                <Hint>{t('users.hint.directoryDepartment')}</Hint>
+              </Field>
+            )}
             <Field label={t('users.field.phone')} error={errors.phone}>
               <Input name="phone" type="tel" value={form.phone} onChange={set('phone')} />
               <Hint>{t('users.hint.optional')}</Hint>
+            </Field>
+            <Field label={t('users.field.department')} error={errors.departmentId}>
+              <DepartmentSelect name="departmentId" departments={departments ?? []} value={departmentId} onChange={setDepartmentId} noneLabel={t('users.department.none')} />
+              <Hint>{departmentId && departments ? pathLabel(departments, departmentId) : t('users.hint.department')}</Hint>
             </Field>
             {editing && (
               <Field label={t('term.administrator')} error={errors.isAdmin}>

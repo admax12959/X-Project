@@ -28,5 +28,6 @@ export default {
   'perm.user.manage': 'Manage users and login identities',
   'perm.audit.view': 'View the audit log',
   'perm.role.view': 'View roles and their permissions',
+  'perm.department.manage': 'Maintain the department tree and assign users to departments',
   'perm.config.manage': 'Manage the system configuration (LDAP)',
 };

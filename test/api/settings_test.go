@@ -82,7 +82,7 @@ type meBody struct {
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
 	Phone       string `json:"phone"`
-	Department  string `json:"department"`
+	Department  string `json:"directoryDepartment"`
 	Language    string `json:"language"`
 	IsAdmin     bool   `json:"isAdmin"`
 	Identities  []struct {
@@ -100,7 +100,7 @@ func getMe(t *testing.T, c *apitest.Client) meBody {
 	return m
 }
 
-func TestUserWithOnlyAnEmailIdentityEditsOwnDisplayNameDepartmentAndPhone(t *testing.T) {
+func TestUserWithOnlyAnEmailIdentityEditsOwnDisplayNameAndPhone(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	createUser(t, env.AdminClient(), map[string]any{"username": "jdoe", "password": "jane-pw-123"})
@@ -109,9 +109,9 @@ func TestUserWithOnlyAnEmailIdentityEditsOwnDisplayNameDepartmentAndPhone(t *tes
 
 	var got meBody
 	patchMe(jane, map[string]any{
-		"displayName": "Jane D. Doe", "department": "Treasury", "phone": "555-0199",
+		"displayName": "Jane D. Doe", "phone": "555-0199",
 	}).ExpectStatus(http.StatusOK).JSON(&got)
-	if got.DisplayName != "Jane D. Doe" || got.Email != "jdoe@example.com" || got.Department != "Treasury" || got.Phone != "555-0199" {
+	if got.DisplayName != "Jane D. Doe" || got.Email != "jdoe@example.com" || got.Phone != "555-0199" {
 		t.Fatalf("PATCH /api/me answered %+v", got)
 	}
 	if again := getMe(t, jane); again.DisplayName != got.DisplayName || again.Email != got.Email ||
@@ -143,25 +143,24 @@ func TestOwnProfileEditsAreValidatedLikeTheAdminsAndCannotChangeUsernameOrRole(t
 	}
 }
 
-func TestLDAPBoundUserCannotEditDisplayNameEmailDepartmentButCanEditPhone(t *testing.T) {
+func TestLDAPBoundUserCannotEditDisplayNameAndEmailButCanEditPhone(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	addEmma(env)
 	emma := env.Client()
 	loginLDAP(emma, "elarsen", "ldap-pw").ExpectStatus(http.StatusOK)
 
-	for _, field := range []string{"displayName", "email", "department"} {
+	for _, field := range []string{"displayName", "email"} {
 		patchMe(emma, map[string]any{field: "Something Else"}).ExpectError(http.StatusUnprocessableEntity, field, "ldapManaged")
 	}
-	// All three at once are all reported.
-	res := patchMe(emma, map[string]any{"displayName": "A", "email": "a@corp.example", "department": "B"})
+	// Both at once are reported.
+	res := patchMe(emma, map[string]any{"displayName": "A", "email": "a@corp.example"})
 	res.ExpectError(http.StatusUnprocessableEntity, "displayName", "ldapManaged")
 	res.ExpectError(http.StatusUnprocessableEntity, "email", "ldapManaged")
-	res.ExpectError(http.StatusUnprocessableEntity, "department", "ldapManaged")
 
 	// Sending the directory's own values back (a form that submits every field) is fine, and so is the phone.
 	patchMe(emma, map[string]any{
-		"displayName": "Emma Larsen", "email": "emma.larsen@corp.example", "department": "Payments Platform", "phone": "555-0142",
+		"displayName": "Emma Larsen", "email": "emma.larsen@corp.example", "phone": "555-0142",
 	}).ExpectStatus(http.StatusOK)
 	me := getMe(t, emma)
 	if me.DisplayName != "Emma Larsen" || me.Email != "emma.larsen@corp.example" || me.Department != "Payments Platform" || me.Phone != "555-0142" {
@@ -326,7 +325,7 @@ func TestAdministratorBindsTheLDAPIdentityToTheExistingLocalUserAndLDAPLoginEnte
 	t.Parallel()
 	env := apitest.New(t)
 	admin := env.AdminClient()
-	local := createUser(t, admin, map[string]any{"username": "elarsen", "displayName": "E. Larsen", "department": "Old Dept", "password": "local-pw-1"})
+	local := createUser(t, admin, map[string]any{"username": "elarsen", "displayName": "E. Larsen", "password": "local-pw-1"})
 	addEmma(env)
 	loginLDAP(env.Client(), "elarsen", "ldap-pw").ExpectError(http.StatusUnprocessableEntity, "username", "usernameTakenByLocal")
 
@@ -512,14 +511,14 @@ func TestAdministratorCannotRenameOrEditDirectoryOwnedFieldsOfAnLDAPBoundUser(t 
 	admin := env.AdminClient()
 
 	patchUser(admin, emma.ID, map[string]any{"username": "emma"}).ExpectError(http.StatusUnprocessableEntity, "username", "usernameLocked")
-	for _, field := range []string{"displayName", "email", "department"} {
+	for _, field := range []string{"displayName", "email"} {
 		patchUser(admin, emma.ID, map[string]any{field: "Changed By Admin"}).ExpectError(http.StatusUnprocessableEntity, field, "ldapManaged")
 	}
 	// The phone is not the directory's.
 	patchUser(admin, emma.ID, map[string]any{"phone": "555-0177"}).ExpectStatus(http.StatusOK)
 
 	got := findUser(t, listUsers(t, admin), "elarsen")
-	if got.DisplayName != "Emma Larsen" || got.Email != "emma.larsen@corp.example" || got.Department != "Payments Platform" || got.Phone != "555-0177" {
+	if got.DisplayName != "Emma Larsen" || got.Email != "emma.larsen@corp.example" || got.DirectoryDepartment != "Payments Platform" || got.Phone != "555-0177" {
 		t.Fatalf("user after the refused edits = %+v", got)
 	}
 	// The old name still logs in to the same user: nothing was renamed.

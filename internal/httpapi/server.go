@@ -80,6 +80,7 @@ func (s *server) routes() {
 	s.systemConfigRoutes()
 	s.userRoutes()
 	s.meRoutes()
+	s.departmentRoutes()
 }
 
 // mustChangeAllowed are the only routes a session opened with an administrator-chosen

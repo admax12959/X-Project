@@ -23,11 +23,15 @@ type User struct {
 	DisplayName string
 	Email       string
 	Phone       string
-	Department  string
-	Language    string // LanguageZh, LanguageEn, or empty when never chosen
-	Status      UserStatus
-	IsAdmin     bool
-	CreatedAt   time.Time
+	// DirectoryDepartment is the department text synced from LDAP (read-only; GLOSSARY: 目录部门).
+	// It has nothing to do with the organization's departments.
+	DirectoryDepartment string
+	// DepartmentID is the department the user belongs to in the organization; 0 = none.
+	DepartmentID DepartmentID
+	Language     string // LanguageZh, LanguageEn, or empty when never chosen
+	Status       UserStatus
+	IsAdmin      bool
+	CreatedAt    time.Time
 }
 
 type IdentityKind string
@@ -77,6 +81,7 @@ type Repository interface {
 	IdentityRepository
 	CodePlatformRepository
 	AuditRepository
+	DepartmentRepository
 	SystemConfigRepository
 
 	// InTx runs fn in one transaction; fn receives a Repository bound to it.

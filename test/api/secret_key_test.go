@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/admax12959/X-Project/internal/app"
 	"github.com/admax12959/X-Project/internal/apitest"
+	"github.com/admax12959/X-Project/internal/app"
 )
 
 func TestStartupWithoutAMasterKeyFailsAndNamesBothSources(t *testing.T) {

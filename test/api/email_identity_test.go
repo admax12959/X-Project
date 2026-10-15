@@ -228,7 +228,7 @@ func TestLoginEmailEditRules(t *testing.T) {
 	patchUser(admin, jane.ID, map[string]any{"loginEmail": "bob@example.com"}).ExpectError(http.StatusUnprocessableEntity, "loginEmail", "loginEmailTaken")
 	patchUser(admin, jane.ID, map[string]any{"loginEmail": "BOB@EXAMPLE.COM"}).ExpectError(http.StatusUnprocessableEntity, "loginEmail", "loginEmailTaken")
 	// Nothing changed; sending the current address is not a change.
-	patchUser(admin, jane.ID, map[string]any{"loginEmail": "jdoe@example.com", "department": "Ops"}).ExpectStatus(http.StatusOK)
+	patchUser(admin, jane.ID, map[string]any{"loginEmail": "jdoe@example.com", "phone": "555-0100"}).ExpectStatus(http.StatusOK)
 	env.Client().LoginAs("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
 
 	// A directory-only user has no login email to change.

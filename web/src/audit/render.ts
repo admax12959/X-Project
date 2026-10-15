@@ -41,6 +41,19 @@ const renderers: Record<string, Renderer> = {
   identityUnbound: (e) => ({ user: targetUser(e), kind: kindName(e.params.kind), loginName: str(e.params.loginName) }),
   appMemberAdded: (e) => appMember(e),
   appMemberRemoved: (e) => appMember(e),
+  departmentCreated: (e) => ({ name: str(e.params.name), parent: deptName(e.params.parent, 'audit.department.top') }),
+  departmentRenamed: (e) => ({ from: str(e.params.from), to: str(e.params.to) }),
+  departmentMoved: (e) => ({
+    name: str(e.params.name),
+    from: deptName(e.params.from, 'audit.department.top'),
+    to: deptName(e.params.to, 'audit.department.top'),
+  }),
+  departmentDeleted: (e) => ({ name: str(e.params.name), parent: deptName(e.params.parent, 'audit.department.top') }),
+  userDepartmentChanged: (e) => ({
+    user: targetUser(e),
+    from: deptName(e.params.from, 'audit.department.none'),
+    to: deptName(e.params.to, 'audit.department.none'),
+  }),
   configChanged: (e) => ({
     section: hasKey(`audit.section.${str(e.params.section)}`) ? translate(`audit.section.${str(e.params.section)}` as MessageKey) : str(e.params.section),
     fields: configFields(e),
@@ -50,6 +63,12 @@ const renderers: Record<string, Renderer> = {
     change: translate(e.params.to === true ? 'audit.adminFlag.granted' : 'audit.adminFlag.revoked'),
   }),
 };
+
+/** A department reference {id, name} from params; null is the top level (or, for a user, no department). */
+function deptName(ref: unknown, none: 'audit.department.top' | 'audit.department.none'): string {
+  const name = (ref as { name?: unknown } | null)?.name;
+  return typeof name === 'string' ? name : translate(none);
+}
 
 /** The changed field names of a configuration section, shown with the labels of that section's page. */
 function configFields(e: AuditEntry): string {

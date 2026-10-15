@@ -338,7 +338,7 @@ func TestOnlyAnAdministratorWhoTypesTheKeyDeletesAnApplicationAndItsLinesAndHist
 
 	f.admin.Do(http.MethodDelete, f.appPath, confirm).ExpectStatus(http.StatusNoContent)
 	for _, path := range []string{"", "/lines", "/history"} {
-		f.admin.Get(f.appPath + path).ExpectError(http.StatusNotFound, "", "notFound")
+		f.admin.Get(f.appPath+path).ExpectError(http.StatusNotFound, "", "notFound")
 	}
 	var list appListBody
 	f.admin.Get("/api/applications").ExpectStatus(http.StatusOK).JSON(&list)

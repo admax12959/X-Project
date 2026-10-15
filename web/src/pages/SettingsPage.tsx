@@ -50,7 +50,7 @@ export function SettingsPage() {
   // Keep the page and the session (top bar name, language) in step with what the server saved.
   const saved = (u: AdminUser) => {
     setLoad({ status: 'ok', me: u });
-    setUser({ id: u.id, username: u.username, displayName: u.displayName, email: u.email, department: u.department, language: u.language, isAdmin: u.isAdmin });
+    setUser({ id: u.id, username: u.username, displayName: u.displayName, email: u.email, directoryDepartment: u.directoryDepartment, language: u.language, isAdmin: u.isAdmin });
   };
 
   return (
@@ -68,9 +68,9 @@ export function SettingsPage() {
 
 function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser) => void }) {
   const { t } = useT();
-  // The directory owns these three for a user with an LDAP identity (spec: read-only, LDAP wins).
+  // The directory owns the display name and email for a user with an LDAP identity (spec: read-only, LDAP wins).
   const ldapBound = me.identities.some((i) => i.kind === 'ldap');
-  const [form, setForm] = useState({ displayName: me.displayName, department: me.department, phone: me.phone });
+  const [form, setForm] = useState({ displayName: me.displayName, phone: me.phone });
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -82,8 +82,8 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
 
   // When the identities change (e.g. LDAP was just bound) the server may have replaced the values.
   useEffect(() => {
-    setForm({ displayName: me.displayName, department: me.department, phone: me.phone });
-  }, [me.displayName, me.department, me.phone]);
+    setForm({ displayName: me.displayName, phone: me.phone });
+  }, [me.displayName, me.phone]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -93,7 +93,7 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
     try {
       // Send only what changed, so untouched LDAP-managed fields are never submitted.
       const changes: Partial<typeof form> = {};
-      for (const k of ['displayName', 'department', 'phone'] as const) {
+      for (const k of ['displayName', 'phone'] as const) {
         if (form[k] !== me[k]) changes[k] = form[k];
       }
       onSaved(await api.me.update(changes));
@@ -123,9 +123,11 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
           <Input name="email" type="email" disabled readOnly value={me.email} />
           <p className="mt-1 text-[12px] text-text-3">{ldapBound ? t('settings.profile.ldapManaged') : t('settings.profile.contactEmail')}</p>
         </Field>
-        <Field label={t('users.field.department')} error={errors.department}>
-          <Input name="department" disabled={ldapBound} value={form.department} onChange={set('department')} />
-        </Field>
+        {me.directoryDepartment !== '' && (
+          <Field label={t('users.field.directoryDepartment')}>
+            <Input name="directoryDepartment" disabled readOnly value={me.directoryDepartment} />
+          </Field>
+        )}
         <Field label={t('users.field.phone')} error={errors.phone}>
           <Input name="phone" type="tel" value={form.phone} onChange={set('phone')} />
         </Field>

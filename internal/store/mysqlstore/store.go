@@ -106,22 +106,23 @@ func (s *Store) MarkBootstrapped(ctx context.Context, at time.Time) error {
 
 // ---------------------------------------------------------------- users
 
-const userCols = "id, username, display_name, email, phone, department, language, status, is_admin, created_at"
+const userCols = "id, username, display_name, email, phone, department, department_id, language, status, is_admin, created_at"
 
 func scanUser(row interface{ Scan(...any) error }) (domain.User, error) {
 	var u domain.User
 	var status string
-	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Phone, &u.Department, &u.Language, &status, &u.IsAdmin, &u.CreatedAt)
-	u.Status = domain.UserStatus(status)
+	var dept sql.NullInt64
+	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Phone, &u.DirectoryDepartment, &dept, &u.Language, &status, &u.IsAdmin, &u.CreatedAt)
+	u.Status, u.DepartmentID = domain.UserStatus(status), domain.DepartmentID(dept.Int64)
 	return u, err
 }
 
 func (s *Store) CreateUser(ctx context.Context, u domain.User) (domain.UserID, error) {
 	res, err := s.q.ExecContext(ctx,
-		"INSERT INTO users (username, display_name, email, phone, department, status, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		u.Username, u.DisplayName, u.Email, u.Phone, u.Department, string(u.Status), u.IsAdmin, u.CreatedAt, u.CreatedAt)
+		"INSERT INTO users (username, display_name, email, phone, department, department_id, status, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		u.Username, u.DisplayName, u.Email, u.Phone, u.DirectoryDepartment, nullableDepartment(u.DepartmentID), string(u.Status), u.IsAdmin, u.CreatedAt, u.CreatedAt)
 	if err != nil {
-		return 0, mapUsernameConflict(err)
+		return 0, mapDepartmentFK(mapUsernameConflict(err))
 	}
 	id, err := res.LastInsertId()
 	return domain.UserID(id), err

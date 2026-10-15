@@ -49,6 +49,19 @@ const (
 	// AuditAdminFlagChanged: the administrator flag of a user changed. Target: the user.
 	// Params: from, to (booleans).
 	AuditAdminFlagChanged AuditAction = "adminFlagChanged"
+	// AuditDepartmentCreated: a department was added to the organization. Target: the
+	// department. Params: name, parent = {id, name} or null for a top-level department.
+	AuditDepartmentCreated AuditAction = "departmentCreated"
+	// AuditDepartmentRenamed: Target: the department. Params: from, to (names).
+	AuditDepartmentRenamed AuditAction = "departmentRenamed"
+	// AuditDepartmentMoved: a department moved under another one or to the top level.
+	// Target: the department. Params: name, from, to = {id, name} or null (top level).
+	AuditDepartmentMoved AuditAction = "departmentMoved"
+	// AuditDepartmentDeleted: Target: the department (gone). Params: name, parent = {id, name} or null.
+	AuditDepartmentDeleted AuditAction = "departmentDeleted"
+	// AuditUserDepartmentChanged: a user was put into, moved between or taken out of
+	// departments. Target: the user. Params: from, to = {id, name} or null (no department).
+	AuditUserDepartmentChanged AuditAction = "userDepartmentChanged"
 	// AuditConfigChanged: a section of the system configuration was saved with changes
 	// (#19). Target: the section (type systemConfig, id "ldap", ...). Params: section,
 	// changes = the NAMES of the changed fields (a secret is listed by name, never its value).
@@ -61,6 +74,9 @@ type AuditTargetType string
 const (
 	AuditTargetUser        AuditTargetType = "user"
 	AuditTargetApplication AuditTargetType = "application"
+	// AuditTargetDepartment: the id is the department ID. The department may be deleted
+	// later; its entries stay, and their params carry its name.
+	AuditTargetDepartment AuditTargetType = "department"
 	// AuditTargetSystemConfig: a section of the system configuration; the id is the section name.
 	AuditTargetSystemConfig AuditTargetType = "systemConfig"
 )
@@ -114,6 +130,28 @@ func appMemberAudit(action AuditAction, app Application, role MemberRole, user U
 
 func adminFlagChangedAudit(id UserID, from, to bool) auditEvent {
 	return auditEvent{AuditAdminFlagChanged, AuditTargetUser, userTargetID(id), map[string]any{"from": from, "to": to}}
+}
+
+func departmentTargetID(id DepartmentID) string { return strconv.FormatInt(int64(id), 10) }
+
+func departmentCreatedAudit(d Department, parent any) auditEvent {
+	return auditEvent{AuditDepartmentCreated, AuditTargetDepartment, departmentTargetID(d.ID), map[string]any{"name": d.Name, "parent": parent}}
+}
+
+func departmentRenamedAudit(d Department, to string) auditEvent {
+	return auditEvent{AuditDepartmentRenamed, AuditTargetDepartment, departmentTargetID(d.ID), map[string]any{"from": d.Name, "to": to}}
+}
+
+func departmentMovedAudit(d Department, from, to any) auditEvent {
+	return auditEvent{AuditDepartmentMoved, AuditTargetDepartment, departmentTargetID(d.ID), map[string]any{"name": d.Name, "from": from, "to": to}}
+}
+
+func departmentDeletedAudit(d Department, parent any) auditEvent {
+	return auditEvent{AuditDepartmentDeleted, AuditTargetDepartment, departmentTargetID(d.ID), map[string]any{"name": d.Name, "parent": parent}}
+}
+
+func userDepartmentChangedAudit(id UserID, from, to any) auditEvent {
+	return auditEvent{AuditUserDepartmentChanged, AuditTargetUser, userTargetID(id), map[string]any{"from": from, "to": to}}
 }
 
 func configChangedAudit(section string, changes []string) auditEvent {
@@ -229,7 +267,7 @@ func (s *Service) ListAudit(ctx context.Context, actor Actor, q AuditQuery) (Aud
 		f.ActorID = UserID(n)
 	}
 	switch tt := AuditTargetType(strings.TrimSpace(q.TargetType)); tt {
-	case "", AuditTargetUser, AuditTargetApplication, AuditTargetSystemConfig:
+	case "", AuditTargetUser, AuditTargetApplication, AuditTargetDepartment, AuditTargetSystemConfig:
 		f.TargetType = tt
 	default:
 		c.Add("targetType", CodeInvalid, nil)

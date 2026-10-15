@@ -65,4 +65,8 @@ const (
 	CodeRepoNotFound        = "repoNotFound"        // the platform has no repository at this path
 	CodeRepoForbidden       = "repoForbidden"       // the platform token cannot access this repository
 	CodePlatformUnreachable = "platformUnreachable" // the code platform could not be reached; try again later
+
+	// organization (#25)
+	CodeDepartmentCycle    = "departmentCycle"    // field "parentId"; a department cannot move under itself or one of its descendants
+	CodeDepartmentNotEmpty = "departmentNotEmpty" // request-level; params {members, children}; the department still has users or child departments
 )

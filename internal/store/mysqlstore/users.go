@@ -64,9 +64,9 @@ func (s *Store) userWithIdentities(ctx context.Context, id domain.UserID, lock s
 
 func (s *Store) UpdateUser(ctx context.Context, u domain.User, at time.Time) error {
 	_, err := s.q.ExecContext(ctx,
-		"UPDATE users SET username = ?, display_name = ?, email = ?, phone = ?, department = ?, language = ?, updated_at = ? WHERE id = ?",
-		u.Username, u.DisplayName, u.Email, u.Phone, u.Department, u.Language, at, u.ID)
-	return mapUsernameConflict(err)
+		"UPDATE users SET username = ?, display_name = ?, email = ?, phone = ?, department = ?, department_id = ?, language = ?, updated_at = ? WHERE id = ?",
+		u.Username, u.DisplayName, u.Email, u.Phone, u.DirectoryDepartment, nullableDepartment(u.DepartmentID), u.Language, at, u.ID)
+	return mapDepartmentFK(mapUsernameConflict(err))
 }
 
 func (s *Store) DeleteIdentity(ctx context.Context, id domain.UserID, kind domain.IdentityKind) error {
@@ -117,7 +117,24 @@ func (s *Store) LockEnabledAdmins(ctx context.Context) ([]domain.UserID, error) 
 }
 
 func (s *Store) ListUsers(ctx context.Context) ([]domain.UserWithIdentities, error) {
-	rows, err := s.q.QueryContext(ctx, "SELECT "+userCols+" FROM users ORDER BY id")
+	return s.listUsers(ctx, "", nil)
+}
+
+func (s *Store) ListUsersInDepartments(ctx context.Context, ids []domain.DepartmentID) ([]domain.UserWithIdentities, error) {
+	if len(ids) == 0 {
+		return []domain.UserWithIdentities{}, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	return s.listUsers(ctx, " WHERE department_id IN (?"+strings.Repeat(",?", len(ids)-1)+")", args)
+}
+
+// listUsers reads users (oldest first) with their login identities; where is an optional
+// condition on the users table, with its arguments.
+func (s *Store) listUsers(ctx context.Context, where string, args []any) ([]domain.UserWithIdentities, error) {
+	rows, err := s.q.QueryContext(ctx, "SELECT "+userCols+" FROM users"+where+" ORDER BY id", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +153,7 @@ func (s *Store) ListUsers(ctx context.Context) ([]domain.UserWithIdentities, err
 		return nil, err
 	}
 
-	idRows, err := s.q.QueryContext(ctx, "SELECT user_id, kind, login_name, bound_at, bound_via FROM login_identities ORDER BY id")
+	idRows, err := s.q.QueryContext(ctx, "SELECT user_id, kind, login_name, bound_at, bound_via FROM login_identities WHERE user_id IN (SELECT id FROM users"+where+") ORDER BY id", args...)
 	if err != nil {
 		return nil, err
 	}

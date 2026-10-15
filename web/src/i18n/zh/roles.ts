@@ -28,5 +28,6 @@ export default {
   'perm.user.manage': '管理用户和登录身份',
   'perm.audit.view': '查看审计日志',
   'perm.role.view': '查看角色及其权限点',
+  'perm.department.manage': '维护部门树，并为用户指定部门',
   'perm.config.manage': '管理系统配置（LDAP）',
 };

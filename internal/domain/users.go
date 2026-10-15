@@ -19,13 +19,15 @@ type UserWithIdentities struct {
 type UserRepository interface {
 	// ListUsers returns every user (oldest first) with its login identities.
 	ListUsers(ctx context.Context) ([]UserWithIdentities, error)
+	// ListUsersInDepartments is ListUsers limited to users whose department is one of ids.
+	ListUsersInDepartments(ctx context.Context, ids []DepartmentID) ([]UserWithIdentities, error)
 	// LockUserWithIdentities reads one user and its identities, locking the user
 	// row for the rest of the transaction (call inside InTx).
 	LockUserWithIdentities(ctx context.Context, id UserID) (UserWithIdentities, bool, error)
 	// GetUserWithIdentities reads one user and its identities without locking.
 	GetUserWithIdentities(ctx context.Context, id UserID) (UserWithIdentities, bool, error)
 	// UpdateUser overwrites the editable columns (username, display name, email,
-	// phone, department, language). Returns ErrUsernameTaken on a username conflict.
+	// phone, language). Returns ErrUsernameTaken on a username conflict.
 	UpdateUser(ctx context.Context, u User, at time.Time) error
 	// RenameEmailLogin changes the login email of the user's email identity.
 	// Returns ErrIdentityTaken on a conflict.
@@ -44,10 +46,23 @@ type UserRepository interface {
 	ReadUsersLocked(ctx context.Context, ids []UserID) (map[UserID]User, error)
 }
 
-// ListUsers returns all users for the administrator's user list.
-func (s *Service) ListUsers(ctx context.Context, actor Actor) ([]UserWithIdentities, error) {
+// ListUsers returns all users for the administrator's user list, oldest first. A non-empty
+// departmentID limits it to the users in that department or any department below it
+// (422 invalid on departmentId when it is malformed or unknown).
+func (s *Service) ListUsers(ctx context.Context, actor Actor, departmentID string) ([]UserWithIdentities, error) {
 	if err := requirePermission(actor, PermUserManage); err != nil {
 		return nil, err
+	}
+	return s.listUsers(ctx, departmentID)
+}
+
+func (s *Service) listUsers(ctx context.Context, departmentID string) ([]UserWithIdentities, error) {
+	ids, filtered, err := s.departmentFilter(ctx, departmentID)
+	if err != nil {
+		return nil, err
+	}
+	if filtered {
+		return s.repo.ListUsersInDepartments(ctx, ids)
 	}
 	return s.repo.ListUsers(ctx)
 }
@@ -56,12 +71,12 @@ func (s *Service) ListUsers(ctx context.Context, actor Actor) ([]UserWithIdentit
 // identity. The login email is also the user's contact email; Password is a temporary
 // one the user must change at the first login.
 type CreateEmailUserInput struct {
-	Username    string
-	DisplayName string
-	LoginEmail  string
-	Phone       string
-	Department  string
-	Password    string
+	Username     string
+	DisplayName  string
+	LoginEmail   string
+	Phone        string
+	DepartmentID string // optional: the department to put the user in
+	Password     string
 }
 
 // CreateEmailUser creates a user with an email identity bound by the administrator. The
@@ -76,11 +91,11 @@ func (s *Service) CreateEmailUser(ctx context.Context, actor Actor, in CreateEma
 	in.DisplayName = strings.TrimSpace(in.DisplayName)
 	in.LoginEmail = normalizeLoginEmail(in.LoginEmail)
 	in.Phone = strings.TrimSpace(in.Phone)
-	in.Department = strings.TrimSpace(in.Department)
 	checkUsername(&c, in.Username)
 	checkLoginEmail(&c, "loginEmail", in.LoginEmail)
-	checkProfile(&c, in.DisplayName, "", in.Phone, in.Department)
+	checkProfile(&c, in.DisplayName, "", in.Phone)
 	checkNewPassword(&c, in.Password)
+	departmentID := parseDepartmentRef(&c, "departmentId", in.DepartmentID)
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
 	}
@@ -99,11 +114,24 @@ func (s *Service) CreateEmailUser(ctx context.Context, actor Actor, in CreateEma
 		now := s.nowUTC()
 		u := User{
 			Username: in.Username, DisplayName: in.DisplayName, Email: in.LoginEmail,
-			Phone: in.Phone, Department: in.Department, Status: UserEnabled, CreatedAt: now,
+			Phone: in.Phone, Status: UserEnabled, CreatedAt: now,
+		}
+		var dept Department
+		if departmentID != 0 {
+			var found bool
+			if dept, found, err = tx.GetDepartment(ctx, departmentID); err != nil {
+				return err
+			} else if !found {
+				return Validation(Invalid("departmentId", CodeInvalid, nil))
+			}
+			u.DepartmentID = departmentID
 		}
 		id, err := tx.CreateUser(ctx, u)
 		if errors.Is(err, ErrUsernameTaken) {
 			return usernameTaken()
+		}
+		if errors.Is(err, ErrDepartmentMissing) {
+			return Validation(Invalid("departmentId", CodeInvalid, nil))
 		}
 		if err != nil {
 			return err
@@ -121,7 +149,13 @@ func (s *Service) CreateEmailUser(ctx context.Context, actor Actor, in CreateEma
 		if err != nil {
 			return err
 		}
-		return s.recordAudit(ctx, tx, AuditActorOf(actor), userCreatedAudit(id, in.LoginEmail))
+		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), userCreatedAudit(id, in.LoginEmail)); err != nil {
+			return err
+		}
+		if departmentID != 0 {
+			return s.recordAudit(ctx, tx, AuditActorOf(actor), userDepartmentChangedAudit(id, nil, departmentRef(dept)))
+		}
+		return nil
 	})
 	return created, err
 }
@@ -134,8 +168,8 @@ type UpdateUserInput struct {
 	Email       *string // the contact email: see applyProfileEdit
 	LoginEmail  *string // the login email of the user's email identity
 	Phone       *string
-	Department  *string
-	IsAdmin     *bool // grants or revokes the administrator role; the last enabled administrator cannot lose it
+	Department  OptionalRef // the department in the organization: unset = unchanged, empty ID = none
+	IsAdmin     *bool       // grants or revokes the administrator role; the last enabled administrator cannot lose it
 }
 
 func (u UserWithIdentities) hasIdentity(kind IdentityKind) bool {
@@ -168,12 +202,11 @@ type profileEdit struct {
 	DisplayName *string
 	Email       *string
 	Phone       *string
-	Department  *string
 }
 
 // applyProfileEdit applies e to u and validates the fields that are being changed,
-// reporting problems on c. For LDAP-bound users the directory owns display name, email
-// and department (they are synced at login, without local validation), so a different
+// reporting problems on c. For LDAP-bound users the directory owns display name and email
+// (they are synced at login, without local validation), so a different
 // value is refused with ldapManaged and an unchanged one is neither applied nor
 // validated: a directory value that does not satisfy the local rules must not block the
 // fields the user does own. For users without an LDAP identity the contact email is
@@ -201,16 +234,6 @@ func applyProfileEdit(c *Collector, u User, ldapBound bool, e profileEdit) User 
 	if v, ok := trimmed(e.Phone); ok {
 		checkLength(c, "phone", v, maxPhoneLength)
 		u.Phone = v
-	}
-	if v, ok := trimmed(e.Department); ok {
-		if ldapBound {
-			if v != u.Department {
-				c.Add("department", CodeLdapManaged, nil)
-			}
-		} else {
-			checkLength(c, "department", v, maxNameLength)
-			u.Department = v
-		}
 	}
 	return u
 }
@@ -284,17 +307,53 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 			}
 		}
 		u = applyProfileEdit(&c, u, ldapBound, profileEdit{
-			DisplayName: in.DisplayName, Email: in.Email, Phone: in.Phone, Department: in.Department,
+			DisplayName: in.DisplayName, Email: in.Email, Phone: in.Phone,
 		})
+		newDept := u.DepartmentID
+		if in.Department.Set {
+			newDept = parseDepartmentRef(&c, "departmentId", in.Department.ID)
+		}
 		if err := c.Err(); err != nil {
 			return err
 		}
+		// The department in the organization (not the directory department): any user may have
+		// one, LDAP-bound or not. A foreign key keeps a department that is being deleted at
+		// the same moment from receiving the user.
+		var oldDeptRef, newDeptRef any
+		if newDept != u.DepartmentID {
+			if u.DepartmentID != 0 {
+				old, _, err := tx.GetDepartment(ctx, u.DepartmentID)
+				if err != nil {
+					return err
+				}
+				oldDeptRef = departmentRef(old)
+			}
+			if newDept != 0 {
+				d, found, err := tx.GetDepartment(ctx, newDept)
+				if err != nil {
+					return err
+				}
+				if !found {
+					return Validation(Invalid("departmentId", CodeInvalid, nil))
+				}
+				newDeptRef = departmentRef(d)
+			}
+		}
+		departmentChanged := newDept != u.DepartmentID
+		u.DepartmentID = newDept
 
 		if newLoginEmail != "" && !ldapBound {
 			u.Email = newLoginEmail
 		}
-		if err := tx.UpdateUser(ctx, u, s.nowUTC()); err != nil {
+		if err := tx.UpdateUser(ctx, u, s.nowUTC()); errors.Is(err, ErrDepartmentMissing) {
+			return Validation(Invalid("departmentId", CodeInvalid, nil))
+		} else if err != nil {
 			return mapUsernameTaken(err)
+		}
+		if departmentChanged {
+			if err := s.recordAudit(ctx, tx, AuditActorOf(actor), userDepartmentChangedAudit(id, oldDeptRef, newDeptRef)); err != nil {
+				return err
+			}
 		}
 		if newLoginEmail != "" {
 			if err := tx.RenameEmailLogin(ctx, id, newLoginEmail); errors.Is(err, ErrIdentityTaken) {
@@ -382,7 +441,7 @@ const (
 	minPasswordLength = 8
 	maxPasswordBytes  = 72 // bcrypt ignores or rejects anything longer
 	maxUsernameLength = 32
-	maxNameLength     = 200 // display name and department
+	maxNameLength     = 200 // display name and department name
 	maxEmailLength    = 320
 	maxPhoneLength    = 64
 )
@@ -471,10 +530,9 @@ func checkEmail(c *Collector, email string) {
 }
 
 // checkProfile validates a whole profile at creation: display name (required), email
-// (optional, shaped like an address), phone and department. Values are already trimmed.
-func checkProfile(c *Collector, displayName, email, phone, department string) {
+// (optional, shaped like an address) and phone. Values are already trimmed.
+func checkProfile(c *Collector, displayName, email, phone string) {
 	checkDisplayName(c, displayName)
 	checkEmail(c, email)
 	checkLength(c, "phone", phone, maxPhoneLength)
-	checkLength(c, "department", department, maxNameLength)
 }

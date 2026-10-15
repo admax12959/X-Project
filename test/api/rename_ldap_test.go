@@ -41,5 +41,5 @@ func TestRenamingALocalUserFailsWhenTheDirectoryCannotBeAsked(t *testing.T) {
 
 	// Edits that are not a rename never need the directory.
 	patchUser(admin, jane.ID, map[string]any{"username": "jdoe", "phone": "555-0100"}).ExpectStatus(http.StatusOK)
-	patchUser(admin, jane.ID, map[string]any{"department": "Ops"}).ExpectStatus(http.StatusOK)
+	patchUser(admin, jane.ID, map[string]any{"phone": "555-0100"}).ExpectStatus(http.StatusOK)
 }
