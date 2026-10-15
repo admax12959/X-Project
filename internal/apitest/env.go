@@ -131,6 +131,9 @@ func (e *Env) start() {
 	})
 }
 
+// URL is the address of the test server, for requests a Client cannot make (a custom Host header).
+func (e *Env) URL() string { return e.server.URL }
+
 // Restart simulates a process restart on the same database. mutate adjusts the
 // configuration for the new process (for example a different admin password).
 func (e *Env) Restart(mutate ...func(*app.Config)) {
