@@ -170,7 +170,7 @@ func TestMailIsWrittenInTheRecipientsLanguageInBothFormatsForEveryTemplate(t *te
 			user    userBody
 			chinese bool
 		}{{zh, true}, {en, false}, {fresh, true}} {
-			req := domain.MailRequest{Template: tpl, Recipient: userIDOf(t, c.user), To: c.user.Email, Data: map[string]string{"Code": "482913"}, LinkPath: "/x/tok"}
+			req := domain.MailRequest{Template: tpl, Recipient: userIDOf(t, c.user), To: c.user.Email, Data: map[string]string{"Code": "482913", "OldEmail": "old@example.com", "NewEmail": "new@example.com", "Kind": "ldap", "LoginName": "elarsen"}, LinkPath: "/x/tok"}
 			if err := env.EnqueueMail(req); err != nil {
 				t.Fatalf("%s: %v", tpl, err)
 			}

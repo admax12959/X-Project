@@ -38,10 +38,18 @@ const (
 	// MailTemplateVerifyCode carries a one-time code that proves the recipient owns the address.
 	// Data: "Code".
 	MailTemplateVerifyCode MailTemplate = "verifyCode"
+	// MailTemplateLoginEmailChanged tells the old address that the login email was changed.
+	// Data: "OldEmail", "NewEmail".
+	MailTemplateLoginEmailChanged MailTemplate = "loginEmailChanged"
+	// MailTemplateIdentityBound / MailTemplateIdentityUnbound tell the contact email that a
+	// login identity was added or removed. Data: "Kind" ("ldap" or "email"), "LoginName".
+	MailTemplateIdentityBound   MailTemplate = "identityBound"
+	MailTemplateIdentityUnbound MailTemplate = "identityUnbound"
 )
 
 // mailTemplates is every bundled template.
-var mailTemplates = []MailTemplate{MailTemplateTest, MailTemplateInvite, MailTemplatePasswordReset, MailTemplateVerifyCode}
+var mailTemplates = []MailTemplate{MailTemplateTest, MailTemplateInvite, MailTemplatePasswordReset, MailTemplateVerifyCode,
+	MailTemplateLoginEmailChanged, MailTemplateIdentityBound, MailTemplateIdentityUnbound}
 
 // MailTemplates lists the bundled templates.
 func MailTemplates() []MailTemplate { return append([]MailTemplate(nil), mailTemplates...) }

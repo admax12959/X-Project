@@ -3,8 +3,11 @@ package domain
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
+	"net/mail"
+	"strings"
 	"time"
 )
 
@@ -146,8 +149,13 @@ func (s *Service) requestEmailCode(ctx context.Context, actor Actor, purpose Tok
 
 // checkEmailTarget checks that the user may be given this login email by this purpose.
 func (s *Service) checkEmailTarget(ctx context.Context, tx Repository, cur UserWithIdentities, purpose TokenPurpose, email string) error {
-	if purpose == TokenBindEmail && cur.hasIdentity(IdentityEmail) {
+	switch ident, has := cur.identity(IdentityEmail); {
+	case purpose == TokenBindEmail && has:
 		return Validation(Invalid("kind", CodeIdentityKindBound, nil))
+	case purpose == TokenChangeEmail && !has:
+		return Validation(Invalid("email", CodeNoEmailIdentity, nil))
+	case purpose == TokenChangeEmail && ident.LoginName == email:
+		return Validation(Invalid("email", CodeLoginEmailUnchanged, nil))
 	}
 	if _, held, err := tx.FindIdentity(ctx, IdentityEmail, email); err != nil {
 		return err
@@ -236,4 +244,99 @@ func (s *Service) BindOwnEmailIdentity(ctx context.Context, actor Actor, in Bind
 	})
 	s.noteGuess(ctx, actor.User.ID, err)
 	return u, err
+}
+
+// RequestChangeLoginEmailCode mails a verification code to the address a user with an email
+// identity wants as their new login email.
+func (s *Service) RequestChangeLoginEmailCode(ctx context.Context, actor Actor, email, clientIP string) error {
+	return s.requestEmailCode(ctx, actor, TokenChangeEmail, email, clientIP)
+}
+
+// ChangeOwnLoginEmail replaces the login email of the actor's email identity once the code sent
+// to the new address is confirmed. The contact email follows it unless the directory owns that;
+// the old address (and the contact email, when it is another one) is told.
+func (s *Service) ChangeOwnLoginEmail(ctx context.Context, actor Actor, email, code string) (UserWithIdentities, error) {
+	if err := s.requireMail(ctx); err != nil {
+		return UserWithIdentities{}, err
+	}
+	email = normalizeLoginEmail(email)
+	var c Collector
+	checkLoginEmail(&c, "email", email)
+	c.Required("code", code)
+	if err := c.Err(); err != nil {
+		return UserWithIdentities{}, err
+	}
+	if err := s.guessLimit(ctx, actor.User.ID); err != nil {
+		return UserWithIdentities{}, err
+	}
+	var result UserWithIdentities
+	err := s.repo.InTx(ctx, func(tx Repository) error {
+		cur, found, err := tx.LockUserWithIdentities(ctx, actor.User.ID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return newKind(KindNotFound, CodeNotFound)
+		}
+		if err := s.checkEmailTarget(ctx, tx, cur, TokenChangeEmail, email); err != nil {
+			return err
+		}
+		if err := s.verifyEmailCode(ctx, tx, cur.User.ID, TokenChangeEmail, email, code); err != nil {
+			return err
+		}
+		old, _ := cur.identity(IdentityEmail)
+		contactBefore := cur.User.Email
+		if err := tx.RenameEmailLogin(ctx, cur.User.ID, email); errors.Is(err, ErrIdentityTaken) {
+			return loginEmailTaken("email")
+		} else if err != nil {
+			return err
+		}
+		if !cur.hasIdentity(IdentityLDAP) {
+			cur.User.Email = email
+			if err := tx.UpdateUser(ctx, cur.User, s.nowUTC()); err != nil {
+				return mapUsernameTaken(err)
+			}
+		}
+		// A link mailed to the old address must not work any more.
+		if err := tx.UseUserAuthTokens(ctx, cur.User.ID, passwordTokenPurposes, s.nowUTC()); err != nil {
+			return err
+		}
+		for i := range cur.Identities {
+			if cur.Identities[i].Kind == IdentityEmail {
+				cur.Identities[i].LoginName = email
+			}
+		}
+		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), loginEmailChangedAudit(cur.User.ID, old.LoginName, email)); err != nil {
+			return err
+		}
+		data := map[string]string{"OldEmail": old.LoginName, "NewEmail": email}
+		if err := s.notifySecurity(ctx, tx, cur.User.ID, old.LoginName, MailTemplateLoginEmailChanged, data); err != nil {
+			return err
+		}
+		if contactBefore != old.LoginName {
+			if err := s.notifySecurity(ctx, tx, cur.User.ID, contactBefore, MailTemplateLoginEmailChanged, data); err != nil {
+				return err
+			}
+		}
+		result = cur
+		return nil
+	})
+	s.noteGuess(ctx, actor.User.ID, err)
+	return result, err
+}
+
+// notifySecurity queues a security notice about a login identity change to an address of the
+// user, when mail works and the address is deliverable. A notice that cannot be sent never
+// stops the change it is about.
+func (s *Service) notifySecurity(ctx context.Context, tx Repository, userID UserID, to string, tpl MailTemplate, data map[string]string) error {
+	settings, _, _, err := s.readSMTP(ctx, tx)
+	if err != nil {
+		return err
+	}
+	to = strings.TrimSpace(to)
+	if a, perr := mail.ParseAddress(to); !settings.configured() || perr != nil || a.Address != to || strings.ContainsAny(to, "\r\n") {
+		return nil
+	}
+	_, err = s.enqueueMail(ctx, tx, MailRequest{Template: tpl, To: to, Recipient: userID, Data: data})
+	return err
 }

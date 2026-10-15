@@ -15,6 +15,8 @@ func (s *server) meRoutes() {
 	s.route("DELETE /api/me/identities/{kind}", s.unbindOwnIdentity)
 	s.route("POST /api/me/email-identity/code", s.requestBindEmailCode)
 	s.route("POST /api/me/email-identity", s.bindOwnEmailIdentity)
+	s.route("POST /api/me/login-email/code", s.requestChangeLoginEmailCode)
+	s.route("PUT /api/me/login-email", s.changeOwnLoginEmail)
 	s.route("POST /api/users/{id}/identities", s.adminBindIdentity)
 }
 
@@ -146,4 +148,34 @@ func (s *server) bindOwnEmailIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, toAdminUserJSON(u))
+}
+
+func (s *server) requestChangeLoginEmailCode(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.svc.RequestChangeLoginEmailCode(r.Context(), actorOf(r), body.Email, domain.ClientIP(r.RemoteAddr)); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *server) changeOwnLoginEmail(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+		Code  string `json:"code"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	u, err := s.svc.ChangeOwnLoginEmail(r.Context(), actorOf(r), body.Email, body.Code)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAdminUserJSON(u))
 }

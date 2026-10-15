@@ -28,12 +28,13 @@ const (
 	CodeEmailManaged   = "emailManaged"   // contact email of a user without LDAP: it is the login email, change that
 
 	// login identities (ADR-0002)
-	CodeLastIdentity      = "lastIdentity"      // unbinding the user's only login identity
-	CodeIdentityKindBound = "identityKindBound" // the user already has an identity of this kind
-	CodeIdentityTaken     = "identityTaken"     // another user already holds this login identity
-	CodeLdapLoginNotFound = "ldapLoginNotFound" // administrator binding: the directory has no such login name
-	CodeLoginEmailTaken   = "loginEmailTaken"   // another email identity already uses this login email
-	CodeNoEmailIdentity   = "noEmailIdentity"   // the user has no email identity to change
+	CodeLastIdentity        = "lastIdentity"        // unbinding the user's only login identity
+	CodeIdentityKindBound   = "identityKindBound"   // the user already has an identity of this kind
+	CodeIdentityTaken       = "identityTaken"       // another user already holds this login identity
+	CodeLdapLoginNotFound   = "ldapLoginNotFound"   // administrator binding: the directory has no such login name
+	CodeLoginEmailTaken     = "loginEmailTaken"     // another email identity already uses this login email
+	CodeNoEmailIdentity     = "noEmailIdentity"     // the user has no email identity to change
+	CodeLoginEmailUnchanged = "loginEmailUnchanged" // field "email"; the new login email is the current one
 
 	// administrator role
 	CodeLastAdmin = "lastAdmin" // field "isAdmin"; the last enabled administrator cannot lose the role
