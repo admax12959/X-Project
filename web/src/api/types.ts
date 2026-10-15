@@ -18,6 +18,8 @@ export type User = {
   /** Saved interface language; '' = never chosen. */
   language: Language | '';
   isAdmin: boolean;
+  /** URL of the picture (/api/avatars/{id}?v=...); null = initials. */
+  avatarUrl: string | null;
 };
 
 export type Language = 'zh' | 'en';
@@ -31,7 +33,7 @@ export type LoginMethod = 'email' | 'ldap';
 export type LoginInput = { method: 'email'; email: string; password: string } | { method: 'ldap'; username: string; password: string };
 
 /** Owner / PE as shown in an application. */
-export type Member = { id: string; username: string; displayName: string; status: 'enabled' | 'disabled' };
+export type Member = { id: string; username: string; displayName: string; status: 'enabled' | 'disabled'; avatarUrl: string | null };
 
 /** A verified repository binding. projectId is assigned by the code platform and is what the binding relies on; path is display only. */
 export type Repo = { platformId: string; kind: PlatformKind; baseUrl: string; path: string; projectId: string };
@@ -91,7 +93,7 @@ export type UpdateApplicationInput = Partial<Pick<CreateApplicationInput, 'name'
 export type UpdateMembersInput = { owners: string[]; pes: string[] };
 
 /** An enabled user as offered by the Owner/PE pickers (GET /api/assignable-users). */
-export type AssignableUser = { id: string; username: string; displayName: string };
+export type AssignableUser = { id: string; username: string; displayName: string; avatarUrl: string | null };
 
 /** A line as referenced from other records (a version's line, a source version's line). The mainline has no name of its own. */
 export type Line = { id: string; isMain: boolean; name: string; branch: string };
@@ -187,6 +189,7 @@ export type AdminUser = {
   language: Language | '';
   status: 'enabled' | 'disabled';
   isAdmin: boolean;
+  avatarUrl: string | null;
   identities: LoginIdentity[];
 };
 

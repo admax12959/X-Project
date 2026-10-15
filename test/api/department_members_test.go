@@ -204,8 +204,8 @@ func TestOwnersFilterThePickerByDepartment(t *testing.T) {
 		owner.Get("/api/assignable-users" + query).ExpectStatus(http.StatusOK).JSON(&l)
 		var names []string
 		for _, it := range l.Items {
-			if len(it) != 3 {
-				t.Fatalf("item = %v, want id, username and displayName only", it)
+			if len(it) != 4 {
+				t.Fatalf("item = %v, want id, username, displayName and avatarUrl only", it)
 			}
 			names = append(names, it["username"].(string))
 		}

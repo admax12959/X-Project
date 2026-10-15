@@ -70,7 +70,7 @@ export function onUnauthenticated(fn: () => void) {
   unauthenticatedHandler = fn;
 }
 
-type Options = { body?: unknown; expect401?: boolean };
+type Options = { body?: unknown; /** A file sent as it is (the avatar), not JSON. */ file?: Blob; expect401?: boolean };
 
 async function request<T>(method: string, path: string, opts: Options = {}): Promise<T> {
   let res: Response;
@@ -78,8 +78,8 @@ async function request<T>(method: string, path: string, opts: Options = {}): Pro
     res = await fetch(path, {
       method,
       credentials: 'same-origin',
-      headers: opts.body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      headers: opts.file ? { 'Content-Type': 'application/octet-stream' } : opts.body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: opts.file ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body)),
     });
   } catch {
     throw new ApiError(0, [{ code: 'network' }]);
@@ -267,6 +267,10 @@ export const api = {
     changePassword: (input: ChangePasswordInput) => request<void>('PUT', '/api/me/password', { body: input }),
     /** Only ldap: 422 on password when the authentication fails (never 401), identityKindBound, identityTaken; 503 ldapUnreachable. */
     bindIdentity: (input: BindIdentityInput) => request<AdminUser>('POST', '/api/me/identities', { body: input }),
+    /** The picture as the raw body. 422 avatar avatarTooLarge / avatarUnsupportedType; 429 rateLimited; 503 storageUnavailable. */
+    uploadAvatar: (file: Blob) => request<AdminUser>('PUT', '/api/me/avatar', { file }),
+    /** Removes the uploaded picture (the directory photo, if any, shows again). */
+    removeAvatar: () => request<AdminUser>('DELETE', '/api/me/avatar'),
     /** 422 lastIdentity on the only identity. */
     unbindIdentity: (kind: IdentityKind) => request<AdminUser>('DELETE', `/api/me/identities/${kind}`),
   },

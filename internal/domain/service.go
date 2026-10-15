@@ -28,6 +28,7 @@ type Service struct {
 	now           func() time.Time
 	sessionTTL    time.Duration
 	tokens        tokenCipher // encrypts stored secrets; zero value when no SecretKey
+	avatarLimits  uploadLimiter
 }
 
 // Options configures a Service.

@@ -400,7 +400,7 @@ func TestEveryoneCanListTheEnabledUsersForTheOwnerAndPePickers(t *testing.T) {
 	var names []string
 	for _, it := range list.Items {
 		names = append(names, it["username"].(string))
-		if len(it) != 3 || it["id"] == "" || it["displayName"] == "" { // no email, phone, department...
+		if len(it) != 4 || it["id"] == "" || it["displayName"] == "" { // id, username, displayName, avatarUrl: no email, phone, department...
 			t.Fatalf("item = %v", it)
 		}
 	}

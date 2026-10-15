@@ -122,7 +122,7 @@ func (d *Directory) run(ctx context.Context, login, password string) domain.Dire
 	res, err := conn.Search(ldap.NewSearchRequest(
 		d.cfg.BaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 2, int(d.cfg.Timeout.Seconds()), false,
 		fmt.Sprintf(d.cfg.UserFilter, ldap.EscapeFilter(login)),
-		[]string{d.cfg.LoginAttr, d.cfg.NameAttr, d.cfg.EmailAttr, d.cfg.DeptAttr}, nil))
+		[]string{d.cfg.LoginAttr, d.cfg.NameAttr, d.cfg.EmailAttr, d.cfg.DeptAttr, "thumbnailPhoto", "jpegPhoto"}, nil))
 	if err != nil {
 		if ldap.IsErrorWithCode(err, ldap.LDAPResultSizeLimitExceeded) {
 			slog.Warn("ldap: user_filter matches more than one entry", "login", login)
@@ -169,6 +169,14 @@ func (d *Directory) run(ctx context.Context, login, password string) domain.Dire
 		DisplayName: e.GetAttributeValue(d.cfg.NameAttr),
 		Email:       e.GetAttributeValue(d.cfg.EmailAttr),
 		Department:  e.GetAttributeValue(d.cfg.DeptAttr),
+	}
+	// The directory photo: thumbnailPhoto first, jpegPhoto otherwise. Raw bytes; the domain
+	// decides whether it is a usable picture.
+	for _, attr := range []string{"thumbnailPhoto", "jpegPhoto"} {
+		if b := e.GetRawAttributeValue(attr); len(b) > 0 {
+			entry.Photo = b
+			break
+		}
 	}
 	if entry.Login == "" {
 		entry.Login = login

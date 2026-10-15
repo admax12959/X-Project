@@ -8,6 +8,7 @@ import { useT } from '../i18n/index.ts';
 import { DepartmentSelect, useDepartments } from '../org/DepartmentSelect.tsx';
 import { pathLabel } from '../org/tree.ts';
 import { useCurrentUser } from '../session/session.tsx';
+import { Avatar } from '../ui/Avatar.tsx';
 import { Button, Empty } from '../ui/controls.tsx';
 import { BindIdentityDialog } from './BindIdentityDialog.tsx';
 import { UserDialog } from './UserDialog.tsx';
@@ -138,6 +139,7 @@ export function UsersPage() {
               <tr key={u.id} className="hover:bg-hover">
                 <td className={`${td} font-mono text-[12.5px]`}>{u.username}</td>
                 <td className={td}>
+                  <Avatar size="sm" name={u.displayName} url={u.avatarUrl} className="mr-2" />
                   {u.displayName}
                   {u.isAdmin && <span className="ml-2 text-[13px] text-text-3">{t('term.administrator')}</span>}
                 </td>

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -166,7 +167,8 @@ func TestAuthenticateReturnsDirectoryAttributes(t *testing.T) {
 	d := newDir(t)
 	res := d.Authenticate(context.Background(), "elarsen", "emma-pw")
 	want := domain.DirectoryEntry{Login: "elarsen", DisplayName: "Emma Larsen", Email: "emma.larsen@corp.example", Department: "Payments Platform"}
-	if res.Outcome != domain.DirectoryOK || res.Entry != want {
+	res.Entry.Photo = nil // the seeded people have no photo
+	if res.Outcome != domain.DirectoryOK || !reflect.DeepEqual(res.Entry, want) {
 		t.Fatalf("Authenticate = %+v, want OK %+v", res, want)
 	}
 }

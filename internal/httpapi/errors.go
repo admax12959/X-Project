@@ -16,6 +16,7 @@ import (
 //	KindForbidden       → 403
 //	KindNotFound        → 404
 //	KindUnavailable     → 503
+//	KindTooManyRequests → 429
 //	malformed request   → 400 badRequest
 //	anything else       → 500 internal (details only in the server log)
 var kindStatus = map[domain.ErrorKind]int{
@@ -24,6 +25,7 @@ var kindStatus = map[domain.ErrorKind]int{
 	domain.KindForbidden:       http.StatusForbidden,
 	domain.KindNotFound:        http.StatusNotFound,
 	domain.KindUnavailable:     http.StatusServiceUnavailable,
+	domain.KindTooManyRequests: http.StatusTooManyRequests,
 }
 
 type errorEnvelope struct {
