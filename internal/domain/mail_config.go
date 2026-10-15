@@ -306,6 +306,68 @@ func (s *Service) UpdateSMTPConfig(ctx context.Context, actor Actor, in SMTPConf
 	return view, err
 }
 
+// MailTestResult is the answer of "send test email". A failed delivery is an expected outcome,
+// not an error of the request: OK=false carries the failure Code (rendered by the frontend as
+// "error.<code>") and the Detail, the mail server's or the network's own words.
+type MailTestResult struct {
+	OK     bool
+	Code   string
+	Detail string
+	To     string // the address the test mail was sent to
+}
+
+// TestSMTPConfig sends a test email, with the (unsaved) form values, to the contact email of
+// the administrator who asks, in the administrator's language. A password left empty falls
+// back to the stored one. Nothing is saved, queued or audited. Administrators only.
+func (s *Service) TestSMTPConfig(ctx context.Context, actor Actor, in SMTPConfigInput) (MailTestResult, error) {
+	if err := requirePermission(actor, PermConfigManage); err != nil {
+		return MailTestResult{}, err
+	}
+	secrets, err := s.loadSecrets(ctx, s.repo, SectionSMTP)
+	if err != nil {
+		return MailTestResult{}, err
+	}
+	in.Enabled = true // testing a form means: as if it were switched on
+	settings, password, err := validateSMTP(in, secrets, true)
+	if err != nil {
+		return MailTestResult{}, err
+	}
+	to := strings.TrimSpace(actor.User.Email)
+	if to == "" {
+		return MailTestResult{}, Validation(Invalid("", CodeNoContactEmail, nil))
+	}
+	res := MailTestResult{To: to}
+	content, err := renderMail(MailTemplateTest, mailLanguageOf(actor.User.Language), map[string]any{"Name": actor.User.DisplayName})
+	if err != nil {
+		return MailTestResult{}, err
+	}
+	if s.mailSenders == nil {
+		res.Code = CodeSmtpUnreachable
+		return res, nil
+	}
+	sender, err := s.mailSenders.Build(smtpConfig(settings, password))
+	if err != nil {
+		res.Code, res.Detail = CodeSmtpRejected, err.Error()
+		return res, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*smtpTimeout)
+	defer cancel()
+	if err := sender.Send(ctx, MailMessage{From: settings.From, To: to, Subject: content.Subject, Text: content.Text, HTML: content.HTML}); err != nil {
+		res.Code, res.Detail = mailFailure(err)
+		return res, nil
+	}
+	res.OK = true
+	return res, nil
+}
+
+// mailFailure turns a delivery error into the code and the detail shown to the administrator.
+func mailFailure(err error) (code, detail string) {
+	if e, ok := err.(*MailSendError); ok {
+		return e.Code, e.Detail
+	}
+	return CodeSmtpUnreachable, err.Error()
+}
+
 func smtpConfig(m SMTPSettings, password string) SMTPConfig {
 	return SMTPConfig{
 		Host: m.Host, Port: m.Port, Security: m.Security, Username: m.Username, Password: password,

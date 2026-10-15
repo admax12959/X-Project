@@ -100,7 +100,7 @@ func TestTestMailIsWrittenInTheAdministratorsLanguage(t *testing.T) {
 	if !strings.Contains(sent[0].Message.Subject, "测试") || !strings.Contains(sent[0].Message.Text, "测试") {
 		t.Errorf("no language chosen yet: subject %q, want Chinese (the default)", sent[0].Message.Subject)
 	}
-	if !strings.Contains(sent[1].Message.Subject, "Test") || strings.Contains(sent[1].Message.Text, "测试") {
+	if !strings.Contains(sent[1].Message.Subject, "test email") || strings.Contains(sent[1].Message.Text, "测试") {
 		t.Errorf("language en: subject %q, want English", sent[1].Message.Subject)
 	}
 }

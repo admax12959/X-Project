@@ -13,6 +13,7 @@ import (
 func (s *server) mailRoutes() {
 	s.route("GET /api/system-config/smtp", s.getSMTPConfig)
 	s.route("PUT /api/system-config/smtp", s.putSMTPConfig)
+	s.route("POST /api/system-config/smtp/test", s.testSMTPConfig)
 	s.route("GET /api/mail/status", s.mailStatus)
 }
 
@@ -89,6 +90,28 @@ func (s *server) putSMTPConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toSMTPConfigJSON(v))
+}
+
+// mailTestJSON is the answer of "send test email": ok, or ok=false with the failure code (shown
+// as the message error.<code>) and the server's own words. A failed delivery is a 200.
+type mailTestJSON struct {
+	OK     bool   `json:"ok"`
+	Code   string `json:"code,omitempty"`
+	Detail string `json:"detail,omitempty"`
+	To     string `json:"to"`
+}
+
+func (s *server) testSMTPConfig(w http.ResponseWriter, r *http.Request) {
+	var body smtpConfigBody
+	if !decode(w, r, &body) {
+		return
+	}
+	res, err := s.svc.TestSMTPConfig(r.Context(), actorOf(r), body.input())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, mailTestJSON{OK: res.OK, Code: res.Code, Detail: res.Detail, To: res.To})
 }
 
 func (s *server) mailStatus(w http.ResponseWriter, r *http.Request) {

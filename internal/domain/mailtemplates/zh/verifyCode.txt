@@ -1,0 +1,11 @@
+Subject: X-Project 邮箱验证码
+
+你好{{if .Name}}，{{.Name}}{{end}}：
+
+你的 X-Project 邮箱验证码是：
+
+{{.Code}}
+
+验证码有有效期。如果不是你本人操作，请忽略这封邮件。
+
+X-Project

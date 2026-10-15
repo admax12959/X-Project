@@ -1,0 +1,7 @@
+Subject: X-Project 测试邮件
+
+你好{{if .Name}}，{{.Name}}{{end}}：
+
+这是一封来自 X-Project 的测试邮件。收到它，说明邮件服务的配置可以正常使用。
+
+X-Project
