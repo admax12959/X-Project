@@ -31,7 +31,7 @@ export function UsersPage() {
   const [actionUser, setActionUser] = useState<AdminUser | null>(null);
   const [bindFor, setBindFor] = useState<AdminUser | null>(null);
   // Login identity kinds the server offers (ldap only when a directory is configured).
-  const [methods, setMethods] = useState<LoginMethod[]>(['local']);
+  const [methods, setMethods] = useState<LoginMethod[]>(['email']);
   const missingKinds = (u: AdminUser): LoginMethod[] => methods.filter((m) => !u.identities.some((i) => i.kind === m));
 
   useEffect(() => {

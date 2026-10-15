@@ -1,10 +1,11 @@
-// 个人设置（#15）：个人资料、登录身份、语言。
+// 个人设置（#15）：个人资料、登录身份、密码、语言。
 export default {
   'settings.title': '设置',
   'settings.loadFailed': '无法加载你的设置。',
   'settings.profile.title': '个人资料',
   'settings.profile.username': '用户名',
   'settings.profile.ldapManaged': '显示名、邮箱和部门以 LDAP 为准，这里只读。',
+  'settings.profile.contactEmail': '联系邮箱就是你的登录邮箱，不能单独修改。',
   'settings.profile.saved': '已保存。',
   'settings.identities.title': '登录身份',
   'settings.identities.col.type': '类型',
@@ -21,14 +22,10 @@ export default {
   'settings.unbind.title': '解绑{kind}？',
   'settings.unbind.body': '解绑后不能再用这个登录身份登录。你的用户信息和其他登录身份不受影响。',
   'settings.bind.ldap': '绑定 LDAP',
-  'settings.bind.local': '设置本地密码',
   'settings.bind.ldapTitle': '绑定 LDAP 登录身份',
-  'settings.bind.localTitle': '设置本地密码',
   'settings.bind.ldapHint': '请用该 LDAP 身份登录一次，证明它是你的。绑定后，显示名、邮箱和部门将以 LDAP 为准。',
-  'settings.bind.localHint': '之后用你的用户名 {username} 和这个密码登录。',
   'settings.bind.loginName': 'LDAP 登录名',
   'settings.bind.ldapPassword': 'LDAP 密码',
-  'settings.bind.localPassword': '新密码',
   'settings.bind.submit': '绑定',
   'settings.bind.submitting': '绑定中…',
   'settings.language.title': '语言',

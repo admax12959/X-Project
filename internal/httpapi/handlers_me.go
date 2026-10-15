@@ -10,6 +10,7 @@ import (
 func (s *server) meRoutes() {
 	s.route("GET /api/me", s.getMe)
 	s.route("PATCH /api/me", s.updateMe)
+	s.route("PUT /api/me/password", s.changePassword)
 	s.route("POST /api/me/identities", s.bindOwnIdentity)
 	s.route("DELETE /api/me/identities/{kind}", s.unbindOwnIdentity)
 	s.route("POST /api/users/{id}/identities", s.adminBindIdentity)
@@ -22,6 +23,21 @@ func (s *server) unbindOwnIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toAdminUserJSON(u))
+}
+
+func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.svc.ChangePassword(r.Context(), actorOf(r), body.CurrentPassword, body.NewPassword); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) getMe(w http.ResponseWriter, r *http.Request) {

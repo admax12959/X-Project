@@ -31,7 +31,7 @@ func newMaintFixture(t *testing.T) maintFixture {
 		ExpectStatus(http.StatusCreated)
 	login := func(username string) *apitest.Client {
 		c := f.env.Client()
-		c.LoginLocal(username, "initial-pw-1").ExpectStatus(http.StatusOK)
+		c.LoginAs(username, "initial-pw-1").ExpectStatus(http.StatusOK)
 		return c
 	}
 	return maintFixture{

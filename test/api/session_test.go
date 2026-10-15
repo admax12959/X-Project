@@ -22,7 +22,7 @@ func TestInitialAdministratorCanLogInWithConfiguredPassword(t *testing.T) {
 	c := env.Client()
 
 	var login sessionBody
-	c.LoginLocal(apitest.AdminUsername, apitest.AdminPassword).ExpectStatus(http.StatusOK).JSON(&login)
+	c.LoginAs(apitest.AdminUsername, apitest.AdminPassword).ExpectStatus(http.StatusOK).JSON(&login)
 	if login.User.Username != apitest.AdminUsername || !login.User.IsAdmin || login.User.DisplayName != "Initial Admin" {
 		t.Fatalf("login user = %+v", login.User)
 	}

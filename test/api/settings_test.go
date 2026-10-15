@@ -27,7 +27,7 @@ func TestLanguagePreferenceIsSavedOnTheUserAndFollowsThemToAnotherDevice(t *test
 		} `json:"user"`
 	}
 	laptop := env.Client()
-	laptop.LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK).JSON(&first)
+	laptop.LoginAs("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK).JSON(&first)
 	if first.User.Language != "" {
 		t.Fatalf("language before any choice = %q, want empty (not chosen yet)", first.User.Language)
 	}
@@ -41,7 +41,7 @@ func TestLanguagePreferenceIsSavedOnTheUserAndFollowsThemToAnotherDevice(t *test
 		} `json:"user"`
 	}
 	phone := env.Client()
-	phone.LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK).JSON(&second)
+	phone.LoginAs("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK).JSON(&second)
 	if second.User.Language != "en" {
 		t.Fatalf("language after login on another device = %q, want en", second.User.Language)
 	}
@@ -100,18 +100,18 @@ func getMe(t *testing.T, c *apitest.Client) meBody {
 	return m
 }
 
-func TestUserWithOnlyALocalIdentityEditsOwnDisplayNameEmailDepartmentAndPhone(t *testing.T) {
+func TestUserWithOnlyAnEmailIdentityEditsOwnDisplayNameDepartmentAndPhone(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	createUser(t, env.AdminClient(), map[string]any{"username": "jdoe", "password": "jane-pw-123"})
 	jane := env.Client()
-	jane.LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+	jane.LoginAs("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
 
 	var got meBody
 	patchMe(jane, map[string]any{
-		"displayName": "Jane D. Doe", "email": "jane.doe@example.com", "department": "Treasury", "phone": "555-0199",
+		"displayName": "Jane D. Doe", "department": "Treasury", "phone": "555-0199",
 	}).ExpectStatus(http.StatusOK).JSON(&got)
-	if got.DisplayName != "Jane D. Doe" || got.Email != "jane.doe@example.com" || got.Department != "Treasury" || got.Phone != "555-0199" {
+	if got.DisplayName != "Jane D. Doe" || got.Email != "jdoe@example.com" || got.Department != "Treasury" || got.Phone != "555-0199" {
 		t.Fatalf("PATCH /api/me answered %+v", got)
 	}
 	if again := getMe(t, jane); again.DisplayName != got.DisplayName || again.Email != got.Email ||
@@ -129,10 +129,12 @@ func TestOwnProfileEditsAreValidatedLikeTheAdminsAndCannotChangeUsernameOrRole(t
 	env := apitest.New(t)
 	createUser(t, env.AdminClient(), map[string]any{"username": "jdoe", "password": "jane-pw-123"})
 	jane := env.Client()
-	jane.LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+	jane.LoginAs("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
 
 	patchMe(jane, map[string]any{"displayName": "  "}).ExpectError(http.StatusUnprocessableEntity, "displayName", "required")
-	patchMe(jane, map[string]any{"email": "not-an-address"}).ExpectError(http.StatusUnprocessableEntity, "email", "invalid")
+	// The contact email of a user without LDAP is the login email: only that changes it.
+	patchMe(jane, map[string]any{"email": "someone.else@example.com"}).ExpectError(http.StatusUnprocessableEntity, "email", "emailManaged")
+	patchMe(jane, map[string]any{"email": "jdoe@example.com", "phone": "555-0100"}).ExpectStatus(http.StatusOK)
 
 	// Username and role are not editable here: the fields are simply ignored.
 	patchMe(jane, map[string]any{"username": "someoneelse", "isAdmin": true, "phone": "555-0111"}).ExpectStatus(http.StatusOK)
@@ -180,7 +182,7 @@ func localJane(t *testing.T, env *apitest.Env) (*apitest.Client, userBody) {
 	t.Helper()
 	u := createUser(t, env.AdminClient(), map[string]any{"username": "jdoe", "password": "jane-pw-123"})
 	c := env.Client()
-	c.LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+	c.LoginAs("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
 	return c, u
 }
 
@@ -213,7 +215,7 @@ func TestUserBindsAnLDAPIdentityAfterAuthenticatingWithItAndThenLogsInWithEither
 	if u := userOf(t, loginLDAP(ldap, "jane.doe", "jane-ldap-pw")); u.ID != created.ID || u.Username != "jdoe" {
 		t.Fatalf("LDAP login opened %+v, want user %s (jdoe)", u, created.ID)
 	}
-	env.Client().LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+	env.Client().LoginAs("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
 }
 
 func TestBindingAnLDAPIdentityMakesTheDirectoryOwnDisplayNameEmailAndDepartment(t *testing.T) {
@@ -266,26 +268,25 @@ func TestAUserHasAtMostOneIdentityOfEachType(t *testing.T) {
 	}
 }
 
-func TestLDAPUserBindsALocalPasswordIdentityAndThenLogsInWithEither(t *testing.T) {
+// A user cannot give themselves an email identity yet: the address has to be verified by
+// mail first, which comes with the mail features. An administrator can bind one.
+func TestAUserCannotBindAnEmailIdentityToThemselves(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	addEmma(env)
 	emma := env.Client()
-	emmaUser := userOf(t, loginLDAP(emma, "elarsen", "ldap-pw"))
+	loginLDAP(emma, "elarsen", "ldap-pw")
 
-	// The local login name is always the username; only the password is chosen.
-	bindOwn(emma, map[string]any{"kind": "local", "password": "short"}).ExpectError(http.StatusUnprocessableEntity, "password", "tooShort")
-	bindOwn(emma, map[string]any{"kind": "local", "password": ""}).ExpectError(http.StatusUnprocessableEntity, "password", "required")
-
-	var me meBody
-	bindOwn(emma, map[string]any{"kind": "local", "password": "emma-local-pw-1"}).ExpectStatus(http.StatusCreated).JSON(&me)
-	if len(me.Identities) != 2 || me.Identities[1].Kind != "local" || me.Identities[1].LoginName != "elarsen" || me.Identities[1].BoundVia != "self" {
-		t.Fatalf("identities = %+v, want ldap then a local identity named after the username, bound by self", me.Identities)
+	e := bindOwn(emma, map[string]any{"kind": "email", "loginName": "emma@example.com", "password": "emma-email-pw-1"}).
+		ExpectError(http.StatusUnprocessableEntity, "kind", "invalid")
+	if allowed, _ := e.Params["allowed"].([]any); len(allowed) != 1 || allowed[0] != "ldap" {
+		t.Fatalf("allowed = %v, want [ldap]", e.Params["allowed"])
 	}
-	if u := userOf(t, env.Client().LoginLocal("elarsen", "emma-local-pw-1")); u.ID != emmaUser.ID {
-		t.Fatalf("local login opened user %s, want %s", u.ID, emmaUser.ID)
+	if me := getMe(t, emma); len(me.Identities) != 1 {
+		t.Fatalf("identities = %+v, want only the ldap one", me.Identities)
 	}
-	bindOwn(emma, map[string]any{"kind": "local", "password": "other-local-pw-2"}).ExpectError(http.StatusUnprocessableEntity, "kind", "identityKindBound")
+	// "local" was the name of the kind before the email identity.
+	bindOwn(emma, map[string]any{"kind": "local", "password": "emma-email-pw-1"}).ExpectError(http.StatusUnprocessableEntity, "kind", "invalid")
 }
 
 func TestUnknownIdentityKindCannotBeBound(t *testing.T) {
@@ -325,7 +326,7 @@ func TestAdministratorBindsTheLDAPIdentityToTheExistingLocalUserAndLDAPLoginEnte
 	t.Parallel()
 	env := apitest.New(t)
 	admin := env.AdminClient()
-	local := createUser(t, admin, map[string]any{"username": "elarsen", "displayName": "E. Larsen", "email": "old@example.com", "department": "Old Dept", "password": "local-pw-1"})
+	local := createUser(t, admin, map[string]any{"username": "elarsen", "displayName": "E. Larsen", "department": "Old Dept", "password": "local-pw-1"})
 	addEmma(env)
 	loginLDAP(env.Client(), "elarsen", "ldap-pw").ExpectError(http.StatusUnprocessableEntity, "username", "usernameTakenByLocal")
 
@@ -352,7 +353,7 @@ func TestAdministratorBindsTheLDAPIdentityToTheExistingLocalUserAndLDAPLoginEnte
 		t.Fatalf("%d users, want the admin and elarsen only", n)
 	}
 	local2 := env.Client()
-	if u := userOf(t, local2.LoginLocal("elarsen", "local-pw-1")); u.ID != local.ID {
+	if u := userOf(t, local2.LoginAs("elarsen", "local-pw-1")); u.ID != local.ID {
 		t.Fatalf("local login opened user %s, want %s", u.ID, local.ID)
 	}
 	// From now on the directory owns those fields and the username.
@@ -360,21 +361,48 @@ func TestAdministratorBindsTheLDAPIdentityToTheExistingLocalUserAndLDAPLoginEnte
 	patchUser(admin, local.ID, map[string]any{"username": "elarsen2"}).ExpectError(http.StatusUnprocessableEntity, "username", "usernameLocked")
 }
 
-func TestAdministratorCanBindALocalPasswordToAnLDAPUser(t *testing.T) {
+func TestAdministratorCanBindAnEmailIdentityToAnLDAPUser(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	addEmma(env)
 	emma := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw"))
 	admin := env.AdminClient()
 
-	adminBind(admin, emma.ID, map[string]any{"kind": "local", "password": "short"}).ExpectError(http.StatusUnprocessableEntity, "password", "tooShort")
+	adminBind(admin, emma.ID, map[string]any{"kind": "email", "loginName": "emma@example.com", "password": "short"}).
+		ExpectError(http.StatusUnprocessableEntity, "password", "tooShort")
+	adminBind(admin, emma.ID, map[string]any{"kind": "email", "loginName": "not-an-email", "password": "set-by-admin-1"}).
+		ExpectError(http.StatusUnprocessableEntity, "loginName", "invalid")
+	adminBind(admin, emma.ID, map[string]any{"kind": "email", "loginName": "", "password": "set-by-admin-1"}).
+		ExpectError(http.StatusUnprocessableEntity, "loginName", "required")
+	adminBind(admin, emma.ID, map[string]any{"kind": "email", "loginName": apitest.AdminEmail, "password": "set-by-admin-1"}).
+		ExpectError(http.StatusUnprocessableEntity, "loginName", "loginEmailTaken")
+
 	var bound userBody
-	adminBind(admin, emma.ID, map[string]any{"kind": "local", "password": "set-by-admin-1"}).ExpectStatus(http.StatusCreated).JSON(&bound)
-	if len(bound.Identities) != 2 || bound.Identities[1].Kind != "local" || bound.Identities[1].BoundVia != "admin" {
+	adminBind(admin, emma.ID, map[string]any{"kind": "email", "loginName": " Emma.Private@Example.com ", "password": "set-by-admin-1"}).
+		ExpectStatus(http.StatusCreated).JSON(&bound)
+	if len(bound.Identities) != 2 || bound.Identities[1].Kind != "email" || bound.Identities[1].LoginName != "emma.private@example.com" ||
+		bound.Identities[1].BoundVia != "admin" {
 		t.Fatalf("identities = %+v", bound.Identities)
 	}
-	if u := userOf(t, env.Client().LoginLocal("elarsen", "set-by-admin-1")); u.ID != emma.ID {
-		t.Fatalf("local login opened user %s, want %s", u.ID, emma.ID)
+	// The directory still owns the contact email; the login email is a separate address.
+	if bound.Email != "emma.larsen@corp.example" {
+		t.Fatalf("contact email = %q, want the directory's", bound.Email)
+	}
+	var login struct {
+		User               ldapUser `json:"user"`
+		MustChangePassword bool     `json:"mustChangePassword"`
+	}
+	env.Client().LoginEmail("emma.private@example.com", "set-by-admin-1").ExpectStatus(http.StatusOK).JSON(&login)
+	if login.User.ID != emma.ID || !login.MustChangePassword {
+		t.Fatalf("email login = %+v, want Emma, with the password to be changed", login)
+	}
+	// The LDAP login is not held up by the temporary password.
+	var ldapLogin struct {
+		MustChangePassword bool `json:"mustChangePassword"`
+	}
+	loginLDAP(env.Client(), "elarsen", "ldap-pw").ExpectStatus(http.StatusOK).JSON(&ldapLogin)
+	if ldapLogin.MustChangePassword {
+		t.Fatal("an LDAP session must not be held up by the email identity's temporary password")
 	}
 }
 
@@ -408,17 +436,21 @@ func TestAdministratorBindRules(t *testing.T) {
 	adminBind(admin, jane.ID, map[string]any{"kind": "ldap", "loginName": "elarsen"}).ExpectError(http.StatusUnprocessableEntity, "loginName", "identityTaken")
 	// One identity per kind.
 	adminBind(admin, emma.ID, map[string]any{"kind": "ldap", "loginName": "gone.person"}).ExpectError(http.StatusUnprocessableEntity, "kind", "identityKindBound")
-	adminBind(admin, jane.ID, map[string]any{"kind": "local", "password": "another-pw-123"}).ExpectError(http.StatusUnprocessableEntity, "kind", "identityKindBound")
+	adminBind(admin, jane.ID, map[string]any{"kind": "email", "loginName": "jane.second@example.com", "password": "another-pw-123"}).
+		ExpectError(http.StatusUnprocessableEntity, "kind", "identityKindBound")
+	// A login email another user holds.
+	adminBind(admin, emma.ID, map[string]any{"kind": "email", "loginName": "JDOE@example.com", "password": "another-pw-123"}).
+		ExpectError(http.StatusUnprocessableEntity, "loginName", "loginEmailTaken")
 
 	// A directory account that is disabled still exists: it can be bound (it just cannot log in),
 	// and the user's profile is left as it was, there being nothing current to sync.
 	var bound userBody
 	adminBind(admin, other.ID, map[string]any{"kind": "ldap", "loginName": "gone.person"}).ExpectStatus(http.StatusCreated).JSON(&bound)
-	if bound.DisplayName != "Jane Doe" || bound.Email != "jane@example.com" || len(bound.Identities) != 2 {
+	if bound.DisplayName != "Jane Doe" || bound.Email != "other@example.com" || len(bound.Identities) != 2 {
 		t.Fatalf("profile was synced from a disabled directory account: %+v", bound)
 	}
 	loginLDAP(env.Client(), "gone.person", "pw").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
-	env.Client().LoginLocal("other", "other-pw-123").ExpectStatus(http.StatusOK)
+	env.Client().LoginAs("other", "other-pw-123").ExpectStatus(http.StatusOK)
 }
 
 // Spec story 9: only the LDAP way in is lost when the directory refuses; the user, the
@@ -434,12 +466,12 @@ func TestUserWithTwoIdentitiesStaysUsableWhenTheDirectoryRefusesTheLDAPIdentity(
 	check := func(what string) {
 		t.Helper()
 		var u ldapSession
-		env.Client().LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK).JSON(&u)
+		env.Client().LoginAs("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK).JSON(&u)
 		if u.User.ID != created.ID {
 			t.Fatalf("%s: local login opened user %s, want %s", what, u.User.ID, created.ID)
 		}
 		fresh := env.Client()
-		fresh.LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+		fresh.LoginAs("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
 		after := getMe(t, fresh)
 		if len(after.Identities) != 2 || after.DisplayName != before.DisplayName || after.Email != before.Email ||
 			after.Department != before.Department || after.Username != before.Username {
@@ -507,11 +539,11 @@ func TestTheLastLoginIdentityCannotBeUnbound(t *testing.T) {
 	env := apitest.New(t)
 	jane, _ := localJane(t, env)
 
-	unbindOwn(jane, "local").ExpectError(http.StatusUnprocessableEntity, "kind", "lastIdentity")
+	unbindOwn(jane, "email").ExpectError(http.StatusUnprocessableEntity, "kind", "lastIdentity")
 	if me := getMe(t, jane); len(me.Identities) != 1 {
 		t.Fatalf("identities = %+v, the only identity must stay", me.Identities)
 	}
-	env.Client().LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+	env.Client().LoginAs("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
 
 	emma := env.Client()
 	addEmma(env)
@@ -527,11 +559,11 @@ func TestUnbindingOneOfTwoIdentitiesRemovesOnlyThatLoginWay(t *testing.T) {
 	bindOwn(jane, bindLDAP("jane.doe", "jane-ldap-pw")).ExpectStatus(http.StatusCreated)
 
 	var me meBody
-	unbindOwn(jane, "local").ExpectStatus(http.StatusOK).JSON(&me)
+	unbindOwn(jane, "email").ExpectStatus(http.StatusOK).JSON(&me)
 	if len(me.Identities) != 1 || me.Identities[0].Kind != "ldap" {
 		t.Fatalf("identities after unbinding local = %+v", me.Identities)
 	}
-	env.Client().LoginLocal("jdoe", "jane-pw-123").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	env.Client().LoginAs("jdoe", "jane-pw-123").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
 	if u := userOf(t, loginLDAP(env.Client(), "jane.doe", "jane-ldap-pw")); u.ID != created.ID {
 		t.Fatalf("LDAP login opened user %s, want %s", u.ID, created.ID)
 	}
@@ -563,7 +595,7 @@ func TestUnbindingAnIdentityTheUserDoesNotHaveIsNotFound(t *testing.T) {
 	jane, _ := localJane(t, env)
 	unbindOwn(jane, "ldap").ExpectError(http.StatusNotFound, "", "notFound")
 	unbindOwn(jane, "kerberos").ExpectError(http.StatusNotFound, "", "notFound")
-	env.Client().Delete("/api/me/identities/local").ExpectError(http.StatusUnauthorized, "", "unauthenticated")
+	env.Client().Delete("/api/me/identities/email").ExpectError(http.StatusUnauthorized, "", "unauthenticated")
 }
 
 func TestSettingsShowEachLoginIdentityWithItsTypeLoginNameBindingTimeAndSource(t *testing.T) {
@@ -574,17 +606,17 @@ func TestSettingsShowEachLoginIdentityWithItsTypeLoginNameBindingTimeAndSource(t
 	if admin.Username != apitest.AdminUsername || !admin.IsAdmin || admin.DisplayName != "Initial Admin" {
 		t.Fatalf("me = %+v", admin)
 	}
-	if len(admin.Identities) != 1 || admin.Identities[0].Kind != "local" || admin.Identities[0].LoginName != apitest.AdminUsername ||
+	if len(admin.Identities) != 1 || admin.Identities[0].Kind != "email" || admin.Identities[0].LoginName != apitest.AdminEmail ||
 		admin.Identities[0].BoundVia != "bootstrap" || admin.Identities[0].BoundAt == "" {
-		t.Fatalf("admin identities = %+v, want the bootstrap local identity", admin.Identities)
+		t.Fatalf("admin identities = %+v, want the bootstrap email identity", admin.Identities)
 	}
 
 	createUser(t, env.AdminClient(), map[string]any{"username": "jdoe", "phone": "555-0100", "password": "jane-pw-123"})
 	jane := env.Client()
-	jane.LoginLocal("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
+	jane.LoginAs("jdoe", "jane-pw-123").ExpectStatus(http.StatusOK)
 	me := getMe(t, jane)
 	if me.Username != "jdoe" || me.Phone != "555-0100" || me.IsAdmin || len(me.Identities) != 1 || me.Identities[0].BoundVia != "admin" {
-		t.Fatalf("jdoe me = %+v, want a local identity bound by admin", me)
+		t.Fatalf("jdoe me = %+v, want an email identity bound by admin", me)
 	}
 
 	addEmma(env)

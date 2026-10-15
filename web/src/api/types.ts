@@ -21,11 +21,13 @@ export type User = {
 
 export type Language = 'zh' | 'en';
 
-export type SessionInfo = { user: User };
+/** mustChangePassword: the password was set by an administrator; until it is changed the server refuses everything else (403 passwordChangeRequired). */
+export type SessionInfo = { user: User; mustChangePassword: boolean };
 
-export type LoginMethod = 'local' | 'ldap';
+export type LoginMethod = 'email' | 'ldap';
 
-export type LoginInput = { method: LoginMethod; username: string; password: string };
+/** email: the login email (not the username). ldap: the directory login name. */
+export type LoginInput = { method: 'email'; email: string; password: string } | { method: 'ldap'; username: string; password: string };
 
 /** Owner / PE as shown in an application. */
 export type Member = { id: string; username: string; displayName: string; status: 'enabled' | 'disabled' };
@@ -184,7 +186,7 @@ export type AdminUser = {
   identities: LoginIdentity[];
 };
 
-export type IdentityKind = 'local' | 'ldap';
+export type IdentityKind = 'email' | 'ldap';
 
 /** How an identity got attached to its user. */
 export type BoundVia = 'firstLogin' | 'self' | 'admin' | 'bootstrap';
@@ -193,24 +195,31 @@ export type LoginIdentity = { kind: IdentityKind; loginName: string; boundAt: st
 
 /**
  * Bind a login identity. ldap: loginName (+ password when binding your own: you
- * authenticate with it once). local: password only; the login name is the username.
+ * authenticate with it once). email: only an administrator binds it: loginName is the
+ * login email and password a temporary one the user must change at the first login.
  */
 export type BindIdentityInput = { kind: IdentityKind; loginName?: string; password?: string };
 
-/** What a user may change about themselves (GET/PATCH /api/me answers with the AdminUser shape). */
-export type UpdateMeInput = Partial<Pick<AdminUser, 'displayName' | 'email' | 'phone' | 'department' | 'language'>>;
+/**
+ * What a user may change about themselves (GET/PATCH /api/me answers with the AdminUser shape).
+ * The contact email is not here: it is the directory's for LDAP users and the login email otherwise.
+ */
+export type UpdateMeInput = Partial<Pick<AdminUser, 'displayName' | 'phone' | 'department' | 'language'>>;
 
+export type ChangePasswordInput = { currentPassword: string; newPassword: string };
+
+/** password is a temporary one: the user must change it at the first login. */
 export type CreateUserInput = {
   username: string;
   displayName: string;
-  email: string;
+  loginEmail: string;
   phone: string;
   department: string;
   password: string;
 };
 
 /** Fields left out are unchanged. */
-export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displayName' | 'email' | 'phone' | 'department'>>;
+export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displayName' | 'loginEmail' | 'phone' | 'department'>>;
 
 export type PlatformKind = 'gitlab' | 'github';
 

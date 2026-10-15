@@ -107,7 +107,7 @@ func (s *Service) loginLDAP(ctx context.Context, in LoginInput) (LoginResult, er
 	if err != nil {
 		return LoginResult{}, err
 	}
-	return s.openSession(ctx, user)
+	return s.openSession(ctx, user, false)
 }
 
 // syncFromDirectory overwrites the directory-owned fields of u (display name, email,

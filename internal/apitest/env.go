@@ -17,8 +17,12 @@ import (
 // Initial administrator configured for every test environment.
 const (
 	AdminUsername = "admin"
+	AdminEmail    = "admin@example.com"
 	AdminPassword = "initial-admin-pw"
 )
+
+// Email is the login email tests give a user: <username>@example.com.
+func Email(username string) string { return username + "@example.com" }
 
 // Env is one isolated backend: its own database, its own server, its own fakes.
 type Env struct {
@@ -40,6 +44,7 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 	cfg.Database.DSN = freshDatabase(t)
 	cfg.SecretKey = "test-secret-key"
 	cfg.Admin.Username = AdminUsername
+	cfg.Admin.Email = AdminEmail
 	cfg.Admin.Password = AdminPassword
 	cfg.Admin.DisplayName = "Initial Admin"
 	for _, m := range mutate {
@@ -58,6 +63,7 @@ func StartError(t testing.TB, mutate func(*app.Config)) error {
 	cfg.Database.DSN = freshDatabase(t)
 	cfg.SecretKey = "test-secret-key"
 	cfg.Admin.Username = AdminUsername
+	cfg.Admin.Email = AdminEmail
 	cfg.Admin.Password = AdminPassword
 	mutate(&cfg)
 	a, err := app.Start(context.Background(), cfg, app.Deps{Directory: fakes.NewDirectory(), CodePlatforms: fakes.NewCodePlatform()})
@@ -100,7 +106,7 @@ func (e *Env) Client() *Client {
 // AdminClient returns a client already logged in as the initial administrator.
 func (e *Env) AdminClient() *Client {
 	c := e.Client()
-	c.LoginLocal(AdminUsername, AdminPassword).ExpectStatus(http.StatusOK)
+	c.LoginEmail(AdminEmail, AdminPassword).ExpectStatus(http.StatusOK)
 	return c
 }
 
@@ -160,10 +166,26 @@ func (c *Client) Delete(path string) *Response {
 	return c.Do(http.MethodDelete, path, nil)
 }
 
-// LoginLocal logs in with a local identity.
-func (c *Client) LoginLocal(username, password string) *Response {
+// LoginEmail logs in with an email identity.
+func (c *Client) LoginEmail(email, password string) *Response {
 	c.t.Helper()
-	return c.Post("/api/session", map[string]string{"method": "local", "username": username, "password": password})
+	return c.Post("/api/session", map[string]string{"method": "email", "email": email, "password": password})
+}
+
+// LoginAs logs in with the email identity of a user created the usual way in tests (login
+// email <username>@example.com).
+func (c *Client) LoginAs(username, password string) *Response {
+	c.t.Helper()
+	return c.LoginEmail(Email(username), password)
+}
+
+// Env returns the environment the client talks to.
+func (c *Client) Env() *Env { return c.env }
+
+// Put sends a PUT with a JSON body.
+func (c *Client) Put(path string, body any) *Response {
+	c.t.Helper()
+	return c.Do(http.MethodPut, path, body)
 }
 
 // Cookies returns the cookies the client would send to the server.

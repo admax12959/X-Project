@@ -1,10 +1,11 @@
-// Personal settings (#15): profile, login identities, language.
+// Personal settings (#15): profile, login identities, password, language.
 export default {
   'settings.title': 'Settings',
   'settings.loadFailed': 'Could not load your settings.',
   'settings.profile.title': 'Profile',
   'settings.profile.username': 'Username',
   'settings.profile.ldapManaged': 'Display name, email and department come from LDAP and are read-only here.',
+  'settings.profile.contactEmail': 'Your contact email is your login email; it cannot be changed on its own.',
   'settings.profile.saved': 'Saved.',
   'settings.identities.title': 'Login identities',
   'settings.identities.col.type': 'Type',
@@ -21,14 +22,10 @@ export default {
   'settings.unbind.title': 'Unbind {kind}?',
   'settings.unbind.body': 'You will no longer be able to sign in with this identity. Your user and other login identities stay.',
   'settings.bind.ldap': 'Bind LDAP',
-  'settings.bind.local': 'Set a local password',
   'settings.bind.ldapTitle': 'Bind LDAP login identity',
-  'settings.bind.localTitle': 'Set a local password',
   'settings.bind.ldapHint': 'Sign in with the LDAP identity once to prove it is yours. Display name, email and department will then follow LDAP.',
-  'settings.bind.localHint': 'You will sign in with your username {username} and this password.',
   'settings.bind.loginName': 'LDAP login name',
   'settings.bind.ldapPassword': 'LDAP password',
-  'settings.bind.localPassword': 'New password',
   'settings.bind.submit': 'Bind',
   'settings.bind.submitting': 'Binding…',
   'settings.language.title': 'Language',

@@ -154,8 +154,8 @@ func (s *Store) FindIdentityByUser(ctx context.Context, userID domain.UserID, ki
 	var k, via string
 	var hash sql.NullString
 	err := s.q.QueryRowContext(ctx,
-		"SELECT id, user_id, kind, login_name, password_hash, bound_at, bound_via FROM login_identities WHERE user_id = ? AND kind = ?",
-		userID, string(kind)).Scan(&i.ID, &i.UserID, &k, &i.LoginName, &hash, &i.BoundAt, &via)
+		"SELECT id, user_id, kind, login_name, password_hash, bound_at, bound_via, must_change_password FROM login_identities WHERE user_id = ? AND kind = ?",
+		userID, string(kind)).Scan(&i.ID, &i.UserID, &k, &i.LoginName, &hash, &i.BoundAt, &via, &i.MustChangePassword)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, false, nil
 	}
@@ -172,8 +172,8 @@ func (s *Store) CreateIdentity(ctx context.Context, i domain.LoginIdentity) erro
 		hash = sql.NullString{String: i.PasswordHash, Valid: true}
 	}
 	_, err := s.q.ExecContext(ctx,
-		"INSERT INTO login_identities (user_id, kind, login_name, password_hash, bound_at, bound_via) VALUES (?, ?, ?, ?, ?, ?)",
-		i.UserID, string(i.Kind), i.LoginName, hash, i.BoundAt, string(i.BoundVia))
+		"INSERT INTO login_identities (user_id, kind, login_name, password_hash, bound_at, bound_via, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		i.UserID, string(i.Kind), i.LoginName, hash, i.BoundAt, string(i.BoundVia), i.MustChangePassword)
 	return mapUsernameConflict(err)
 }
 
@@ -182,8 +182,8 @@ func (s *Store) FindIdentity(ctx context.Context, kind domain.IdentityKind, logi
 	var k, via string
 	var hash sql.NullString
 	err := s.q.QueryRowContext(ctx,
-		"SELECT id, user_id, kind, login_name, password_hash, bound_at, bound_via FROM login_identities WHERE kind = ? AND login_name = ?",
-		string(kind), loginName).Scan(&i.ID, &i.UserID, &k, &i.LoginName, &hash, &i.BoundAt, &via)
+		"SELECT id, user_id, kind, login_name, password_hash, bound_at, bound_via, must_change_password FROM login_identities WHERE kind = ? AND login_name = ?",
+		string(kind), loginName).Scan(&i.ID, &i.UserID, &k, &i.LoginName, &hash, &i.BoundAt, &via, &i.MustChangePassword)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, false, nil
 	}
@@ -197,15 +197,15 @@ func (s *Store) FindIdentity(ctx context.Context, kind domain.IdentityKind, logi
 // ---------------------------------------------------------------- sessions
 
 func (s *Store) CreateSession(ctx context.Context, sess domain.Session) error {
-	_, err := s.q.ExecContext(ctx, "INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-		sess.TokenHash, sess.UserID, sess.CreatedAt, sess.ExpiresAt)
+	_, err := s.q.ExecContext(ctx, "INSERT INTO sessions (token_hash, user_id, created_at, expires_at, must_change_password) VALUES (?, ?, ?, ?, ?)",
+		sess.TokenHash, sess.UserID, sess.CreatedAt, sess.ExpiresAt, sess.MustChangePassword)
 	return err
 }
 
 func (s *Store) FindSession(ctx context.Context, tokenHash string) (domain.Session, bool, error) {
 	var sess domain.Session
-	err := s.q.QueryRowContext(ctx, "SELECT token_hash, user_id, created_at, expires_at FROM sessions WHERE token_hash = ?", tokenHash).
-		Scan(&sess.TokenHash, &sess.UserID, &sess.CreatedAt, &sess.ExpiresAt)
+	err := s.q.QueryRowContext(ctx, "SELECT token_hash, user_id, created_at, expires_at, must_change_password FROM sessions WHERE token_hash = ?", tokenHash).
+		Scan(&sess.TokenHash, &sess.UserID, &sess.CreatedAt, &sess.ExpiresAt, &sess.MustChangePassword)
 	if errors.Is(err, sql.ErrNoRows) {
 		return sess, false, nil
 	}

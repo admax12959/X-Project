@@ -133,7 +133,7 @@ func TestMineFilterKeepsApplicationsWhereTheUserIsOwnerOrPE(t *testing.T) {
 		return out
 	}
 	elarsen := f.env.Client()
-	elarsen.LoginLocal("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
+	elarsen.LoginAs("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
 	for _, tc := range []struct {
 		why    string
 		client *apitest.Client
@@ -186,7 +186,7 @@ func TestRecentActivityMergesEveryApplicationsHistoryNewestFirstForEveryUser(t *
 	createApp(t, f.admin, f.pid, []string{f.owner.ID}, map[string]any{"key": "app-a", "name": "App A"})
 	createApp(t, f.admin, f.pid, []string{f.owner.ID}, map[string]any{"key": "app-b", "name": "App B"})
 	owner := f.env.Client()
-	owner.LoginLocal("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
+	owner.LoginAs("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
 	owner.Do(http.MethodPatch, "/api/applications/app-a", map[string]any{"name": "App A2"}).ExpectStatus(http.StatusOK)
 
 	got := activity(t, reader, "/api/recent-activity")

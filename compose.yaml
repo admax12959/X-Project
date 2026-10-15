@@ -23,6 +23,7 @@ services:
       XP_DB_DSN: "xproject:xproject-pw@tcp(db:3306)/xproject"
       XP_SECRET_KEY: local-dev-secret-key-change-me
       XP_ADMIN_USERNAME: admin
+      XP_ADMIN_EMAIL: admin@example.com
       XP_ADMIN_PASSWORD: change-me-now
       XP_ADMIN_DISPLAY_NAME: Administrator
 

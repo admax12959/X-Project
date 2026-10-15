@@ -1,4 +1,4 @@
-// Personal settings: profile, login identities (bind / unbind), interface language.
+// Personal settings: profile, login identities (bind / unbind), password, interface language.
 import { Dialog } from '@base-ui/react/dialog';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api } from '../api/client.ts';
@@ -8,6 +8,7 @@ import { LOCALES, setLocale, useT, type Locale } from '../i18n/index.ts';
 import { useSession } from '../session/session.tsx';
 import { Button, Empty, Field, Input, Segmented } from '../ui/controls.tsx';
 import { BindIdentityDialog } from './BindIdentityDialog.tsx';
+import { ChangePasswordForm } from './ChangePassword.tsx';
 import { th, td } from '../ui/table.ts';
 
 type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; me: AdminUser };
@@ -25,7 +26,7 @@ export function SettingsPage() {
   const { t } = useT();
   const { setUser } = useSession();
   const [load, setLoad] = useState<Load>({ status: 'loading' });
-  const [methods, setMethods] = useState<LoginMethod[]>(['local']);
+  const [methods, setMethods] = useState<LoginMethod[]>(['email']);
 
   useEffect(() => {
     let live = true;
@@ -57,6 +58,7 @@ export function SettingsPage() {
       <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
       <ProfileSection me={me} onSaved={saved} />
       <IdentitiesSection me={me} methods={methods} onChanged={saved} />
+      {me.identities.some((i) => i.kind === 'email') && <PasswordSection />}
       <LanguageSection onSaved={saved} />
     </>
   );
@@ -68,7 +70,7 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
   const { t } = useT();
   // The directory owns these three for a user with an LDAP identity (spec: read-only, LDAP wins).
   const ldapBound = me.identities.some((i) => i.kind === 'ldap');
-  const [form, setForm] = useState({ displayName: me.displayName, email: me.email, department: me.department, phone: me.phone });
+  const [form, setForm] = useState({ displayName: me.displayName, department: me.department, phone: me.phone });
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -80,8 +82,8 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
 
   // When the identities change (e.g. LDAP was just bound) the server may have replaced the values.
   useEffect(() => {
-    setForm({ displayName: me.displayName, email: me.email, department: me.department, phone: me.phone });
-  }, [me.displayName, me.email, me.department, me.phone]);
+    setForm({ displayName: me.displayName, department: me.department, phone: me.phone });
+  }, [me.displayName, me.department, me.phone]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -91,7 +93,7 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
     try {
       // Send only what changed, so untouched LDAP-managed fields are never submitted.
       const changes: Partial<typeof form> = {};
-      for (const k of ['displayName', 'email', 'department', 'phone'] as const) {
+      for (const k of ['displayName', 'department', 'phone'] as const) {
         if (form[k] !== me[k]) changes[k] = form[k];
       }
       onSaved(await api.me.update(changes));
@@ -117,13 +119,13 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
         <Field label={t('users.field.displayName')} error={errors.displayName}>
           <Input name="displayName" disabled={ldapBound} value={form.displayName} onChange={set('displayName')} />
         </Field>
-        <Field label={t('users.field.email')} error={errors.email}>
-          <Input name="email" type="email" disabled={ldapBound} value={form.email} onChange={set('email')} />
+        <Field label={t('users.field.email')}>
+          <Input name="email" type="email" disabled readOnly value={me.email} />
+          <p className="mt-1 text-[12px] text-text-3">{ldapBound ? t('settings.profile.ldapManaged') : t('settings.profile.contactEmail')}</p>
         </Field>
         <Field label={t('users.field.department')} error={errors.department}>
           <Input name="department" disabled={ldapBound} value={form.department} onChange={set('department')} />
         </Field>
-        {ldapBound && <p className="-mt-1.5 text-[12px] text-text-3">{t('settings.profile.ldapManaged')}</p>}
         <Field label={t('users.field.phone')} error={errors.phone}>
           <Input name="phone" type="tel" value={form.phone} onChange={set('phone')} />
         </Field>
@@ -149,7 +151,8 @@ function IdentitiesSection({ me, methods, onChanged }: { me: AdminUser; methods:
   const [binding, setBinding] = useState<IdentityKind | null>(null);
   const [unbinding, setUnbinding] = useState<IdentityKind | null>(null);
   const have = new Set(me.identities.map((i) => i.kind));
-  const missing = methods.filter((m) => !have.has(m));
+  // Only the directory can be bound here: an email identity needs its address verified by mail first.
+  const missing = methods.filter((m) => m === 'ldap' && !have.has(m));
   const onlyOne = me.identities.length <= 1;
 
 
@@ -188,7 +191,7 @@ function IdentitiesSection({ me, methods, onChanged }: { me: AdminUser; methods:
         <div className="mt-3 flex gap-2">
           {missing.map((k) => (
             <Button key={k} onClick={() => setBinding(k)}>
-              {t(k === 'ldap' ? 'settings.bind.ldap' : 'settings.bind.local')}
+              {t('settings.bind.ldap')}
             </Button>
           ))}
         </div>
@@ -263,6 +266,24 @@ function UnbindDialog({ kind, onClose, onUnbound }: { kind: IdentityKind; onClos
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+// ---------------------------------------------------------------- password
+
+function PasswordSection() {
+  const { t } = useT();
+  const [done, setDone] = useState(false);
+  return (
+    <Section title={t('password.title')}>
+      <p className="mb-3 text-[13px] text-text-2">{t('password.hint')}</p>
+      <ChangePasswordForm onDone={() => setDone(true)} />
+      {done && (
+        <p role="status" className="mt-2 text-[13px] text-ok">
+          {t('password.changed')}
+        </p>
+      )}
+    </Section>
   );
 }
 

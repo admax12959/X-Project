@@ -27,6 +27,9 @@ func toUserJSON(u domain.User) userJSON {
 
 type sessionJSON struct {
 	User userJSON `json:"user"`
+	// MustChangePassword: the password was chosen by an administrator. Until the user
+	// changes it (PUT /api/me/password) every other endpoint answers 403 passwordChangeRequired.
+	MustChangePassword bool `json:"mustChangePassword"`
 }
 
 // memberRefJSON is a user inside another record (Owner/PE lists, event and status-change actors).
@@ -54,19 +57,20 @@ type listJSON[T any] struct {
 func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Method   string `json:"method"`
-		Username string `json:"username"`
+		Username string `json:"username"` // method "ldap"
+		Email    string `json:"email"`    // method "email"
 		Password string `json:"password"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	res, err := s.svc.Login(r.Context(), domain.LoginInput{Method: body.Method, Username: body.Username, Password: body.Password})
+	res, err := s.svc.Login(r.Context(), domain.LoginInput{Method: body.Method, Username: body.Username, Email: body.Email, Password: body.Password})
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	s.setSessionCookie(w, res.Token, res.ExpiresAt)
-	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(res.User)})
+	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(res.User), MustChangePassword: res.MustChangePassword})
 }
 
 func (s *server) loginMethods(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +78,8 @@ func (s *server) loginMethods(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) currentSession(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(actorOf(r).User)})
+	a := actorOf(r)
+	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(a.User), MustChangePassword: a.MustChangePassword})
 }
 
 func (s *server) logout(w http.ResponseWriter, r *http.Request) {

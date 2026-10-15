@@ -6,6 +6,7 @@ import type {
   ApplicationListItem,
   AssignableUser,
   BindIdentityInput,
+  ChangePasswordInput,
   ChangeEvent,
   CodePlatform,
   CodePlatformInput,
@@ -83,7 +84,7 @@ export const api = {
     methods: () => request<List<LoginMethod>>('GET', '/api/login-methods', { expect401: true }),
     /** Current session; 401 (ApiError) when logged out. */
     get: () => request<SessionInfo>('GET', '/api/session', { expect401: true }),
-    /** 401 invalidCredentials, 422 field errors (e.g. usernameTakenByLocal) or 503 ldapUnreachable on failure. */
+    /** 401 invalidCredentials, 422 field errors (e.g. usernameTakenByLocal) or 503 ldapUnreachable on failure. A session with mustChangePassword can only change the password and log out. */
     login: (input: LoginInput) => request<SessionInfo>('POST', '/api/session', { body: input, expect401: true }),
     logout: () => request<void>('DELETE', '/api/session', { expect401: true }),
   },
@@ -185,15 +186,17 @@ export const api = {
     update: (id: string, input: UpdateUserInput) => request<AdminUser>('PATCH', `/api/users/${id}`, { body: input }),
     disable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/disable`),
     enable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/enable`),
-    /** 422 field errors (identityKindBound, identityTaken, ldapLoginNotFound, password rules); 503 ldapUnreachable. */
+    /** 422 field errors (identityKindBound, identityTaken, loginEmailTaken, ldapLoginNotFound, password rules); 503 ldapUnreachable. */
     bindIdentity: (id: string, input: BindIdentityInput) => request<AdminUser>('POST', `/api/users/${id}/identities`, { body: input }),
   },
   /** The logged-in user's own settings. */
   me: {
     get: () => request<AdminUser>('GET', '/api/me'),
-    /** 422 ldapManaged on displayName / email / department for LDAP-bound users. */
+    /** 422 ldapManaged on displayName / department for LDAP-bound users. */
     update: (input: UpdateMeInput) => request<AdminUser>('PATCH', '/api/me', { body: input }),
-    /** 422 on password when the authentication fails (never 401), identityKindBound, identityTaken; 503 ldapUnreachable. */
+    /** 422 currentPassword invalidCredentials, newPassword tooShort / passwordUnchanged; 404 for a user without an email identity. */
+    changePassword: (input: ChangePasswordInput) => request<void>('PUT', '/api/me/password', { body: input }),
+    /** Only ldap: 422 on password when the authentication fails (never 401), identityKindBound, identityTaken; 503 ldapUnreachable. */
     bindIdentity: (input: BindIdentityInput) => request<AdminUser>('POST', '/api/me/identities', { body: input }),
     /** 422 lastIdentity on the only identity. */
     unbindIdentity: (kind: IdentityKind) => request<AdminUser>('DELETE', `/api/me/identities/${kind}`),

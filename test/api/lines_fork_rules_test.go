@@ -84,7 +84,7 @@ func TestAPEOfTheApplicationCannotFork(t *testing.T) {
 	pe := createUser(t, f.admin, map[string]any{"username": "pat", "displayName": "Pat PE"})
 	f.post(map[string]any{"pes": []string{pe.ID}}).ExpectStatus(http.StatusCreated)
 	owner := f.env.Client()
-	owner.LoginLocal("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
+	owner.LoginAs("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
 	var v versionBody
 	var lines struct {
 		Items []lineBody `json:"items"`
@@ -93,7 +93,7 @@ func TestAPEOfTheApplicationCannotFork(t *testing.T) {
 	owner.Post(versionsPath("payments-core", lines.Items[0].ID), newVersion(nil)).ExpectStatus(http.StatusCreated).JSON(&v)
 
 	peClient := f.env.Client()
-	peClient.LoginLocal("pat", "initial-pw-1").ExpectStatus(http.StatusOK)
+	peClient.LoginAs("pat", "initial-pw-1").ExpectStatus(http.StatusOK)
 	peClient.Post(linesPath("payments-core"), newFork(v.ID, nil)).ExpectError(http.StatusForbidden, "", "forbidden")
 }
 

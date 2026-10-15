@@ -79,6 +79,14 @@ func (s *server) routes() {
 	s.meRoutes()
 }
 
+// mustChangeAllowed are the only routes a session opened with an administrator-chosen
+// password may use: see who it is, change the password, log out.
+var mustChangeAllowed = map[string]bool{
+	"GET /api/session":     true,
+	"DELETE /api/session":  true,
+	"PUT /api/me/password": true,
+}
+
 func (s *server) route(pattern string, h http.HandlerFunc) { s.mux.HandleFunc(pattern, h) }
 
 func (s *server) publicRoute(pattern string, h http.HandlerFunc) {
@@ -95,6 +103,10 @@ func (s *server) serveAPI(w http.ResponseWriter, r *http.Request) {
 		actor, err := s.svc.Authenticate(r.Context(), sessionToken(r))
 		if err != nil {
 			writeError(w, r, err)
+			return
+		}
+		if actor.MustChangePassword && !mustChangeAllowed[pattern] {
+			writeCode(w, http.StatusForbidden, domain.CodePasswordChangeRequired)
 			return
 		}
 		r = r.WithContext(context.WithValue(r.Context(), actorKey{}, actor))

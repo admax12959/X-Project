@@ -51,6 +51,9 @@ func (s *Service) nowUTC() time.Time { return s.now().UTC().Truncate(time.Micros
 // Actor is the authenticated user a request acts as.
 type Actor struct {
 	User User
+	// MustChangePassword: the session was opened with an administrator-chosen password.
+	// The HTTP layer lets such a session do nothing but change the password and log out.
+	MustChangePassword bool
 }
 
 // ---------------------------------------------------------------- bootstrap
@@ -60,25 +63,30 @@ type InitialAdmin struct {
 	Username    string
 	Password    string
 	DisplayName string
-	Email       string
+	Email       string // the login email; the administrator's contact email too
 }
 
 // ErrBootstrapConfig is returned on a first start without initial admin credentials.
-var ErrBootstrapConfig = errors.New("first start: initial administrator username and password must be configured (admin.username/admin.password or XP_ADMIN_USERNAME/XP_ADMIN_PASSWORD)")
+var ErrBootstrapConfig = errors.New("first start: initial administrator username, email and password must be configured (admin.username/admin.email/admin.password or XP_ADMIN_USERNAME/XP_ADMIN_EMAIL/XP_ADMIN_PASSWORD)")
 
-// Bootstrap creates the local initial administrator on the very first start and
-// does nothing on later starts, whatever the configuration says then.
+// Bootstrap creates the initial administrator, with an email identity whose login email
+// is the configured one (taken as verified), on the very first start and does nothing on
+// later starts, whatever the configuration says then.
 func (s *Service) Bootstrap(ctx context.Context, admin InitialAdmin) error {
 	return s.repo.InTx(ctx, func(tx Repository) error {
 		done, err := tx.LockBootstrap(ctx)
 		if err != nil || done {
 			return err
 		}
-		if strings.TrimSpace(admin.Username) == "" || admin.Password == "" {
+		admin.Email = normalizeLoginEmail(admin.Email)
+		if strings.TrimSpace(admin.Username) == "" || admin.Email == "" || admin.Password == "" {
 			return ErrBootstrapConfig
 		}
 		if !usernamePattern.MatchString(admin.Username) {
 			return errors.New("first start: initial administrator username must match " + usernamePattern.String())
+		}
+		if !emailPattern.MatchString(admin.Email) || len(admin.Email) > maxEmailLength {
+			return errors.New("first start: initial administrator email is not a valid email address")
 		}
 		hash, err := hashPassword(admin.Password)
 		if err != nil {
@@ -97,7 +105,7 @@ func (s *Service) Bootstrap(ctx context.Context, admin InitialAdmin) error {
 			return err
 		}
 		if err := tx.CreateIdentity(ctx, LoginIdentity{
-			UserID: id, Kind: IdentityLocal, LoginName: admin.Username,
+			UserID: id, Kind: IdentityEmail, LoginName: admin.Email,
 			PasswordHash: hash, BoundAt: now, BoundVia: BoundViaBootstrap,
 		}); err != nil {
 			return err
@@ -108,36 +116,39 @@ func (s *Service) Bootstrap(ctx context.Context, admin InitialAdmin) error {
 
 // ---------------------------------------------------------------- sessions
 
-// LoginInput is a login attempt. Method is "local" or "ldap".
+// LoginInput is a login attempt. Method is "email" (Email is the login email) or "ldap"
+// (Username is the directory login name).
 type LoginInput struct {
 	Method   string
 	Username string
+	Email    string
 	Password string
 }
 
 // LoginResult carries the raw session token (to be set as a cookie) and the user.
 type LoginResult struct {
-	Token     string
-	ExpiresAt time.Time
-	User      User
+	Token              string
+	ExpiresAt          time.Time
+	User               User
+	MustChangePassword bool
 }
 
-// A fixed bcrypt hash so unknown usernames cost the same as wrong passwords.
+// A fixed bcrypt hash so unknown login emails cost the same as wrong passwords.
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("x-project-dummy"), bcrypt.DefaultCost)
 
 func invalidCredentials() error { return newKind(KindUnauthenticated, CodeInvalidCredentials) }
 
-// LoginMethods lists the login methods the login page may offer: "local" always,
+// LoginMethods lists the login methods the login page may offer: "email" always,
 // "ldap" when a directory is configured.
 func (s *Service) LoginMethods() []string {
-	m := []string{string(IdentityLocal)}
+	m := []string{string(IdentityEmail)}
 	if s.directory != nil {
 		m = append(m, string(IdentityLDAP))
 	}
 	return m
 }
 
-// Login authenticates a user and opens a session. Wrong username, wrong password
+// Login authenticates a user and opens a session. Wrong login, wrong password
 // and disabled users all yield the same invalidCredentials error.
 func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error) {
 	var c Collector
@@ -145,7 +156,11 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	if !slices.Contains(allowed, in.Method) {
 		c.Add("method", CodeInvalid, map[string]any{"allowed": allowed})
 	}
-	c.Required("username", in.Username)
+	if in.Method == string(IdentityEmail) {
+		c.Required("email", in.Email)
+	} else {
+		c.Required("username", in.Username)
+	}
 	if in.Password == "" {
 		c.Add("password", CodeRequired, nil)
 	}
@@ -156,7 +171,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 		return s.loginLDAP(ctx, in)
 	}
 
-	ident, found, err := s.repo.FindIdentity(ctx, IdentityLocal, strings.TrimSpace(in.Username))
+	ident, found, err := s.repo.FindIdentity(ctx, IdentityEmail, normalizeLoginEmail(in.Email))
 	if err != nil {
 		return LoginResult{}, err
 	}
@@ -174,21 +189,21 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	if !ok || u.Status != UserEnabled {
 		return LoginResult{}, invalidCredentials()
 	}
-	return s.openSession(ctx, u)
+	return s.openSession(ctx, u, ident.MustChangePassword)
 }
 
-func (s *Service) openSession(ctx context.Context, u User) (LoginResult, error) {
+func (s *Service) openSession(ctx context.Context, u User, mustChange bool) (LoginResult, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return LoginResult{}, err
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	now := s.nowUTC()
-	sess := Session{TokenHash: hashToken(token), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(s.sessionTTL)}
+	sess := Session{TokenHash: hashToken(token), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(s.sessionTTL), MustChangePassword: mustChange}
 	if err := s.repo.CreateSession(ctx, sess); err != nil {
 		return LoginResult{}, err
 	}
-	return LoginResult{Token: token, ExpiresAt: sess.ExpiresAt, User: u}, nil
+	return LoginResult{Token: token, ExpiresAt: sess.ExpiresAt, User: u, MustChangePassword: mustChange}, nil
 }
 
 // Authenticate resolves a session token to an Actor, or returns an unauthenticated error.
@@ -211,7 +226,7 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Actor, error)
 	if !ok || u.Status != UserEnabled {
 		return Actor{}, unauth
 	}
-	return Actor{User: u}, nil
+	return Actor{User: u, MustChangePassword: sess.MustChangePassword}, nil
 }
 
 // Logout ends the session identified by token. Unknown tokens are ignored.

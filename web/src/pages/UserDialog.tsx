@@ -1,4 +1,4 @@
-// Create-local-user and edit-user dialog for the administrator's user page.
+// Create-user and edit-user dialog for the administrator's user page.
 import { Dialog } from '@base-ui/react/dialog';
 import { useState, type FormEvent } from 'react';
 import { api } from '../api/client.ts';
@@ -7,16 +7,18 @@ import type { AdminUser, UpdateUserInput } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
 import { Button, Field, Input } from '../ui/controls.tsx';
 
-/** `user` set = edit that user; `null` = create a local user. */
+/** `user` set = edit that user; `null` = create a user with an email identity. */
 export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null; onClose: () => void; onSaved: (u: AdminUser) => void }) {
   const { t } = useT();
   const editing = user !== null;
   // For an LDAP-bound user the directory owns these fields and the username is fixed (ADR-0004).
   const ldapBound = !!user?.identities.some((i) => i.kind === 'ldap');
+  // The login email lives on the email identity; a directory-only user has none to edit.
+  const loginEmail = user?.identities.find((i) => i.kind === 'email')?.loginName;
   const [form, setForm] = useState({
     username: user?.username ?? '',
     displayName: user?.displayName ?? '',
-    email: user?.email ?? '',
+    loginEmail: loginEmail ?? '',
     phone: user?.phone ?? '',
     department: user?.department ?? '',
     password: '',
@@ -36,9 +38,10 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
       if (user) {
         // Send only what changed, so untouched LDAP-managed fields are never submitted.
         const changes: UpdateUserInput = {};
-        for (const k of ['username', 'displayName', 'email', 'phone', 'department'] as const) {
+        for (const k of ['username', 'displayName', 'phone', 'department'] as const) {
           if (form[k] !== user[k]) changes[k] = form[k];
         }
+        if (loginEmail !== undefined && form.loginEmail !== loginEmail) changes.loginEmail = form.loginEmail;
         saved = await api.users.update(user.id, changes);
       } else {
         saved = await api.users.create(form);
@@ -73,10 +76,18 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
               <Input name="displayName" disabled={ldapBound} value={form.displayName} onChange={set('displayName')} />
               {ldapBound && <Hint>{t('users.hint.ldapManaged')}</Hint>}
             </Field>
-            <Field label={t('users.field.email')} error={errors.email}>
-              <Input name="email" type="email" disabled={ldapBound} value={form.email} onChange={set('email')} />
-              <Hint>{ldapBound ? t('users.hint.ldapManaged') : t('users.hint.optional')}</Hint>
-            </Field>
+            {(!editing || loginEmail !== undefined) && (
+              <Field label={t('users.field.loginEmail')} error={errors.loginEmail}>
+                <Input name="loginEmail" type="email" autoComplete="off" value={form.loginEmail} onChange={set('loginEmail')} />
+                <Hint>{t('users.hint.loginEmail')}</Hint>
+              </Field>
+            )}
+            {editing && (
+              <Field label={t('users.field.email')} error={errors.email}>
+                <Input name="email" type="email" disabled value={user.email} readOnly />
+                <Hint>{ldapBound ? t('users.hint.ldapManaged') : t('users.hint.contactEmail')}</Hint>
+              </Field>
+            )}
             <Field label={t('users.field.department')} error={errors.department}>
               <Input name="department" disabled={ldapBound} value={form.department} onChange={set('department')} />
               <Hint>{ldapBound ? t('users.hint.ldapManaged') : t('users.hint.optional')}</Hint>
@@ -88,7 +99,7 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
             {!editing && (
               <Field label={t('users.field.password')} error={errors.password}>
                 <Input name="password" type="password" autoComplete="new-password" value={form.password} onChange={set('password')} />
-                <Hint>{t('users.hint.password')}</Hint>
+                <Hint>{t('users.hint.tempPassword')}</Hint>
               </Field>
             )}
             <div className="mt-2 flex justify-end gap-2">

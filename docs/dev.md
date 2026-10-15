@@ -41,7 +41,7 @@ XP_PORT=18080 docker-compose -p mine up --build   # another host port / project 
 Backend against your own MySQL, with the frontend dev server:
 
 ```sh
-XP_DB_DSN='user:pw@tcp(127.0.0.1:3306)/xproject' XP_SECRET_KEY=dev-secret XP_ADMIN_USERNAME=admin XP_ADMIN_PASSWORD=change-me-now go run ./cmd/xproject
+XP_DB_DSN='user:pw@tcp(127.0.0.1:3306)/xproject' XP_SECRET_KEY=dev-secret XP_ADMIN_USERNAME=admin XP_ADMIN_EMAIL=admin@example.com XP_ADMIN_PASSWORD=change-me-now go run ./cmd/xproject
 pnpm --dir web install && pnpm --dir web dev   # http://localhost:5173, proxies /api to :8080 (XP_API_ORIGIN)
 ```
 
@@ -56,8 +56,8 @@ Optional YAML file named by `XP_CONFIG` (see `config.example.yaml`); environment
 | `XP_SECRET_KEY` | `secret_key` | (required) | Encrypts secrets stored in the database (code platform tokens, AES-256-GCM). Keep it stable: changing it makes stored tokens unreadable. |
 | `XP_LISTEN` | `listen` | `:8080` | HTTP listen address. |
 | `XP_WEB_DIR` | `web_dir` | empty (image: `/srv/web`) | Built SPA; empty serves the API only. |
-| `XP_ADMIN_USERNAME` / `XP_ADMIN_PASSWORD` | `admin.username` / `admin.password` | — | Initial administrator. Required only on the very first start. |
-| `XP_ADMIN_DISPLAY_NAME` / `XP_ADMIN_EMAIL` | `admin.display_name` / `admin.email` | username / empty | |
+| `XP_ADMIN_USERNAME` / `XP_ADMIN_EMAIL` / `XP_ADMIN_PASSWORD` | `admin.username` / `admin.email` / `admin.password` | — | Initial administrator; the email is the login email (log in with it, not the username). Required only on the very first start. |
+| `XP_ADMIN_DISPLAY_NAME` | `admin.display_name` | username | |
 | `XP_LDAP_URL` / `ldap.url` | | empty | The one LDAP directory, `ldap://host:389` or `ldaps://host:636`. Empty = LDAP login is not configured (the login page offers local login only). Setting any other `XP_LDAP_*` value without a URL, or a URL without `base_dn`, stops startup. |
 | `XP_LDAP_BASE_DN` | `ldap.base_dn` | (required with URL) | Users are searched in this subtree. |
 | `XP_LDAP_BIND_DN` / `XP_LDAP_BIND_PASSWORD` | `ldap.bind_dn` / `ldap.bind_password` | anonymous | Service account for searching. Set both or neither. |

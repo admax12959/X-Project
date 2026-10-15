@@ -1,4 +1,4 @@
-// Login page: local password, or LDAP when the server has a directory configured.
+// Login page: email + password, or LDAP when the server has a directory configured.
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../api/client.ts';
@@ -20,10 +20,11 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const next = safeNext(params.get('next'));
-  // null until GET /api/login-methods answers; if it fails, offer local login only.
+  // null until GET /api/login-methods answers; if it fails, offer email login only.
   const [methods, setMethods] = useState<LoginMethod[] | null>(null);
   const [chosen, setChosen] = useState<LoginMethod | null>(null);
-  const [username, setUsername] = useState('');
+  // The login email for the email method, the directory login name for LDAP.
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   // Keep the raw error; messages are rendered at render time so they follow a language switch.
   const [error, setError] = useState<unknown>(null);
@@ -33,12 +34,12 @@ export function LoginPage() {
   useEffect(() => {
     api.session.methods().then(
       (r) => setMethods(r.items),
-      () => setMethods(['local']),
+      () => setMethods(['email']),
     );
   }, []);
 
   const hasLdap = methods?.includes('ldap') ?? false;
-  const method: LoginMethod = chosen ?? (hasLdap ? 'ldap' : 'local');
+  const method: LoginMethod = chosen ?? (hasLdap ? 'ldap' : 'email');
 
   if (state.status === 'authenticated') return <Navigate to={next} replace />;
 
@@ -47,7 +48,7 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await login({ method, username, password });
+      await login(method === 'email' ? { method, email: identifier, password } : { method, username: identifier, password });
       navigate(next, { replace: true });
     } catch (err) {
       setError(err);
@@ -74,7 +75,7 @@ export function LoginPage() {
                 value={method}
                 options={[
                   { value: 'ldap', label: t('login.method.ldap') },
-                  { value: 'local', label: t('login.method.local') },
+                  { value: 'email', label: t('login.method.email') },
                 ]}
                 onChange={(m) => {
                   setChosen(m);
@@ -87,9 +88,15 @@ export function LoginPage() {
                 {errors['']}
               </p>
             )}
-            <Field label={t('login.username')} error={errors.username}>
-              <Input name="username" autoComplete="username" autoFocus value={username} onChange={(e) => setUsername(e.target.value)} />
-            </Field>
+            {method === 'email' ? (
+              <Field key="email" label={t('login.email')} error={errors.email}>
+                <Input name="email" type="email" autoComplete="username" autoFocus value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
+              </Field>
+            ) : (
+              <Field key="username" label={t('login.username')} error={errors.username}>
+                <Input name="username" autoComplete="username" autoFocus value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
+              </Field>
+            )}
             <Field label={t('login.password')} error={errors.password}>
               <Input name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>

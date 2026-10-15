@@ -19,8 +19,9 @@ type userBody struct {
 	Status      string `json:"status"`
 	IsAdmin     bool   `json:"isAdmin"`
 	Identities  []struct {
-		Kind     string `json:"kind"`
-		BoundVia string `json:"boundVia"`
+		Kind      string `json:"kind"`
+		LoginName string `json:"loginName"`
+		BoundVia  string `json:"boundVia"`
 	} `json:"identities"`
 }
 
@@ -28,25 +29,47 @@ type userListBody struct {
 	Items []userBody `json:"items"`
 }
 
-// newUser is a valid create-user request; tests override single fields.
+// newUser is a valid create-user request; tests override single fields. "password" is the
+// password the user is meant to end up with; the login email defaults to <username>@example.com.
 func newUser(over map[string]any) map[string]any {
 	m := map[string]any{
 		"username":    "jdoe",
 		"displayName": "Jane Doe",
-		"email":       "jane@example.com",
 		"department":  "Payments",
 		"password":    "initial-pw-1",
 	}
 	for k, v := range over {
 		m[k] = v
 	}
+	if _, ok := m["loginEmail"]; !ok {
+		m["loginEmail"] = apitest.Email(m["username"].(string))
+	}
 	return m
 }
 
-func createUser(t *testing.T, c *apitest.Client, over map[string]any) userBody {
+// createUserRaw creates a user the way an administrator does: the password in the body is
+// the temporary one, and the user has to change it at the first login.
+func createUserRaw(t *testing.T, c *apitest.Client, over map[string]any) userBody {
 	t.Helper()
 	var u userBody
 	c.Post("/api/users", newUser(over)).ExpectStatus(http.StatusCreated).JSON(&u)
+	return u
+}
+
+// createUser creates a user and completes their first login, so that the password given
+// in the body is the one that works and the user is free to use the API. Tests of the
+// first login itself use createUserRaw.
+func createUser(t *testing.T, c *apitest.Client, over map[string]any) userBody {
+	t.Helper()
+	body := newUser(over)
+	final := body["password"].(string)
+	temp := final + "-temp"
+	body["password"] = temp
+	var u userBody
+	c.Post("/api/users", body).ExpectStatus(http.StatusCreated).JSON(&u)
+	first := c.Env().Client()
+	first.LoginEmail(body["loginEmail"].(string), temp).ExpectStatus(http.StatusOK)
+	first.Put("/api/me/password", map[string]string{"currentPassword": temp, "newPassword": final}).ExpectStatus(http.StatusNoContent)
 	return u
 }
 
@@ -68,20 +91,26 @@ func findUser(t *testing.T, users []userBody, username string) userBody {
 	return userBody{}
 }
 
-func TestAdminCreatesALocalUserWhoCanThenLogIn(t *testing.T) {
+func TestAdminCreatesAnEmailUserWhoCanThenLogInWithTheLoginEmail(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	admin := env.AdminClient()
 
-	created := createUser(t, admin, nil)
+	created := createUserRaw(t, admin, nil)
 	if created.ID == "" || created.Username != "jdoe" || created.DisplayName != "Jane Doe" ||
-		created.Email != "jane@example.com" || created.Department != "Payments" ||
+		created.Email != "jdoe@example.com" || created.Department != "Payments" ||
 		created.Status != "enabled" || created.IsAdmin {
 		t.Fatalf("created = %+v", created)
 	}
+	if len(created.Identities) != 1 || created.Identities[0].Kind != "email" || created.Identities[0].LoginName != "jdoe@example.com" {
+		t.Fatalf("identities = %+v", created.Identities)
+	}
 
-	env.Client().LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
-	env.Client().LoginLocal("jdoe", "wrong-password").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	env.Client().LoginEmail("jdoe@example.com", "initial-pw-1").ExpectStatus(http.StatusOK)
+	env.Client().LoginEmail("jdoe@example.com", "wrong-password").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	// The username is a display name, not a way to log in; the email address is not case sensitive.
+	env.Client().LoginEmail("jdoe", "initial-pw-1").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	env.Client().LoginEmail("JDoe@Example.COM", "initial-pw-1").ExpectStatus(http.StatusOK)
 }
 
 func TestUserListShowsFieldsStatusAndLoginIdentityKinds(t *testing.T) {
@@ -95,14 +124,14 @@ func TestUserListShowsFieldsStatusAndLoginIdentityKinds(t *testing.T) {
 		t.Fatalf("users = %+v", users)
 	}
 	jane := findUser(t, users, "jdoe")
-	if jane.DisplayName != "Jane Doe" || jane.Email != "jane@example.com" || jane.Department != "Payments" || jane.Status != "enabled" {
+	if jane.DisplayName != "Jane Doe" || jane.Email != "jdoe@example.com" || jane.Department != "Payments" || jane.Status != "enabled" {
 		t.Fatalf("jane = %+v", jane)
 	}
-	if len(jane.Identities) != 1 || jane.Identities[0].Kind != "local" {
+	if len(jane.Identities) != 1 || jane.Identities[0].Kind != "email" {
 		t.Fatalf("identities = %+v", jane.Identities)
 	}
 	root := findUser(t, users, apitest.AdminUsername)
-	if !root.IsAdmin || len(root.Identities) != 1 || root.Identities[0].Kind != "local" {
+	if !root.IsAdmin || len(root.Identities) != 1 || root.Identities[0].Kind != "email" {
 		t.Fatalf("admin = %+v", root)
 	}
 }
@@ -127,8 +156,9 @@ func TestCreatingAUserReportsEveryInvalidFieldAtOnce(t *testing.T) {
 	env := apitest.New(t)
 	admin := env.AdminClient()
 
-	res := admin.Post("/api/users", map[string]any{"username": " ", "displayName": " ", "password": ""})
+	res := admin.Post("/api/users", map[string]any{"username": " ", "displayName": " ", "loginEmail": " ", "password": ""})
 	res.ExpectError(http.StatusUnprocessableEntity, "username", "required")
+	res.ExpectError(http.StatusUnprocessableEntity, "loginEmail", "required")
 	res.ExpectError(http.StatusUnprocessableEntity, "displayName", "required")
 	res.ExpectError(http.StatusUnprocessableEntity, "password", "required")
 
@@ -173,19 +203,25 @@ func TestInitialPasswordNeedsAtLeastEightCharacters(t *testing.T) {
 	createUser(t, admin, map[string]any{"password": "12345678"})
 }
 
-func TestEmailIsOptionalButMustLookLikeAnEmail(t *testing.T) {
+func TestLoginEmailIsRequiredAndMustLookLikeAnEmail(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	admin := env.AdminClient()
 
-	admin.Post("/api/users", newUser(map[string]any{"email": "not-an-email"})).
-		ExpectError(http.StatusUnprocessableEntity, "email", "invalid")
-	admin.Post("/api/users", newUser(map[string]any{"email": "a b@example.com"})).
-		ExpectError(http.StatusUnprocessableEntity, "email", "invalid")
+	admin.Post("/api/users", newUser(map[string]any{"loginEmail": "not-an-email"})).
+		ExpectError(http.StatusUnprocessableEntity, "loginEmail", "invalid")
+	admin.Post("/api/users", newUser(map[string]any{"loginEmail": "a b@example.com"})).
+		ExpectError(http.StatusUnprocessableEntity, "loginEmail", "invalid")
+	admin.Post("/api/users", newUser(map[string]any{"loginEmail": ""})).
+		ExpectError(http.StatusUnprocessableEntity, "loginEmail", "required")
+	long := strings.Repeat("x", 320) + "@example.com"
+	admin.Post("/api/users", newUser(map[string]any{"loginEmail": long})).
+		ExpectError(http.StatusUnprocessableEntity, "loginEmail", "tooLong")
 
-	u := createUser(t, admin, map[string]any{"email": "", "department": ""})
-	if u.Email != "" || u.Department != "" {
-		t.Fatalf("optional fields = %+v", u)
+	// The department stays optional; the login email is the contact email.
+	u := createUser(t, admin, map[string]any{"loginEmail": "  Jane.Doe@Example.com ", "department": ""})
+	if u.Email != "jane.doe@example.com" || u.Department != "" || u.Identities[0].LoginName != "jane.doe@example.com" {
+		t.Fatalf("created = %+v", u)
 	}
 }
 
@@ -221,6 +257,24 @@ func TestUsernameMustBeUnique(t *testing.T) {
 	}
 }
 
+func TestLoginEmailMustBeUniqueWhateverItsCase(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	admin := env.AdminClient()
+	createUser(t, admin, nil)
+
+	admin.Post("/api/users", newUser(map[string]any{"username": "other", "loginEmail": "jdoe@example.com"})).
+		ExpectError(http.StatusUnprocessableEntity, "loginEmail", "loginEmailTaken")
+	admin.Post("/api/users", newUser(map[string]any{"username": "other", "loginEmail": "JDOE@EXAMPLE.COM"})).
+		ExpectError(http.StatusUnprocessableEntity, "loginEmail", "loginEmailTaken")
+	admin.Post("/api/users", newUser(map[string]any{"username": "other", "loginEmail": apitest.AdminEmail})).
+		ExpectError(http.StatusUnprocessableEntity, "loginEmail", "loginEmailTaken")
+
+	if got := len(listUsers(t, admin)); got != 2 {
+		t.Fatalf("a rejected create left %d users, want 2", got)
+	}
+}
+
 func TestOnlyAdministratorsMayManageUsers(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
@@ -228,7 +282,7 @@ func TestOnlyAdministratorsMayManageUsers(t *testing.T) {
 	createUser(t, admin, nil)
 
 	jane := env.Client()
-	jane.LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+	jane.LoginAs("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
 	jane.Get("/api/users").ExpectError(http.StatusForbidden, "", "forbidden")
 	jane.Post("/api/users", newUser(map[string]any{"username": "other"})).ExpectError(http.StatusForbidden, "", "forbidden")
 
@@ -242,7 +296,7 @@ func patchUser(c *apitest.Client, id string, fields map[string]any) *apitest.Res
 	return c.Do(http.MethodPatch, "/api/users/"+id, fields)
 }
 
-func TestAdminEditsDisplayNameEmailDepartmentAndPhone(t *testing.T) {
+func TestAdminEditsDisplayNameDepartmentAndPhone(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	admin := env.AdminClient()
@@ -250,9 +304,9 @@ func TestAdminEditsDisplayNameEmailDepartmentAndPhone(t *testing.T) {
 
 	var edited userBody
 	patchUser(admin, jane.ID, map[string]any{
-		"displayName": " Jane Q. Doe ", "email": "jq@example.com", "department": "Treasury", "phone": "555-0100",
+		"displayName": " Jane Q. Doe ", "department": "Treasury", "phone": "555-0100",
 	}).ExpectStatus(http.StatusOK).JSON(&edited)
-	if edited.ID != jane.ID || edited.DisplayName != "Jane Q. Doe" || edited.Email != "jq@example.com" ||
+	if edited.ID != jane.ID || edited.DisplayName != "Jane Q. Doe" || edited.Email != "jdoe@example.com" ||
 		edited.Department != "Treasury" || edited.Phone != "555-0100" || edited.Username != "jdoe" {
 		t.Fatalf("edited = %+v", edited)
 	}
@@ -261,8 +315,8 @@ func TestAdminEditsDisplayNameEmailDepartmentAndPhone(t *testing.T) {
 	}
 
 	// Fields that are left out stay as they were; optional fields can be cleared.
-	patchUser(admin, jane.ID, map[string]any{"email": "", "department": ""}).ExpectStatus(http.StatusOK).JSON(&edited)
-	if edited.DisplayName != "Jane Q. Doe" || edited.Phone != "555-0100" || edited.Email != "" || edited.Department != "" {
+	patchUser(admin, jane.ID, map[string]any{"department": ""}).ExpectStatus(http.StatusOK).JSON(&edited)
+	if edited.DisplayName != "Jane Q. Doe" || edited.Phone != "555-0100" || edited.Department != "" {
 		t.Fatalf("after partial edit = %+v", edited)
 	}
 }
@@ -274,18 +328,18 @@ func TestEditingAUserUsesTheSameFieldRulesAsCreating(t *testing.T) {
 	jane := createUser(t, admin, nil)
 
 	res := patchUser(admin, jane.ID, map[string]any{
-		"displayName": " ", "email": "not-an-email", "phone": strings.Repeat("9", 65),
+		"displayName": " ", "loginEmail": "not-an-email", "phone": strings.Repeat("9", 65),
 	})
 	res.ExpectError(http.StatusUnprocessableEntity, "displayName", "required")
-	res.ExpectError(http.StatusUnprocessableEntity, "email", "invalid")
+	res.ExpectError(http.StatusUnprocessableEntity, "loginEmail", "invalid")
 	res.ExpectError(http.StatusUnprocessableEntity, "phone", "tooLong")
 
-	if got := findUser(t, listUsers(t, admin), "jdoe"); got.DisplayName != "Jane Doe" || got.Email != "jane@example.com" {
+	if got := findUser(t, listUsers(t, admin), "jdoe"); got.DisplayName != "Jane Doe" || got.Email != "jdoe@example.com" {
 		t.Fatalf("a rejected edit changed the user: %+v", got)
 	}
 }
 
-func TestRenamingALocalUserKeepsTheSameUserAndMovesTheLoginName(t *testing.T) {
+func TestRenamingAUserKeepsTheSameUserAndTheLoginEmail(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	admin := env.AdminClient()
@@ -293,7 +347,7 @@ func TestRenamingALocalUserKeepsTheSameUserAndMovesTheLoginName(t *testing.T) {
 
 	// A session opened before the rename keeps working: it refers to the user ID.
 	open := env.Client()
-	open.LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+	open.LoginAs("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
 
 	var renamed userBody
 	patchUser(admin, jane.ID, map[string]any{"username": " jane.doe "}).ExpectStatus(http.StatusOK).JSON(&renamed)
@@ -309,18 +363,20 @@ func TestRenamingALocalUserKeepsTheSameUserAndMovesTheLoginName(t *testing.T) {
 		t.Fatalf("existing session now sees %+v", me.User)
 	}
 
-	// The login identity follows the user; the old name stops working and is free again.
-	env.Client().LoginLocal("jane.doe", "initial-pw-1").ExpectStatus(http.StatusOK)
-	env.Client().LoginLocal("jdoe", "initial-pw-1").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	// The login email is not the username: it is the same after the rename, and the old
+	// username is free again for somebody else.
+	env.Client().LoginEmail("jdoe@example.com", "initial-pw-1").ExpectStatus(http.StatusOK)
 	users := listUsers(t, admin)
-	if got := findUser(t, users, "jane.doe"); got.ID != jane.ID || len(got.Identities) != 1 || got.Identities[0].Kind != "local" {
+	if got := findUser(t, users, "jane.doe"); got.ID != jane.ID || len(got.Identities) != 1 ||
+		got.Identities[0].Kind != "email" || got.Identities[0].LoginName != "jdoe@example.com" {
 		t.Fatalf("list after rename = %+v", got)
 	}
-	other := createUser(t, admin, map[string]any{"username": "jdoe", "displayName": "John Doe"})
+	other := createUser(t, admin, map[string]any{"username": "jdoe", "displayName": "John Doe", "loginEmail": "john@example.com"})
 	if other.ID == jane.ID {
 		t.Fatal("a new user reusing the old name must be a different user")
 	}
-	env.Client().LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+	env.Client().LoginEmail("john@example.com", "initial-pw-1").ExpectStatus(http.StatusOK)
+	env.Client().LoginEmail("jdoe@example.com", "initial-pw-1").ExpectStatus(http.StatusOK)
 }
 
 func TestRenameFollowsTheSameRulesAsCreation(t *testing.T) {
@@ -336,7 +392,7 @@ func TestRenameFollowsTheSameRulesAsCreation(t *testing.T) {
 	patchUser(admin, jane.ID, map[string]any{"username": apitest.AdminUsername}).ExpectError(http.StatusUnprocessableEntity, "username", "usernameTaken")
 
 	// Nothing changed, and sending the current username is not a rename.
-	env.Client().LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+	env.Client().LoginAs("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
 	patchUser(admin, jane.ID, map[string]any{"username": "jdoe", "department": "Ops"}).ExpectStatus(http.StatusOK)
 }
 
@@ -348,7 +404,7 @@ func TestOnlyAdministratorsMayEditOrDisableUsers(t *testing.T) {
 	bob := createUser(t, admin, map[string]any{"username": "bob", "displayName": "Bob"})
 
 	janeClient := env.Client()
-	janeClient.LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+	janeClient.LoginAs("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
 	for _, id := range []string{jane.ID, bob.ID} {
 		patchUser(janeClient, id, map[string]any{"displayName": "Hacked"}).ExpectError(http.StatusForbidden, "", "forbidden")
 		janeClient.Post("/api/users/"+id+"/disable", nil).ExpectError(http.StatusForbidden, "", "forbidden")
@@ -370,7 +426,7 @@ func TestDisabledUserCannotLogInUntilEnabledAgain(t *testing.T) {
 
 	// An already open session ends as soon as the user is disabled.
 	open := env.Client()
-	open.LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+	open.LoginAs("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
 
 	var disabled userBody
 	admin.Post("/api/users/"+jane.ID+"/disable", nil).ExpectStatus(http.StatusOK).JSON(&disabled)
@@ -380,7 +436,7 @@ func TestDisabledUserCannotLogInUntilEnabledAgain(t *testing.T) {
 	if got := findUser(t, listUsers(t, admin), "jdoe").Status; got != "disabled" {
 		t.Fatalf("list status = %q", got)
 	}
-	env.Client().LoginLocal("jdoe", "initial-pw-1").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	env.Client().LoginAs("jdoe", "initial-pw-1").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
 	open.Get("/api/session").ExpectError(http.StatusUnauthorized, "", "unauthenticated")
 
 	// Disabling twice is harmless, and a disabled user can still be edited.
@@ -392,7 +448,7 @@ func TestDisabledUserCannotLogInUntilEnabledAgain(t *testing.T) {
 	if enabled.Status != "enabled" {
 		t.Fatalf("enabled = %+v", enabled)
 	}
-	env.Client().LoginLocal("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
+	env.Client().LoginAs("jdoe", "initial-pw-1").ExpectStatus(http.StatusOK)
 }
 
 func TestDisablingOrEnablingAnUnknownUserIsNotFound(t *testing.T) {

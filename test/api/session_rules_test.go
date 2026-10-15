@@ -20,9 +20,9 @@ func TestLoginWithWrongPasswordOrUnknownUserGivesTheSameError(t *testing.T) {
 	env := apitest.New(t)
 	c := env.Client()
 
-	wrongPw := c.LoginLocal(apitest.AdminUsername, "not-the-password")
+	wrongPw := c.LoginAs(apitest.AdminUsername, "not-the-password")
 	wrongPw.ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
-	unknown := c.LoginLocal("nobody", apitest.AdminPassword)
+	unknown := c.LoginAs("nobody", apitest.AdminPassword)
 	unknown.ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
 	if string(wrongPw.Body) != string(unknown.Body) {
 		t.Fatalf("bodies differ: %s vs %s", wrongPw.Body, unknown.Body)
@@ -57,7 +57,7 @@ func TestMalformedJSONIsABadRequest(t *testing.T) {
 func TestSessionCookieIsHttpOnly(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
-	res := env.Client().LoginLocal(apitest.AdminUsername, apitest.AdminPassword).ExpectStatus(http.StatusOK)
+	res := env.Client().LoginAs(apitest.AdminUsername, apitest.AdminPassword).ExpectStatus(http.StatusOK)
 	if len(res.Cookies) != 1 || !res.Cookies[0].HttpOnly || res.Cookies[0].Value == "" {
 		t.Fatalf("cookies = %+v", res.Cookies)
 	}
@@ -142,9 +142,9 @@ func TestRestartDoesNotRecreateTheInitialAdministrator(t *testing.T) {
 	env.Restart(func(c *app.Config) { c.Admin.Password = "a-different-password" })
 
 	c := env.Client()
-	c.LoginLocal(apitest.AdminUsername, "a-different-password").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	c.LoginAs(apitest.AdminUsername, "a-different-password").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
 	var again sessionBody
-	c.LoginLocal(apitest.AdminUsername, apitest.AdminPassword).ExpectStatus(http.StatusOK).JSON(&again)
+	c.LoginAs(apitest.AdminUsername, apitest.AdminPassword).ExpectStatus(http.StatusOK).JSON(&again)
 	if again.User.ID != first.User.ID {
 		t.Fatalf("admin id changed: %s → %s", first.User.ID, again.User.ID)
 	}
@@ -153,17 +153,18 @@ func TestRestartDoesNotRecreateTheInitialAdministrator(t *testing.T) {
 func TestRestartWithoutAdminConfigurationStillStarts(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
-	env.Restart(func(c *app.Config) { c.Admin.Username, c.Admin.Password = "", "" })
+	env.Restart(func(c *app.Config) { c.Admin.Username, c.Admin.Email, c.Admin.Password = "", "", "" })
 	env.AdminClient().Get("/api/session").ExpectStatus(http.StatusOK)
 }
 
 func TestFirstStartWithoutAdminConfigurationFails(t *testing.T) {
 	t.Parallel()
-	// Both the password and the username are required on the very first start, and the
-	// refusal is the bootstrap configuration error, not some other failure.
+	// The password, the username and the login email are required on the very first start,
+	// and the refusal is the bootstrap configuration error, not some other failure.
 	for name, mutate := range map[string]func(*app.Config){
 		"password": func(c *app.Config) { c.Admin.Password = "" },
 		"username": func(c *app.Config) { c.Admin.Username = "" },
+		"email":    func(c *app.Config) { c.Admin.Email = "" },
 	} {
 		if err := apitest.StartError(t, mutate); !errors.Is(err, domain.ErrBootstrapConfig) {
 			t.Fatalf("first start without the admin %s: err = %v, want ErrBootstrapConfig", name, err)

@@ -17,8 +17,9 @@ import (
 //     themselves must also give the directory Password (they authenticate with the
 //     new identity once). An administrator gives only LoginName; the directory is asked
 //     whether the login name exists.
-//   - Kind "local": the login name is always the user's username. Password is the new
-//     local password.
+//   - Kind "email": LoginName is the login email. Only an administrator binds it (a user
+//     verifies a new address by mail, which comes with the mail features): Password is the
+//     temporary password the user must change at the first login.
 type BindIdentityInput struct {
 	Kind      string
 	LoginName string
@@ -28,15 +29,20 @@ type BindIdentityInput struct {
 type bindSpec struct {
 	kind      IdentityKind
 	loginName string
-	hash      string // local only
+	hash      string // email only
 	via       BoundVia
 	// entry, when non-nil, is the directory entry the user's display name, email and
 	// department are synced from right away (the directory owns them once bound).
 	entry *DirectoryEntry
 }
 
-func (s *Service) checkBindableKind(c *Collector, kind string) {
+// checkBindableKind checks the kind is one that may be bound: any login method for an
+// administrator, only the directory for a user binding for themselves.
+func (s *Service) checkBindableKind(c *Collector, kind string, byAdmin bool) {
 	allowed := s.LoginMethods()
+	if !byAdmin {
+		allowed = slices.DeleteFunc(allowed, func(m string) bool { return m == string(IdentityEmail) })
+	}
 	if !slices.Contains(allowed, kind) {
 		c.Add("kind", CodeInvalid, map[string]any{"allowed": allowed})
 	}
@@ -45,13 +51,10 @@ func (s *Service) checkBindableKind(c *Collector, kind string) {
 // BindOwnIdentity attaches a login identity to the actor after they authenticated with it.
 func (s *Service) BindOwnIdentity(ctx context.Context, actor Actor, in BindIdentityInput) (UserWithIdentities, error) {
 	var c Collector
-	s.checkBindableKind(&c, in.Kind)
+	s.checkBindableKind(&c, in.Kind, false)
 	in.LoginName = strings.TrimSpace(in.LoginName)
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
-	}
-	if in.Kind == string(IdentityLocal) {
-		return s.bindLocalIdentity(ctx, actor.User.ID, in.Password, BoundViaSelf)
 	}
 	c.Required("loginName", in.LoginName)
 	if in.Password == "" {
@@ -103,11 +106,12 @@ func (s *Service) UnbindOwnIdentity(ctx context.Context, actor Actor, kind strin
 	return result, err
 }
 
-// bindLocalIdentity gives the user a local password identity. Its login name is the
-// user's username (so a rename keeps them in step), the password is the one given:
-// there is no existing credential to authenticate with, the user is already logged in.
-func (s *Service) bindLocalIdentity(ctx context.Context, userID UserID, password string, via BoundVia) (UserWithIdentities, error) {
+// bindEmailIdentity gives the user an email identity with a temporary password chosen by
+// an administrator. The administrator typed the login email, so it counts as verified.
+func (s *Service) bindEmailIdentity(ctx context.Context, userID UserID, loginEmail, password string) (UserWithIdentities, error) {
 	var c Collector
+	loginEmail = normalizeLoginEmail(loginEmail)
+	checkLoginEmail(&c, "loginName", loginEmail)
 	checkNewPassword(&c, password)
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
@@ -116,27 +120,27 @@ func (s *Service) bindLocalIdentity(ctx context.Context, userID UserID, password
 	if err != nil {
 		return UserWithIdentities{}, err
 	}
-	// loginName stays empty: bindIdentity uses the username it reads under the lock.
-	return s.bindIdentity(ctx, userID, bindSpec{kind: IdentityLocal, hash: hash, via: via})
+	return s.bindIdentity(ctx, userID, bindSpec{kind: IdentityEmail, loginName: loginEmail, hash: hash, via: BoundViaAdmin})
 }
 
 // BindIdentityForUser is the administrator's bind. Unlike a user binding for themselves,
 // the administrator does not authenticate with the identity: for "ldap" the directory is
 // only asked whether the login name exists (a disabled directory account counts as
-// existing, like in ADR-0004's name check; it simply cannot log in), and for "local"
-// the administrator sets the password. The binding source is "admin".
+// existing, like in ADR-0004's name check; it simply cannot log in), and for "email"
+// the administrator types the login email and sets a temporary password. The binding
+// source is "admin".
 func (s *Service) BindIdentityForUser(ctx context.Context, actor Actor, id UserID, in BindIdentityInput) (UserWithIdentities, error) {
 	if err := requireAdmin(actor); err != nil {
 		return UserWithIdentities{}, err
 	}
 	var c Collector
-	s.checkBindableKind(&c, in.Kind)
+	s.checkBindableKind(&c, in.Kind, true)
 	in.LoginName = strings.TrimSpace(in.LoginName)
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
 	}
-	if in.Kind == string(IdentityLocal) {
-		return s.bindLocalIdentity(ctx, id, in.Password, BoundViaAdmin)
+	if in.Kind == string(IdentityEmail) {
+		return s.bindEmailIdentity(ctx, id, in.LoginName, in.Password)
 	}
 	if !c.Required("loginName", in.LoginName) {
 		return UserWithIdentities{}, c.Err()
@@ -174,20 +178,23 @@ func (s *Service) bindIdentity(ctx context.Context, userID UserID, sp bindSpec) 
 		if cur.hasIdentity(sp.kind) {
 			return Validation(Invalid("kind", CodeIdentityKindBound, nil))
 		}
-		if sp.kind == IdentityLocal {
-			sp.loginName = cur.User.Username
+		taken := func() error {
+			if sp.kind == IdentityEmail {
+				return loginEmailTaken("loginName")
+			}
+			return Validation(Invalid("loginName", CodeIdentityTaken, nil))
 		}
 		if _, held, err := tx.FindIdentity(ctx, sp.kind, sp.loginName); err != nil {
 			return err
 		} else if held {
-			return Validation(Invalid("loginName", CodeIdentityTaken, nil))
+			return taken()
 		}
 		ident := LoginIdentity{
-			UserID: userID, Kind: sp.kind, LoginName: sp.loginName,
-			PasswordHash: sp.hash, BoundAt: s.nowUTC(), BoundVia: sp.via,
+			UserID: userID, Kind: sp.kind, LoginName: sp.loginName, PasswordHash: sp.hash,
+			BoundAt: s.nowUTC(), BoundVia: sp.via, MustChangePassword: sp.kind == IdentityEmail,
 		}
-		if err := tx.CreateIdentity(ctx, ident); errors.Is(err, ErrUsernameTaken) { // lost a race for the login name
-			return Validation(Invalid("loginName", CodeIdentityTaken, nil))
+		if err := tx.CreateIdentity(ctx, ident); errors.Is(err, ErrIdentityTaken) { // lost a race for the login name
+			return taken()
 		} else if err != nil {
 			return err
 		}

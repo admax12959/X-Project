@@ -88,6 +88,7 @@ func (s *server) updateUser(w http.ResponseWriter, r *http.Request) {
 		Username    *string `json:"username"`
 		DisplayName *string `json:"displayName"`
 		Email       *string `json:"email"`
+		LoginEmail  *string `json:"loginEmail"`
 		Phone       *string `json:"phone"`
 		Department  *string `json:"department"`
 	}
@@ -95,7 +96,7 @@ func (s *server) updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := s.svc.UpdateUser(r.Context(), actorOf(r), id, domain.UpdateUserInput{
-		Username: body.Username, DisplayName: body.DisplayName, Email: body.Email,
+		Username: body.Username, DisplayName: body.DisplayName, Email: body.Email, LoginEmail: body.LoginEmail,
 		Phone: body.Phone, Department: body.Department,
 	})
 	if err != nil {
@@ -122,16 +123,16 @@ func (s *server) createUser(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username    string `json:"username"`
 		DisplayName string `json:"displayName"`
-		Email       string `json:"email"`
+		LoginEmail  string `json:"loginEmail"`
 		Phone       string `json:"phone"`
 		Department  string `json:"department"`
-		Password    string `json:"password"`
+		Password    string `json:"password"` // temporary: the user must change it at the first login
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	u, err := s.svc.CreateLocalUser(r.Context(), actorOf(r), domain.CreateLocalUserInput{
-		Username: body.Username, DisplayName: body.DisplayName, Email: body.Email,
+	u, err := s.svc.CreateEmailUser(r.Context(), actorOf(r), domain.CreateEmailUserInput{
+		Username: body.Username, DisplayName: body.DisplayName, LoginEmail: body.LoginEmail,
 		Phone: body.Phone, Department: body.Department, Password: body.Password,
 	})
 	if err != nil {

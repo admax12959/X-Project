@@ -27,7 +27,7 @@ func (f versionFixture) secondApp(t *testing.T, ownerID string, over map[string]
 
 func (f versionFixture) login(username string) *apitest.Client {
 	c := f.env.Client()
-	c.LoginLocal(username, "initial-pw-1").ExpectStatus(http.StatusOK)
+	c.LoginAs(username, "initial-pw-1").ExpectStatus(http.StatusOK)
 	return c
 }
 

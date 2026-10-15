@@ -25,12 +25,19 @@ const (
 	CodeUsernameTaken  = "usernameTaken"  // another user already has this username
 	CodeUsernameLocked = "usernameLocked" // LDAP-bound users keep their username (ADR-0004)
 	CodeLdapManaged    = "ldapManaged"    // field is owned by the directory for LDAP-bound users
+	CodeEmailManaged   = "emailManaged"   // contact email of a user without LDAP: it is the login email, change that
 
 	// login identities (ADR-0002)
 	CodeLastIdentity      = "lastIdentity"      // unbinding the user's only login identity
 	CodeIdentityKindBound = "identityKindBound" // the user already has an identity of this kind
 	CodeIdentityTaken     = "identityTaken"     // another user already holds this login identity
 	CodeLdapLoginNotFound = "ldapLoginNotFound" // administrator binding: the directory has no such login name
+	CodeLoginEmailTaken   = "loginEmailTaken"   // another email identity already uses this login email
+	CodeNoEmailIdentity   = "noEmailIdentity"   // the user has no email identity to change
+
+	// passwords of email identities
+	CodePasswordChangeRequired = "passwordChangeRequired" // HTTP 403; the user must change the administrator-set password first
+	CodePasswordUnchanged      = "passwordUnchanged"      // the new password equals the current one
 
 	// applications
 	CodeKeyTaken        = "keyTaken"        // another application already has this key

@@ -33,7 +33,7 @@ type User struct {
 type IdentityKind string
 
 const (
-	IdentityLocal IdentityKind = "local"
+	IdentityEmail IdentityKind = "email" // login email + password
 	IdentityLDAP  IdentityKind = "ldap"
 )
 
@@ -53,18 +53,22 @@ type LoginIdentity struct {
 	ID           int64
 	UserID       UserID
 	Kind         IdentityKind
-	LoginName    string
-	PasswordHash string // local only: bcrypt (salted); empty for LDAP
+	LoginName    string // LDAP: the directory login name; email: the login email, lower case
+	PasswordHash string // email only: bcrypt (salted); empty for LDAP
 	BoundAt      time.Time
 	BoundVia     BoundVia
+	// MustChangePassword (email only) is set while the password is one an administrator
+	// chose: a session opened with it can do nothing but change the password and log out.
+	MustChangePassword bool
 }
 
 // Session is a logged-in browser session. Only the token's hash is stored.
 type Session struct {
-	TokenHash string
-	UserID    UserID
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	TokenHash          string
+	UserID             UserID
+	CreatedAt          time.Time
+	ExpiresAt          time.Time
+	MustChangePassword bool // opened with an administrator-chosen password
 }
 
 // Repository is the persistence port. Only the domain service uses it;

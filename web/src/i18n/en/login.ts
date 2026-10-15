@@ -1,10 +1,11 @@
 export default {
   'login.title': 'Sign in',
-  'login.username': 'Username',
+  'login.username': 'LDAP login name',
+  'login.email': 'Login email',
   'login.password': 'Password',
   'login.submit': 'Sign in',
   'login.submitting': 'Signing in…',
   'login.method': 'Sign-in method',
   'login.method.ldap': 'LDAP',
-  'login.method.local': 'Local password',
+  'login.method.email': 'Email and password',
 };

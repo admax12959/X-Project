@@ -6,13 +6,15 @@ import { Navigate, useLocation } from 'react-router';
 import { api, ApiError, onUnauthenticated } from '../api/client.ts';
 import type { LoginInput, User } from '../api/types.ts';
 import { setLocale, useT } from '../i18n/index.ts';
+import { ForcedChangePasswordPage } from '../pages/ChangePassword.tsx';
 
 /** The language saved on the user wins over this browser's choice, so it follows them across devices. */
 function applySavedLanguage(user: User) {
   if (user.language === 'zh' || user.language === 'en') setLocale(user.language);
 }
 
-type State = { status: 'loading' } | { status: 'anonymous' } | { status: 'error' } | { status: 'authenticated'; user: User };
+/** mustChangePassword: opened with an administrator-set password; RequireSession shows only the change-password page. */
+type State = { status: 'loading' } | { status: 'anonymous' } | { status: 'error' } | { status: 'authenticated'; user: User; mustChangePassword: boolean };
 
 type SessionApi = {
   state: State;
@@ -33,7 +35,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     api.session.get().then(
       (s) => {
         applySavedLanguage(s.user);
-        setState({ status: 'authenticated', user: s.user });
+        setState({ status: 'authenticated', user: s.user, mustChangePassword: s.mustChangePassword });
       },
       (e: unknown) => setState(e instanceof ApiError && e.status === 401 ? { status: 'anonymous' } : { status: 'error' }),
     );
@@ -47,10 +49,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (input: LoginInput) => {
     const s = await api.session.login(input);
     applySavedLanguage(s.user);
-    setState({ status: 'authenticated', user: s.user });
+    setState({ status: 'authenticated', user: s.user, mustChangePassword: s.mustChangePassword });
   }, []);
 
-  const setUser = useCallback((user: User) => setState({ status: 'authenticated', user }), []);
+  const setUser = useCallback(
+    (user: User) => setState((prev) => ({ status: 'authenticated', user, mustChangePassword: prev.status === 'authenticated' && prev.mustChangePassword })),
+    [],
+  );
 
   const logout = useCallback(async () => {
     await api.session.logout().catch(() => undefined);
@@ -101,6 +106,6 @@ export function RequireSession({ children }: { children: ReactNode }) {
       return <Navigate to={next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`} replace />;
     }
     case 'authenticated':
-      return <>{children}</>;
+      return state.mustChangePassword ? <ForcedChangePasswordPage onDone={reload} /> : <>{children}</>;
   }
 }

@@ -12,13 +12,18 @@ import (
 	"github.com/admax12959/X-Project/internal/domain"
 )
 
-// mapUsernameConflict turns a duplicate-key error on the username or on the local
-// login name into domain.ErrUsernameTaken. Other errors pass through.
+// mapUsernameConflict turns a duplicate-key error on the username into
+// domain.ErrUsernameTaken and one on a login identity's (kind, login name) into
+// domain.ErrIdentityTaken. Other errors pass through.
 func mapUsernameConflict(err error) error {
 	var me *mysql.MySQLError
-	if errors.As(err, &me) && me.Number == 1062 &&
-		(strings.Contains(me.Message, "uq_users_username") || strings.Contains(me.Message, "uq_identity_login")) {
-		return domain.ErrUsernameTaken
+	if errors.As(err, &me) && me.Number == 1062 {
+		switch {
+		case strings.Contains(me.Message, "uq_users_username"):
+			return domain.ErrUsernameTaken
+		case strings.Contains(me.Message, "uq_identity_login"):
+			return domain.ErrIdentityTaken
+		}
 	}
 	return err
 }
@@ -69,10 +74,19 @@ func (s *Store) DeleteIdentity(ctx context.Context, id domain.UserID, kind domai
 	return err
 }
 
-func (s *Store) RenameLocalLogin(ctx context.Context, id domain.UserID, loginName string) error {
+func (s *Store) RenameEmailLogin(ctx context.Context, id domain.UserID, loginEmail string) error {
 	_, err := s.q.ExecContext(ctx, "UPDATE login_identities SET login_name = ? WHERE user_id = ? AND kind = ?",
-		loginName, id, string(domain.IdentityLocal))
+		loginEmail, id, string(domain.IdentityEmail))
 	return mapUsernameConflict(err)
+}
+
+func (s *Store) ChangePassword(ctx context.Context, id domain.UserID, hash string) error {
+	if _, err := s.q.ExecContext(ctx, "UPDATE login_identities SET password_hash = ?, must_change_password = FALSE WHERE user_id = ? AND kind = ?",
+		hash, id, string(domain.IdentityEmail)); err != nil {
+		return err
+	}
+	_, err := s.q.ExecContext(ctx, "UPDATE sessions SET must_change_password = FALSE WHERE user_id = ?", id)
+	return err
 }
 
 func (s *Store) SetUserStatus(ctx context.Context, id domain.UserID, status domain.UserStatus, at time.Time) error {
