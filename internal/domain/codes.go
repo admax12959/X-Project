@@ -69,4 +69,16 @@ const (
 	// organization (#25)
 	CodeDepartmentCycle    = "departmentCycle"    // field "parentId"; a department cannot move under itself or one of its descendants
 	CodeDepartmentNotEmpty = "departmentNotEmpty" // request-level; params {members, children}; the department still has users or child departments
+
+	// mail (#20)
+	CodeMailNotConfigured     = "mailNotConfigured"     // 503; the feature needs SMTP, and the administrator has not configured it
+	CodeSiteURLRequired       = "siteUrlRequired"       // 503; a mail with a link needs the site's external address, which is not configured
+	CodeNoContactEmail        = "noContactEmail"        // request-level; the administrator has no contact email to send the test mail to
+	CodeSmtpUnreachable       = "smtpUnreachable"       // SMTP failure (test mail, outbox): cannot connect, DNS failure or timeout
+	CodeSmtpTLSFailed         = "smtpTlsFailed"         // the TLS handshake or the server certificate verification failed
+	CodeSmtpStartTLSMissing   = "smtpStartTlsMissing"   // STARTTLS was required but the server does not offer it
+	CodeSmtpAuthFailed        = "smtpAuthFailed"        // the server refused the account or password
+	CodeSmtpSenderRejected    = "smtpSenderRejected"    // the server refused the sender address
+	CodeSmtpRecipientRejected = "smtpRecipientRejected" // the server refused the recipient address
+	CodeSmtpRejected          = "smtpRejected"          // the server refused the message or answered unexpectedly
 )

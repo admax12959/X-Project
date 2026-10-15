@@ -78,6 +78,7 @@ func (s *server) routes() {
 	s.route("GET /api/roles", s.listRoles)     // read-only: built-in roles are not editable
 	s.route("GET /api/audit-log", s.listAudit) // read-only: the audit log is append-only
 	s.systemConfigRoutes()
+	s.mailRoutes()
 	s.userRoutes()
 	s.meRoutes()
 	s.departmentRoutes()
