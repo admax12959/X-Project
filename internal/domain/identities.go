@@ -120,6 +120,9 @@ func (s *Service) UnbindOwnIdentity(ctx context.Context, actor Actor, kind strin
 		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), identityUnboundAudit(cur.User.ID, removed.Kind, removed.LoginName)); err != nil {
 			return err
 		}
+		if err := s.notifySecurity(ctx, tx, cur.User.ID, cur.User.Email, MailTemplateIdentityUnbound, map[string]string{"Kind": string(removed.Kind), "LoginName": removed.LoginName}); err != nil {
+			return err
+		}
 		cur.Identities = slices.DeleteFunc(cur.Identities, func(i LoginIdentity) bool { return i.Kind == IdentityKind(kind) })
 		result = cur
 		return nil
@@ -237,6 +240,9 @@ func (s *Service) bindIdentity(ctx context.Context, userID UserID, sp bindSpec) 
 			}
 		}
 		if err := s.recordAudit(ctx, tx, sp.by, identityBoundAudit(userID, sp.kind, sp.loginName, sp.via)); err != nil {
+			return err
+		}
+		if err := s.notifySecurity(ctx, tx, userID, cur.User.Email, MailTemplateIdentityBound, map[string]string{"Kind": string(sp.kind), "LoginName": sp.loginName}); err != nil {
 			return err
 		}
 		result = cur

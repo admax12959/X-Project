@@ -421,6 +421,22 @@ Routes in `internal/httpapi/handlers_me.go`, rules in `internal/domain/me.go` an
 - **Links** are built from the site address saved on the Email page (`siteUrl`), never the Host header: `<siteUrl>/set-password/<token>`. Mail without a site address is refused (`siteUrlRequired`), so inviting needs it. Templates `invite` and `passwordReset` exist in zh and en.
 - **Tests.** API tests read the token out of the mail the fake mailer received (`tokenFromMail` in `test/api/password_recovery_test.go`) and never see the database. Create a test's users before `enableMail`; once mail is configured, creating a user sends an invitation. Not covered by a test: response-time equality (the work is moved off the request path instead) and the LDAP-only case (no email identity, so no mail).
 
+### Self-service email identity and login email (#30)
+
+Rules in `internal/domain/email_self_service.go`; routes in `handlers_me.go`. An LDAP user adds an email identity, a user with one changes the login email; both prove the new address with a six-digit code mailed to it. Without mail every route answers `503 mailNotConfigured` (the SPA shows the buttons disabled with the reason, from `GET /api/mail/status`).
+
+| Route | Meaning |
+|---|---|
+| `POST /api/me/email-identity/code` `{email}` | `202`. Mails a code to the address. `422 identityKindBound` (field `kind`) when the user already has an email identity, `422 loginEmailTaken` (field `email`), `422 invalid` on a malformed address, `429 rateLimited`. |
+| `POST /api/me/email-identity` `{email, code, password}` | `201` + the user. Spends the code, creates the identity (`boundVia: self`, no forced password change). `422` on field `code`: `tokenInvalid` (wrong code, other address, other user), `tokenExpired`, `tokenUsed`; password rules on `password`; `loginEmailTaken` on `loginName` if the address was taken since. The contact email is unchanged (LDAP owns it). |
+| `POST /api/me/login-email/code` `{email}` | `202`. As above for a user with an email identity: `422 noEmailIdentity`, `422 loginEmailUnchanged` (field `email`), `loginEmailTaken`. |
+| `PUT /api/me/login-email` `{email, code}` | `200` + the user. Renames the login, spends the user's unused password-setup/recovery tokens (a link mailed to the old address dies), records `loginEmailChanged` (operator = the user). Without an LDAP identity the contact email becomes the new login email; with one it stays. The old login address, and the contact email if different, get a notice. |
+
+- **The code is a one-time token** (`auth_tokens`, purposes `bindEmail` / `changeEmail`, TTL 15 minutes). The row stores `SHA-256(purpose:userID:address:code)`, so no schema change was needed and a code only works for the user and address it was sent to. Asking again spends the earlier code. Expiry is the service clock (`env.Clock` in tests).
+- **Limits** (`rate_events`): sending counts accepted requests per user (5 per hour) and per client IP (20 per hour, TCP peer, no proxy header); typing a wrong code (`tokenInvalid`) counts per user and 5 within 15 minutes locks confirming (`429 rateLimited`, even for the right code) until the window passes. The counters are written outside the failing transaction.
+- **Security notices.** Every identity bind (self or administrator) and unbind, and a login email change, queues a notice (`identityBound`, `identityUnbound`, `loginEmailChanged` templates) in the same transaction, to the contact email; a login email change also tells the old login address. Without mail, or with an undeliverable address, the notice is skipped and the change still happens (`notifySecurity`). Audit: `identityBound` / `identityUnbound` / `loginEmailChanged` as before; codes and passwords are never logged.
+- **Tests.** `test/api/self_service_email_test.go` reads codes from the fake mailer (`codeFromMail`). Create a test's email users before `enableMail` (see #21). Every bundled template must render from `Code`, `Link`, `OldEmail`, `NewEmail`, `Kind`, `LoginName`.
+
 ### i18n
 
 All visible text goes through `t('key')` from `web/src/i18n`. Dictionaries are split by feature area: `web/src/i18n/{en,zh}/<area>.ts`.

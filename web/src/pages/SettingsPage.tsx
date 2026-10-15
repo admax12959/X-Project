@@ -10,6 +10,7 @@ import { Avatar } from '../ui/Avatar.tsx';
 import { Button, Empty, Field, Input, Segmented } from '../ui/controls.tsx';
 import { BindIdentityDialog } from './BindIdentityDialog.tsx';
 import { ChangePasswordForm } from './ChangePassword.tsx';
+import { EmailLoginDialog } from './EmailLoginDialog.tsx';
 import { th, td } from '../ui/table.ts';
 
 type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; me: AdminUser };
@@ -217,12 +218,28 @@ function AvatarSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser)
 
 // ---------------------------------------------------------------- login identities
 
+const hasEmailIdentity = (me: AdminUser) => me.identities.some((i) => i.kind === 'email');
+
 function IdentitiesSection({ me, methods, onChanged }: { me: AdminUser; methods: LoginMethod[]; onChanged: (u: AdminUser) => void }) {
   const { t, locale } = useT();
   const [binding, setBinding] = useState<IdentityKind | null>(null);
   const [unbinding, setUnbinding] = useState<IdentityKind | null>(null);
+  const [emailDialog, setEmailDialog] = useState<'bind' | 'change' | null>(null);
+  // Adding an email login and changing the login email send a code by mail; without mail they are unavailable.
+  const [mailOn, setMailOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.mail.status().then(
+      (r) => live && setMailOn(r.configured),
+      () => live && setMailOn(false),
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  const emailMode = hasEmailIdentity(me) ? 'change' : 'bind';
   const have = new Set(me.identities.map((i) => i.kind));
-  // Only the directory can be bound here: an email identity needs its address verified by mail first.
+  // The directory is bound with its password; an email identity has its own flow below (the address is verified by mail).
   const missing = methods.filter((m) => m === 'ldap' && !have.has(m));
   const onlyOne = me.identities.length <= 1;
 
@@ -258,14 +275,27 @@ function IdentitiesSection({ me, methods, onChanged }: { me: AdminUser; methods:
         </table>
       </div>
       {onlyOne && <p className="mt-2 text-[13px] text-text-2">{t('settings.unbind.lastReason')}</p>}
-      {missing.length > 0 && (
-        <div className="mt-3 flex gap-2">
-          {missing.map((k) => (
-            <Button key={k} onClick={() => setBinding(k)}>
-              {t('settings.bind.ldap')}
-            </Button>
-          ))}
-        </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {missing.map((k) => (
+          <Button key={k} onClick={() => setBinding(k)}>
+            {t('settings.bind.ldap')}
+          </Button>
+        ))}
+        <Button disabled={mailOn !== true} onClick={() => setEmailDialog(emailMode)}>
+          {emailMode === 'bind' ? t('settings.emailLogin.add') : t('settings.emailLogin.change')}
+        </Button>
+      </div>
+      {mailOn === false && <p className="mt-2 text-[13px] text-text-2">{t('settings.emailLogin.unavailable')}</p>}
+      {emailDialog !== null && (
+        <EmailLoginDialog
+          mode={emailDialog}
+          ldapBound={have.has('ldap')}
+          onClose={() => setEmailDialog(null)}
+          onDone={(u) => {
+            setEmailDialog(null);
+            onChanged(u);
+          }}
+        />
       )}
 
       {binding !== null && (

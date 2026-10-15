@@ -368,3 +368,86 @@ func TestAnOldPasswordResetLinkDiesWithTheOldLoginEmail(t *testing.T) {
 	changeLoginEmail(bobC, "bob.new@example.com", codeFromMail(t, env, "bob.new@example.com", 1)).ExpectStatus(http.StatusOK)
 	setPassword(env.Client(), token, "brand-new-pw-1").ExpectError(http.StatusUnprocessableEntity, "token", "tokenUsed")
 }
+
+const emmaContact = "emma.larsen@corp.example"
+
+// noticesTo returns subject and text of the mails delivered to address, once n of them have arrived.
+func noticesTo(t *testing.T, env *apitest.Env, address string, n int) []string {
+	t.Helper()
+	eventually(t, "mail to "+address, func() bool { return len(env.Mailer.SentTo(address)) >= n })
+	var out []string
+	for _, m := range env.Mailer.SentTo(address) {
+		out = append(out, m.Message.Subject+"\n"+m.Message.Text)
+	}
+	return out
+}
+
+func TestBindingAndUnbindingALoginIdentityNotifiesTheContactEmail(t *testing.T) {
+	t.Parallel()
+	env, _, emma := emmaWithMail(t)
+
+	requestBindCode(emma, emmaEmail).ExpectStatus(http.StatusAccepted)
+	bindEmail(emma, emmaEmail, codeFromMail(t, env, emmaEmail, 1), "emma-email-pw-1").ExpectStatus(http.StatusCreated)
+	got := noticesTo(t, env, emmaContact, 1)
+	if !strings.Contains(got[0], emmaEmail) {
+		t.Errorf("the bind notice does not name the new login:\n%s", got[0])
+	}
+
+	unbindOwn(emma, "email").ExpectStatus(http.StatusOK)
+	got = noticesTo(t, env, emmaContact, 2)
+	if !strings.Contains(got[1], emmaEmail) || got[1] == got[0] {
+		t.Errorf("the unbind notice = %q (bind notice %q)", got[1], got[0])
+	}
+}
+
+func TestAnAdministratorsBindIsNotifiedToo(t *testing.T) {
+	t.Parallel()
+	env, admin, emma := emmaWithMail(t)
+	me := getMe(t, emma)
+	adminBind(admin, me.ID, map[string]any{"kind": "email", "loginName": emmaEmail, "password": "temp-pw-12345"}).ExpectStatus(http.StatusCreated)
+	noticesTo(t, env, emmaContact, 1)
+}
+
+func TestChangingTheLoginEmailOfAnLDAPUserAlsoTellsTheContactEmail(t *testing.T) {
+	t.Parallel()
+	env, _, emma := emmaWithMail(t)
+	requestBindCode(emma, emmaEmail).ExpectStatus(http.StatusAccepted)
+	bindEmail(emma, emmaEmail, codeFromMail(t, env, emmaEmail, 1), "emma-email-pw-1").ExpectStatus(http.StatusCreated)
+	requestChangeCode(emma, "emma.new@example.com").ExpectStatus(http.StatusAccepted)
+	changeLoginEmail(emma, "emma.new@example.com", codeFromMail(t, env, "emma.new@example.com", 1)).ExpectStatus(http.StatusOK)
+
+	// The old login address (bind code + change notice) and the directory contact (bind + change notice).
+	if got := noticesTo(t, env, emmaEmail, 2); !strings.Contains(got[1], "emma.new@example.com") {
+		t.Errorf("old address notices = %q", got)
+	}
+	if got := noticesTo(t, env, emmaContact, 2); !strings.Contains(got[1], "emma.new@example.com") {
+		t.Errorf("contact notices = %q", got)
+	}
+}
+
+func TestSelfServiceChangesAreRecordedWithTheUserAsOperator(t *testing.T) {
+	t.Parallel()
+	env, admin, emma := emmaWithMail(t)
+	me := getMe(t, emma)
+	requestBindCode(emma, emmaEmail).ExpectStatus(http.StatusAccepted)
+	bindEmail(emma, emmaEmail, codeFromMail(t, env, emmaEmail, 1), "emma-email-pw-1").ExpectStatus(http.StatusCreated)
+	requestChangeCode(emma, "emma.new@example.com").ExpectStatus(http.StatusAccepted)
+	changeLoginEmail(emma, "emma.new@example.com", codeFromMail(t, env, "emma.new@example.com", 1)).ExpectStatus(http.StatusOK)
+	unbindOwn(emma, "email").ExpectStatus(http.StatusOK)
+	// Codes and passwords never reach the log; a refused attempt leaves no trace.
+	bindEmail(emma, emmaEmail, "000000", "emma-email-pw-1").ExpectStatus(http.StatusUnprocessableEntity)
+
+	bound := auditOf(t, admin, "identityBound")
+	if len(bound) != 1 || bound[0].Actor.Username != "elarsen" || bound[0].Target.ID != me.ID ||
+		bound[0].Params["kind"] != "email" || bound[0].Params["loginName"] != emmaEmail || bound[0].Params["via"] != "self" {
+		t.Errorf("identityBound = %+v", bound)
+	}
+	changed := auditOf(t, admin, "loginEmailChanged")
+	if len(changed) != 1 || changed[0].Actor.Username != "elarsen" || changed[0].Target.ID != me.ID ||
+		changed[0].Params["from"] != emmaEmail || changed[0].Params["to"] != "emma.new@example.com" {
+		t.Errorf("loginEmailChanged = %+v", changed)
+	}
+	if unbound := auditOf(t, admin, "identityUnbound"); len(unbound) != 1 || unbound[0].Params["loginName"] != "emma.new@example.com" {
+		t.Errorf("identityUnbound = %+v", unbound)
+	}
+}
