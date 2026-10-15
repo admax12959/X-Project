@@ -10,11 +10,11 @@ admin:                      # initial administrator, used only on the very first
   username: admin
   password: change-me-now
   display_name: Administrator
-  email: ""
+  email: admin@example.com  # the login email: the administrator logs in with it, not with the username
 session:
   ttl: 12h
   cookie_secure: false      # true when served over HTTPS
-# ldap:                     # optional; without ldap.url the login page offers local login only
+# ldap:                     # optional; without ldap.url the login page offers email login only
 #   url: "ldaps://ldap.corp.example:636"
 #   base_dn: "ou=people,dc=corp,dc=example"
 #   bind_dn: "cn=xproject,ou=services,dc=corp,dc=example"   # service account used to search

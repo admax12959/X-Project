@@ -31,7 +31,7 @@ One command builds the image (frontend + backend):
 docker build -t x-project .
 ```
 
-App + MySQL 8 locally (migrations run at startup; the initial admin is `admin` / `change-me-now`):
+App + MySQL 8 locally (migrations run at startup; the initial admin logs in with the email `admin@example.com` and the password `change-me-now`):
 
 ```sh
 docker-compose up --build            # or: docker compose up --build
@@ -58,7 +58,7 @@ Optional YAML file named by `XP_CONFIG` (see `config.example.yaml`); environment
 | `XP_WEB_DIR` | `web_dir` | empty (image: `/srv/web`) | Built SPA; empty serves the API only. |
 | `XP_ADMIN_USERNAME` / `XP_ADMIN_EMAIL` / `XP_ADMIN_PASSWORD` | `admin.username` / `admin.email` / `admin.password` | — | Initial administrator; the email is the login email (log in with it, not the username). Required only on the very first start. |
 | `XP_ADMIN_DISPLAY_NAME` | `admin.display_name` | username | |
-| `XP_LDAP_URL` / `ldap.url` | | empty | The one LDAP directory, `ldap://host:389` or `ldaps://host:636`. Empty = LDAP login is not configured (the login page offers local login only). Setting any other `XP_LDAP_*` value without a URL, or a URL without `base_dn`, stops startup. |
+| `XP_LDAP_URL` / `ldap.url` | | empty | The one LDAP directory, `ldap://host:389` or `ldaps://host:636`. Empty = LDAP login is not configured (the login page offers email login only). Setting any other `XP_LDAP_*` value without a URL, or a URL without `base_dn`, stops startup. |
 | `XP_LDAP_BASE_DN` | `ldap.base_dn` | (required with URL) | Users are searched in this subtree. |
 | `XP_LDAP_BIND_DN` / `XP_LDAP_BIND_PASSWORD` | `ldap.bind_dn` / `ldap.bind_password` | anonymous | Service account for searching. Set both or neither. |
 | `XP_LDAP_USER_FILTER` | `ldap.user_filter` | `(uid=%s)` | Finds one user; exactly one `%s` is replaced by the escaped login name. |
@@ -68,7 +68,7 @@ Optional YAML file named by `XP_CONFIG` (see `config.example.yaml`); environment
 | `XP_SESSION_TTL` | `session.ttl` | `12h` | Session lifetime. |
 | `XP_COOKIE_SECURE` | `session.cookie_secure` | `false` | Set `true` behind HTTPS. |
 
-First start means the `system_state` row has never been marked as bootstrapped. Bootstrap then creates the local admin with a `bootstrap` login identity. Later starts ignore the admin settings: changing the password in config does nothing.
+First start means the `system_state` row has never been marked as bootstrapped. Bootstrap then creates the initial admin with an email identity (login email = `admin.email`, binding source `bootstrap`). Later starts ignore the admin settings: changing the password in config does nothing.
 
 ## Test
 
@@ -87,7 +87,7 @@ How the API tests work (`internal/apitest`):
 - `apitest.New(t)` creates a fresh database for the test and starts the app on it through `app.Start`, the same path production uses (migrate, then bootstrap). It serves the app with `httptest`. Tests are independent and call `t.Parallel()`.
 - `env.Client()` is a browser-like client with its own cookie jar. `env.AdminClient()` is already logged in as the initial admin.
 - `env.Directory` and `env.CodePlatforms` are the fakes wired into the app. Configure them in the test, for example `env.Directory.AddAccount(...)` or `env.CodePlatforms.AddRepo(...)`.
-- Test helpers in `test/api/helpers_test.go` and `application_create_test.go` (same package, reuse them): `registerPlatform(t, admin, "gitlab", glURL)` returns a platform ID; `env.CodePlatforms.AddRepo(glURL, "group/repo", "1182")` makes a repo resolvable; `createUser(t, admin, over)` makes a user through the API; `createApp(t, admin, platformID, ownerIDs, over)` creates an application through the API; `newAppFixture(t)` bundles env, admin, platform, a known repo `payments/payments-core` and an Owner candidate (`f.post(over)` posts a create request). Plain-user clients: `plainUserClient(t, env, "bob")` (creates the user through the API and logs in), or log in as a user created with `createUser` (`LoginLocal(username, "initial-pw-1")`).
+- Test helpers in `test/api/helpers_test.go` and `application_create_test.go` (same package, reuse them): `registerPlatform(t, admin, "gitlab", glURL)` returns a platform ID; `env.CodePlatforms.AddRepo(glURL, "group/repo", "1182")` makes a repo resolvable; `createUser(t, admin, over)` makes a user through the API; `createApp(t, admin, platformID, ownerIDs, over)` creates an application through the API; `newAppFixture(t)` bundles env, admin, platform, a known repo `payments/payments-core` and an Owner candidate (`f.post(over)` posts a create request). Plain-user clients: `plainUserClient(t, env, "bob")` (creates the user through the API and logs in), or log in as a user created with `createUser` (`LoginAs(username, "initial-pw-1")`; the login email of a test user is `<username>@example.com`, `apitest.Email(username)`). `createUser` also completes the user's first login (temporary password → the password in the body), so the user can use the API; `createUserRaw` leaves the temporary password in place for tests of the first login.
 - The test config sets `SecretKey` for you.
 - `env.Restart(mutate)` simulates a process restart on the same database.
 - To reuse an existing MySQL 8 server instead of a container, set `XP_TEST_MYSQL_DSN='root:pw@tcp(127.0.0.1:3306)/'`. The value has no database name and no parameters.
@@ -109,7 +109,7 @@ Keep **all** API tests in `test/api`. Every extra test package starts another co
 
 - Routes are registered in `internal/httpapi/server.go` `routes()`, which also calls `userRoutes()` (`handlers_users.go`) and `meRoutes()` (`handlers_me.go`). Every `/api/*` route requires a session. Only routes registered with `publicRoute` skip that check. Unknown `/api` paths return 401 when logged out and 404 when logged in.
 - JSON is camelCase. IDs are strings. Collections return `{"items": [...]}`.
-- Session: HttpOnly cookie `xp_session` (SameSite=Lax). Only the token's SHA-256 is stored. `POST /api/session` logs in, `GET` returns `{user}`, `DELETE` logs out.
+- Session: HttpOnly cookie `xp_session` (SameSite=Lax). Only the token's SHA-256 is stored. `POST /api/session` logs in (`{method: "email", email, password}` or `{method: "ldap", username, password}`), `GET` returns `{user, mustChangePassword}`, `DELETE` logs out. A session with `mustChangePassword` only gets `GET`/`DELETE /api/session` and `PUT /api/me/password`; everything else is `403 passwordChangeRequired` (see "Email identity and temporary passwords").
 
 ### Errors
 
@@ -281,10 +281,10 @@ Real adapter details worth knowing: GitLab gets `GET {base}/api/v4/projects/{pat
 
 ### LDAP login (ADR-0002, ADR-0004)
 
-- `POST /api/session` with `method: "ldap"`. `GET /api/login-methods` (public) lists `["local"]` or `["local","ldap"]`.
+- `POST /api/session` with `method: "ldap"`. `GET /api/login-methods` (public) lists `["email"]` or `["email","ldap"]`.
 - The directory is asked on every login. Not found, disabled or wrong password all give `401 invalidCredentials`; unreachable gives `503 ldapUnreachable`. Nothing is deleted when the directory refuses: the user and the LDAP identity stay and work again when the account comes back.
 - A known LDAP identity logs in to its user (whoever bound it) and overwrites display name, email and department. An unknown one creates a user (username = login name, binding source `firstLogin`) only if the username is free; otherwise `422 usernameTakenByLocal` on field `username` and nothing is stored. Never merged by email or username.
-- `Service.CheckUsernameFreeInDirectory(ctx, field, username)` is the admin-side check, already called by `CreateLocalUser` and by `UpdateUser` when a local user is renamed (before its transaction; a rename fails with `ldapUnreachable` while the directory is down, other edits do not need the directory): `422 usernameExistsInLdap` (a disabled directory account counts too) or `503 ldapUnreachable` when the directory cannot be queried; it never skips the check. With no directory configured it passes. Any other code path that creates a local user must call it too.
+- `Service.CheckUsernameFreeInDirectory(ctx, field, username)` is the admin-side check, already called by `CreateEmailUser` and by `UpdateUser` when a user without LDAP is renamed (before its transaction; a rename fails with `ldapUnreachable` while the directory is down, other edits do not need the directory): `422 usernameExistsInLdap` (a disabled directory account counts too) or `503 ldapUnreachable` when the directory cannot be queried; it never skips the check. With no directory configured it passes. Any other code path that creates a user without LDAP must call it too.
 - Binding an LDAP identity to an existing user needs no change to login: a known LDAP identity signs in to whichever user holds it and the directory overwrites display name, email and department (see "Personal settings and login identities").
 
 ### Personal settings and login identities (ADR-0002)
@@ -294,14 +294,23 @@ Routes in `internal/httpapi/handlers_me.go`, rules in `internal/domain/me.go` an
 | Route | Meaning |
 |---|---|
 | `GET /api/me` | Own profile with identities. |
-| `PATCH /api/me` | Body fields are all optional: `displayName`, `email`, `department` (only for users without an LDAP identity, otherwise `422 ldapManaged` on a changed value; sending the current value is fine), `phone` (everyone), `language` (`zh` or `en`, else `422 invalid`). `username` and `isAdmin` are ignored. |
-| `POST /api/me/identities` | Bind for yourself, `201`. `{"kind":"ldap","loginName":...,"password":...}`: the directory authenticates the pair first; any failure is `422 invalidCredentials` on `password` (never 401, which would log the SPA out), unreachable is `503 ldapUnreachable`. `{"kind":"local","password":...}`: the login name is the username, the password follows the create rules; there is no existing credential to authenticate with, the logged-in session is the proof. Binding source `self`. |
+| `PATCH /api/me` | Body fields are all optional: `displayName`, `department` (only for users without an LDAP identity, otherwise `422 ldapManaged` on a changed value; sending the current value is fine), `email` (the contact email: the directory's for LDAP users, `422 ldapManaged`; otherwise the login email, `422 emailManaged`; sending the current value is fine), `phone` (everyone), `language` (`zh` or `en`, else `422 invalid`). `username` and `isAdmin` are ignored. |
+| `POST /api/me/identities` | Bind for yourself, `201`. `{"kind":"ldap","loginName":...,"password":...}`: the directory authenticates the pair first; any failure is `422 invalidCredentials` on `password` (never 401, which would log the SPA out), unreachable is `503 ldapUnreachable`. Only the directory can be bound this way: `{"kind":"email",...}` is `422 invalid` on `kind` (with `allowed: ["ldap"]`) until an email identity can be verified by mail (#30). Binding source `self`. |
+| `PUT /api/me/password` | `{currentPassword, newPassword}`, `204`. `422 invalidCredentials` on `currentPassword`, the create rules on `newPassword` (`required`, `tooShort`, `tooLong`), `422 passwordUnchanged` when it equals the current one, `404` for a user without an email identity. Clears the must-change flag (below). |
 | `DELETE /api/me/identities/{kind}` | Unbind. `422 lastIdentity` (field `kind`) on the only identity, `404` when the user has none of that kind. |
-| `POST /api/users/{id}/identities` | Administrator bind, same body but no LDAP password: the directory is only asked if the login name exists (`422 ldapLoginNotFound` on `loginName`, `503 ldapUnreachable`; a disabled directory account counts as existing and can be bound). Binding source `admin`. |
+| `POST /api/users/{id}/identities` | Administrator bind, same body but no LDAP password: the directory is only asked if the login name exists (`422 ldapLoginNotFound` on `loginName`, `503 ldapUnreachable`; a disabled directory account counts as existing and can be bound). `{"kind":"email","loginName":<login email>,"password":<temporary password>}` binds an email identity (`422 loginEmailTaken` on `loginName`, `invalid`/`required` on `loginName`, the password rules on `password`); the user must change the password at the first email login. Binding source `admin`. |
 
 - Both bind routes: `422 identityKindBound` (field `kind`, one identity per kind) and `422 identityTaken` (field `loginName`, held by another user). The check runs under the user row lock; the unique-key race maps to `identityTaken` too.
 - Binding an LDAP identity (self or admin) syncs display name, email and department from the directory at once when the directory returns the entry; every later LDAP login syncs again. The username stays and is locked from then on (ADR-0004).
 - `language` is stored on the user (`users.language`, empty = never chosen) and is part of the `user` object of `POST/GET /api/session`. The SPA applies it after login and when it loads the session; the language switch in the top bar and the settings page save it with `PATCH /api/me`, the one on the login page stays local.
+
+### Email identity and temporary passwords (#29)
+
+- The local identity is the **email identity** (`kind: "email"`): the login name is the login email, stored trimmed and lower case, unique among email identities whatever the case (`loginEmailTaken`). The username is a display name and never logs in. Log in with `{method: "email", email, password}`; an unknown email and a wrong password are the same `401 invalidCredentials`.
+- The contact email (`users.email`) is the directory's for LDAP-bound users and the login email for everyone else; `PATCH /api/users/{id}` with `loginEmail` changes the login email (an administrator-typed address counts as verified) and, for a user without LDAP, the contact email with it. `422 noEmailIdentity` when the user has no email identity. LDAP sync never touches a login email.
+- `POST /api/users` takes `{username, displayName, loginEmail, phone, department, password}`; `password` is a temporary one. The initial administrator's login email comes from `XP_ADMIN_EMAIL` (required on the first start).
+- **Must change password.** An email identity created or bound by an administrator has `must_change_password` set, and a session opened with it carries the flag too (`sessions.must_change_password`); `PUT /api/me/password` clears both. While the flag is on the session, `serveAPI` answers `403 passwordChangeRequired` for every route except the ones in `mustChangeAllowed` (`GET`/`DELETE /api/session`, `PUT /api/me/password`). The flag is per session, so an LDAP login of the same user is never held up. The SPA shows only the change-password page for such a session.
+- **Upgrading a database created before #29.** The migration converts each local identity in place: the login email is the user's email when it is non-empty and unique among the converted users, otherwise the placeholder `<username>@x-project.invalid`. An initial administrator created without `XP_ADMIN_EMAIL` therefore logs in as `admin@x-project.invalid` (same password); change it on the Users page afterwards. Users with a placeholder cannot receive mail until an administrator edits their login email.
 
 ### i18n
 
