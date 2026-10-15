@@ -100,8 +100,9 @@ func configuredMail(t *testing.T, mutate ...func(*app.Config)) (*apitest.Env, *a
 
 func TestQueuedMailIsSentInTheBackgroundWithTheSavedConfiguration(t *testing.T) {
 	t.Parallel()
-	env, admin := configuredMail(t)
+	env, admin := mailEnv(t)
 	bob := createUser(t, admin, map[string]any{"username": "bob"})
+	enableMail(t, admin)
 
 	err := env.EnqueueMail(domain.MailRequest{Template: domain.MailTemplateInvite, Recipient: userIDOf(t, bob), To: bob.Email, LinkPath: "/invite/tok-abc"})
 	if err != nil {
@@ -125,8 +126,9 @@ func TestQueuedMailIsSentInTheBackgroundWithTheSavedConfiguration(t *testing.T) 
 
 func TestMailLinksAreBuiltFromTheConfiguredSiteAddress(t *testing.T) {
 	t.Parallel()
-	env, admin := configuredMail(t)
+	env, admin := mailEnv(t)
 	bob := createUser(t, admin, map[string]any{"username": "bob"})
+	enableMail(t, admin)
 	req := domain.MailRequest{Template: domain.MailTemplateInvite, Recipient: userIDOf(t, bob), To: bob.Email, LinkPath: "/invite/tok-abc"}
 
 	if err := env.EnqueueMail(req); err != nil {
@@ -151,10 +153,11 @@ func TestMailLinksAreBuiltFromTheConfiguredSiteAddress(t *testing.T) {
 
 func TestMailIsWrittenInTheRecipientsLanguageInBothFormatsForEveryTemplate(t *testing.T) {
 	t.Parallel()
-	env, admin := configuredMail(t)
+	env, admin := mailEnv(t)
 	zh := createUser(t, admin, map[string]any{"username": "zhang", "displayName": "张三"})
 	en := createUser(t, admin, map[string]any{"username": "ellen", "displayName": "Ellen"})
 	fresh := createUser(t, admin, map[string]any{"username": "fresh", "displayName": "Fresh"}) // never chose a language
+	enableMail(t, admin)
 	for name, lang := range map[string]string{"zhang": "zh", "ellen": "en"} {
 		c := env.Client()
 		c.LoginAs(name, "initial-pw-1").ExpectStatus(http.StatusOK)
@@ -193,8 +196,9 @@ func TestMailIsWrittenInTheRecipientsLanguageInBothFormatsForEveryTemplate(t *te
 
 func TestHTMLMailEscapesTheRecipientsNameAndTextMailDoesNot(t *testing.T) {
 	t.Parallel()
-	env, admin := configuredMail(t)
+	env, admin := mailEnv(t)
 	evil := createUser(t, admin, map[string]any{"username": "evil", "displayName": `<b>Eve</b> & "Co"`})
+	enableMail(t, admin)
 
 	if err := env.EnqueueMail(domain.MailRequest{Template: domain.MailTemplateVerifyCode, Recipient: userIDOf(t, evil), To: evil.Email, Data: map[string]string{"Code": "111222"}}); err != nil {
 		t.Fatal(err)
@@ -212,8 +216,9 @@ func TestHTMLMailEscapesTheRecipientsNameAndTextMailDoesNot(t *testing.T) {
 
 func TestFailedDeliveriesAreRetriedAndAFinalFailureShowsInTheOutbox(t *testing.T) {
 	t.Parallel()
-	env, admin := configuredMail(t) // the test environment retries after 25ms, three times: four attempts in all
+	env, admin := mailEnv(t) // the test environment retries after 25ms, three times: four attempts in all
 	bob := createUser(t, admin, map[string]any{"username": "bob"})
+	enableMail(t, admin)
 	env.Mailer.FailWith(&domain.MailSendError{Code: "smtpAuthFailed", Detail: "535 5.7.8 Username and Password not accepted"})
 
 	if err := env.EnqueueMail(domain.MailRequest{Template: domain.MailTemplateInvite, Recipient: userIDOf(t, bob), To: bob.Email, LinkPath: "/invite/secret-token-1"}); err != nil {
@@ -243,8 +248,9 @@ func TestFailedDeliveriesAreRetriedAndAFinalFailureShowsInTheOutbox(t *testing.T
 
 func TestADeliveryThatSucceedsOnARetryIsSentOnce(t *testing.T) {
 	t.Parallel()
-	env, admin := configuredMail(t)
+	env, admin := mailEnv(t)
 	bob := createUser(t, admin, map[string]any{"username": "bob"})
+	enableMail(t, admin)
 	env.Mailer.FailNext(2, &domain.MailSendError{Code: "smtpUnreachable", Detail: "dial tcp: i/o timeout"})
 
 	if err := env.EnqueueMail(domain.MailRequest{Template: domain.MailTemplatePasswordReset, Recipient: userIDOf(t, bob), To: bob.Email, LinkPath: "/reset/tok"}); err != nil {
@@ -267,8 +273,9 @@ func TestADeliveryThatSucceedsOnARetryIsSentOnce(t *testing.T) {
 func TestQueuedMailLivesInTheDatabaseAndIsSentByWhicheverProcessRunsTheWorker(t *testing.T) {
 	t.Parallel()
 	// A worker that wakes up once an hour: the mail has to wait in the database.
-	env, admin := configuredMail(t, func(c *app.Config) { c.Mail.PollInterval = time.Hour })
+	env, admin := mailEnv(t, func(c *app.Config) { c.Mail.PollInterval = time.Hour })
 	bob := createUser(t, admin, map[string]any{"username": "bob"})
+	enableMail(t, admin)
 
 	if err := env.EnqueueMail(domain.MailRequest{Template: domain.MailTemplateInvite, Recipient: userIDOf(t, bob), To: bob.Email, LinkPath: "/invite/tok"}); err != nil {
 		t.Fatal(err)
@@ -307,8 +314,9 @@ func TestMailCannotBeQueuedWhileMailIsNotConfigured(t *testing.T) {
 
 func TestMailThatCannotBeRenderedIsRefusedWhenItIsQueued(t *testing.T) {
 	t.Parallel()
-	env, admin := configuredMail(t)
+	env, admin := mailEnv(t)
 	bob := createUser(t, admin, map[string]any{"username": "bob"})
+	enableMail(t, admin)
 
 	// The verification-code template needs a code.
 	if err := env.EnqueueMail(domain.MailRequest{Template: domain.MailTemplateVerifyCode, Recipient: userIDOf(t, bob), To: bob.Email}); err == nil {
