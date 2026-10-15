@@ -131,6 +131,10 @@ func (e *Env) start() {
 	})
 }
 
+// SettleBackground waits until the mail preparation that password recovery requests started in
+// the background has finished, so a test can assert that something was NOT queued.
+func (e *Env) SettleBackground() { e.app.Service.WaitBackground() }
+
 // URL is the address of the test server, for requests a Client cannot make (a custom Host header).
 func (e *Env) URL() string { return e.server.URL }
 

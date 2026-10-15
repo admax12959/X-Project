@@ -168,10 +168,10 @@ func TestRecoveryAnswersTheSameWhetherOrNotTheAccountExistsAndSendsNothingForOth
 		t.Fatalf("the answers differ: %q", bodies)
 	}
 
-	// Mail is prepared in the background, in request order per account but not across them:
-	// once bob's mail is out, check that nothing was queued for the others.
+	// Mail is prepared in the background: once all of it is done and bob's mail is out, check
+	// that nothing was queued for the others.
+	env.SettleBackground()
 	tokenFromMail(t, env, bob.Email, 1)
-	time.Sleep(200 * time.Millisecond)
 	if sent := env.Mailer.Sent(); len(sent) != 1 {
 		t.Fatalf("%d mails were sent, want only the one to bob", len(sent))
 	}
