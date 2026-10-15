@@ -8,4 +8,10 @@ export default {
   'login.method': 'Sign-in method',
   'login.method.ldap': 'LDAP',
   'login.method.email': 'Email and password',
+  'login.secondFactor.title': 'Two-step verification',
+  'login.secondFactor.hint': 'Open your authenticator app and enter the 6-digit code for X-Project.',
+  'login.secondFactor.code': 'Verification code',
+  'login.secondFactor.submit': 'Verify',
+  'login.secondFactor.submitting': 'Verifying…',
+  'login.secondFactor.back': 'Back to sign in',
 };

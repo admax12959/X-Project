@@ -27,7 +27,15 @@ export type Language = 'zh' | 'en';
 /** mustChangePassword: the password was set by an administrator; until it is changed the server refuses everything else (403 passwordChangeRequired). */
 export type SessionInfo = { user: User; mustChangePassword: boolean };
 
+/** The first factor passed but the user has a second factor: no session yet, POST /api/session/second-factor with the code finishes the login. */
+export type SecondFactorRequired = { secondFactorRequired: true; expiresAt: string };
+
 export type LoginMethod = 'email' | 'ldap';
+
+export type SecondFactorStatus = { enabled: boolean; authenticators: { type: 'totp'; enabledAt: string }[] };
+
+/** secret: base32 for typing in; otpauthUri: what the QR code holds; qrSvg: the QR code as an SVG document. */
+export type TotpSetup = { secret: string; otpauthUri: string; qrSvg: string };
 
 /** email: the login email (not the username). ldap: the directory login name. */
 export type LoginInput = { method: 'email'; email: string; password: string } | { method: 'ldap'; username: string; password: string };

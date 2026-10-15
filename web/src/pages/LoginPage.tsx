@@ -1,7 +1,7 @@
 // Login page: email + password, or LDAP when the server has a directory configured.
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router';
-import { api } from '../api/client.ts';
+import { api, ApiError } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
 import type { LoginMethod } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
@@ -16,7 +16,7 @@ function safeNext(v: string | null): string {
 
 export function LoginPage() {
   const { t } = useT();
-  const { state, login } = useSession();
+  const { state, login, submitSecondFactor } = useSession();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const next = safeNext(params.get('next'));
@@ -29,6 +29,9 @@ export function LoginPage() {
   // Keep the raw error; messages are rendered at render time so they follow a language switch.
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  // The password was right and the user has a second factor: ask for the code.
+  const [needsCode, setNeedsCode] = useState(false);
+  const [code, setCode] = useState('');
   const errors: Record<string, string> = error ? errorsByField(error) : {};
 
   useEffect(() => {
@@ -48,7 +51,12 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await login(method === 'email' ? { method, email: identifier, password } : { method, username: identifier, password });
+      const outcome = await login(method === 'email' ? { method, email: identifier, password } : { method, username: identifier, password });
+      if (outcome === 'secondFactor') {
+        setNeedsCode(true);
+        setCode('');
+        return;
+      }
       navigate(next, { replace: true });
     } catch (err) {
       setError(err);
@@ -56,6 +64,68 @@ export function LoginPage() {
       setBusy(false);
     }
   };
+
+  const backToPassword = () => {
+    setNeedsCode(false);
+    setPassword('');
+    setError(null);
+  };
+
+  const submitCode = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await submitSecondFactor(code);
+      navigate(next, { replace: true });
+    } catch (err) {
+      // 401: the short-lived token is gone (expired); the password has to be typed again.
+      if (err instanceof ApiError && err.status === 401) backToPassword();
+      else setCode('');
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (needsCode) {
+    return (
+      <div className="flex min-h-screen flex-col items-center bg-subtle pt-[12vh]">
+        <div className="mb-4 text-lg font-bold">{t('app.brand')}</div>
+        <form onSubmit={submitCode} noValidate className="w-[380px] rounded border border-line bg-white p-6">
+          <div className="mb-2 flex items-center justify-between">
+            <h1 className="text-xl font-bold">{t('login.secondFactor.title')}</h1>
+            <LanguageSwitch />
+          </div>
+          <p className="mb-4 text-[13px] text-text-2">{t('login.secondFactor.hint')}</p>
+          <div className="grid gap-3.5">
+            {errors[''] && (
+              <p role="alert" className="rounded border border-danger/40 bg-danger/5 px-3 py-2 text-[13px] text-danger">
+                {errors['']}
+              </p>
+            )}
+            <Field label={t('login.secondFactor.code')} error={errors.code}>
+              <Input
+                name="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                maxLength={7}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+            </Field>
+            <Button kind="primary" type="submit" disabled={busy}>
+              {busy ? t('login.secondFactor.submitting') : t('login.secondFactor.submit')}
+            </Button>
+            <button type="button" className="justify-self-start text-[13px] text-accent hover:underline" onClick={backToPassword}>
+              {t('login.secondFactor.back')}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-subtle pt-[12vh]">
