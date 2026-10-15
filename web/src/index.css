@@ -1,0 +1,42 @@
+@import 'tailwindcss';
+
+/* Plan A · Console tokens (issue #1): white, hairlines, no shadows, one blue accent,
+   14px body, 40px table rows. Use them as Tailwind utilities: text-text-2, border-line, bg-subtle... */
+@theme {
+  --color-text: #0f141a;
+  --color-text-2: #424650;
+  --color-text-3: #6b7280;
+  --color-subtle: #f6f7f8;
+  --color-line: #c6c6cd;
+  --color-sep: #ebebf0;
+  --color-thead: #fcfcfd;
+  --color-accent: #006ce0;
+  --color-accent-hover: #0057b8;
+  --color-sel: #e8f1fb;
+  --color-ok: #00802f;
+  --color-danger: #b91c1c;
+  --color-danger-hover: #991b1b;
+  --color-info: #0972d3;
+  --color-disabled: #cfd5dd;
+  --color-hover: #fafbfc;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+@layer base {
+  html {
+    font-size: 14px;
+    line-height: 1.43;
+    color: var(--color-text);
+    background: #fff;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+  *:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}

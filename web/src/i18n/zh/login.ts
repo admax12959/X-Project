@@ -1,0 +1,10 @@
+export default {
+  'login.title': '登录',
+  'login.username': '用户名',
+  'login.password': '密码',
+  'login.submit': '登录',
+  'login.submitting': '正在登录…',
+  'login.method': '登录方式',
+  'login.method.ldap': 'LDAP',
+  'login.method.local': '本地账号密码',
+};

@@ -1,0 +1,252 @@
+package domain
+
+import (
+	"context"
+	"encoding/json"
+	"strconv"
+	"time"
+)
+
+// Change history (spec #2, 变更历史): an append-only log of key operations per
+// application. An event is a TYPE plus structured PARAMS; the frontend renders it
+// in the current UI language (web/src/history/render.ts and the history.event.*
+// messages). User input (names, reasons, ...) goes into params verbatim and is
+// never translated. docs/dev.md explains how to add an event type.
+//
+// Rules for params:
+//   - JSON-serialisable values only (strings, numbers, bools, lists, maps).
+//   - A reference to a user is userParam(id), never a name: users are never
+//     deleted (ADR-0004) and the name is resolved when the history is read.
+//   - The event is written in the same transaction as the change it records.
+
+// EventType identifies what happened. The value is the wire format and the
+// suffix of the frontend message key "history.event.<type>".
+type EventType string
+
+const (
+	// EventAppCreated: application created. Params: owners = [userParam], pes = [userParam] (always present,
+	// possibly empty; events written before PEs were recorded have none).
+	EventAppCreated EventType = "appCreated"
+	// EventAppInfoChanged: name, description or main branch edited. Params:
+	// changes = {name|description|mainBranch: {from, to}}, only the fields that changed.
+	EventAppInfoChanged EventType = "appInfoChanged"
+	// EventDeployInfoChanged: deployment info edited. No params (the text can be long;
+	// the application page shows the current text).
+	EventDeployInfoChanged EventType = "deployInfoChanged"
+	// EventMemberAdded / EventMemberRemoved: one person added to or removed from the
+	// Owner or PE list (also when an administrator does it; the actor is the real
+	// operator). Params: role = "owner" | "pe", user = userParam. The user is its own
+	// nested value so that history reads can expand it.
+	EventMemberAdded   EventType = "memberAdded"
+	EventMemberRemoved EventType = "memberRemoved"
+	// EventVersionRegistered: version registered on a line. Params: number,
+	// line = {id, isMain, name, branch} as the line was when it happened.
+	EventVersionRegistered EventType = "versionRegistered"
+	// EventLineForked: a maintenance line was forked. Params: line = the new line
+	// {id, isMain, name, branch}, number = the source version's number, sourceLine =
+	// the line that holds the source version {id, isMain, name, branch}.
+	EventLineForked EventType = "lineForked"
+	// EventLineStatusChanged: a maintenance line moved along the state machine. Params:
+	// line = {id, isMain, name, branch}, from, to = "active" | "frozen" | "retired".
+	EventLineStatusChanged EventType = "lineStatusChanged"
+	// EventLineChanged: an Owner edited a maintenance line. Params: line = {id, isMain,
+	// name, branch} after the edit, changes = {name|note|plannedEnd: {from, to}}, only the
+	// fields that changed (plannedEnd as YYYY-MM-DD; "" means none).
+	EventLineChanged EventType = "lineChanged"
+)
+
+// event is a change-history entry that has not been written yet. Build it with
+// one constructor per type (see appCreatedEvent) so params stay consistent.
+type event struct {
+	typ    EventType
+	params map[string]any
+}
+
+func appCreatedEvent(owners, pes []UserID) event {
+	return event{EventAppCreated, map[string]any{"owners": userParams(owners), "pes": userParams(pes)}}
+}
+
+func userParams(ids []UserID) []any {
+	refs := make([]any, len(ids))
+	for i, id := range ids {
+		refs[i] = userParam(id)
+	}
+	return refs
+}
+
+func appInfoChangedEvent(changes map[string]any) event {
+	return event{EventAppInfoChanged, map[string]any{"changes": changes}}
+}
+
+func memberAddedEvent(role MemberRole, id UserID) event {
+	return event{EventMemberAdded, map[string]any{"role": string(role), "user": userParam(id)}}
+}
+
+func memberRemovedEvent(role MemberRole, id UserID) event {
+	return event{EventMemberRemoved, map[string]any{"role": string(role), "user": userParam(id)}}
+}
+
+func deployInfoChangedEvent() event {
+	return event{EventDeployInfoChanged, map[string]any{}}
+}
+
+func versionRegisteredEvent(number string, line Line) event {
+	return event{EventVersionRegistered, map[string]any{"number": number, "line": lineParam(line)}}
+}
+
+func lineForkedEvent(line Line, source Version) event {
+	return event{EventLineForked, map[string]any{"line": lineParam(line), "number": source.Number, "sourceLine": lineParam(source.Line)}}
+}
+
+func lineStatusChangedEvent(line Line, from, to LineStatus) event {
+	return event{EventLineStatusChanged, map[string]any{"line": lineParam(line), "from": string(from), "to": string(to)}}
+}
+
+func lineChangedEvent(line Line, changes map[string]any) event {
+	return event{EventLineChanged, map[string]any{"line": lineParam(line), "changes": changes}}
+}
+
+// userParam is the params form of a reference to a user.
+func userParam(id UserID) map[string]any {
+	return map[string]any{"userId": strconv.FormatInt(int64(id), 10)}
+}
+
+// StoredChangeEvent is a change-history row as the repository keeps it.
+type StoredChangeEvent struct {
+	ID            int64
+	ApplicationID int64
+	At            time.Time
+	ActorID       UserID
+	Type          EventType
+	Params        []byte // JSON object
+}
+
+// HistoryRepository is the change-history part of Repository. There is deliberately
+// no update and no delete: the history is append-only.
+type HistoryRepository interface {
+	AppendChangeEvent(ctx context.Context, e StoredChangeEvent) error
+	// ListChangeEvents returns an application's events, newest first.
+	ListChangeEvents(ctx context.Context, applicationID int64) ([]StoredChangeEvent, error)
+}
+
+// recordEvent appends ev to the application's history. Call it inside the same
+// InTx as the change it describes, with the tx Repository.
+func (s *Service) recordEvent(ctx context.Context, tx Repository, applicationID int64, actor Actor, ev event) error {
+	params, err := json.Marshal(ev.params)
+	if err != nil {
+		return err
+	}
+	return tx.AppendChangeEvent(ctx, StoredChangeEvent{
+		ApplicationID: applicationID, At: s.nowUTC(), ActorID: actor.User.ID, Type: ev.typ, Params: params,
+	})
+}
+
+// ChangeEvent is a change-history entry ready for display. Params is the stored
+// params with every user reference enriched: {"userId", "username", "displayName"}.
+type ChangeEvent struct {
+	ID     int64
+	At     time.Time
+	Actor  UserRef
+	Type   EventType
+	Params map[string]any
+}
+
+// ListChangeEvents returns the application's change history, newest first. Any
+// logged-in user may read it.
+func (s *Service) ListChangeEvents(ctx context.Context, _ Actor, appKey string) ([]ChangeEvent, error) {
+	app, found, err := s.repo.GetApplicationByKey(ctx, appKey)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, newKind(KindNotFound, CodeNotFound)
+	}
+	stored, err := s.repo.ListChangeEvents(ctx, app.ID)
+	if err != nil {
+		return nil, err
+	}
+	users := userResolver{repo: s.repo, cache: map[UserID]UserRef{}}
+	out := make([]ChangeEvent, 0, len(stored))
+	for _, e := range stored {
+		ev, err := users.changeEvent(ctx, e)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ev)
+	}
+	return out, nil
+}
+
+// changeEvent turns a stored row into a display event: user references in the
+// params and the actor are resolved to their current names.
+func (r userResolver) changeEvent(ctx context.Context, e StoredChangeEvent) (ChangeEvent, error) {
+	var params map[string]any
+	if err := json.Unmarshal(e.Params, &params); err != nil {
+		return ChangeEvent{}, err
+	}
+	resolved, err := r.enrich(ctx, params)
+	if err != nil {
+		return ChangeEvent{}, err
+	}
+	actor, err := r.ref(ctx, e.ActorID)
+	if err != nil {
+		return ChangeEvent{}, err
+	}
+	return ChangeEvent{ID: e.ID, At: e.At, Actor: actor, Type: e.Type, Params: resolved.(map[string]any)}, nil
+}
+
+// userResolver turns user IDs into UserRefs, remembering what it has looked up.
+type userResolver struct {
+	repo  Repository
+	cache map[UserID]UserRef
+}
+
+func (r userResolver) ref(ctx context.Context, id UserID) (UserRef, error) {
+	if u, ok := r.cache[id]; ok {
+		return u, nil
+	}
+	u, found, err := r.repo.GetUser(ctx, id)
+	if err != nil {
+		return UserRef{}, err
+	}
+	ref := UserRef{ID: id}
+	if found {
+		ref = refOf(u)
+	}
+	r.cache[id] = ref
+	return ref, nil
+}
+
+// enrich walks decoded params and expands every {"userId": "..."} object.
+func (r userResolver) enrich(ctx context.Context, v any) (any, error) {
+	switch x := v.(type) {
+	case map[string]any:
+		if raw, ok := x["userId"].(string); ok && len(x) == 1 {
+			id, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil {
+				return x, nil
+			}
+			ref, err := r.ref(ctx, UserID(id))
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"userId": raw, "username": ref.Username, "displayName": ref.DisplayName}, nil
+		}
+		for k, e := range x {
+			enriched, err := r.enrich(ctx, e)
+			if err != nil {
+				return nil, err
+			}
+			x[k] = enriched
+		}
+	case []any:
+		for i, e := range x {
+			enriched, err := r.enrich(ctx, e)
+			if err != nil {
+				return nil, err
+			}
+			x[i] = enriched
+		}
+	}
+	return v, nil
+}

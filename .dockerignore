@@ -1,0 +1,7 @@
+.git
+.claude
+**/node_modules
+web/dist
+bin
+docs
+*.md
