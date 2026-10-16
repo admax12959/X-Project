@@ -112,3 +112,103 @@ func (s *Service) claimRecoveryCode(ctx context.Context, id UserID, code string)
 	}
 	return s.repo.ClaimRecoveryCode(ctx, hit.ID, s.nowUTC())
 }
+
+// ---------------------------------------------------------------- regenerate and disable (#31)
+
+// secondFactorEnforcedFor says whether the user is required to have a second factor, in which
+// case they cannot turn it off.
+//
+// TODO(#23): the enforcement rule (by role, department or user) lands with #23. Until then no
+// one is required, and this is the one place that ticket has to fill in.
+func (s *Service) secondFactorEnforcedFor(ctx context.Context, u User) (bool, error) {
+	return false, nil
+}
+
+// requireEnabledSecondFactor says notFound for a user without an enabled authenticator, before
+// any code is looked at: a wrong code of such a user must not count against their lockout.
+func requireEnabledSecondFactor(ctx context.Context, tx Repository, id UserID) error {
+	if on, err := hasEnabledTOTP(ctx, tx, id); err != nil {
+		return err
+	} else if !on {
+		return newKind(KindNotFound, CodeNotFound)
+	}
+	return nil
+}
+
+// proveSecondFactor is the re-verification of a user who has a second factor: an authenticator
+// code or an unspent recovery code, through the same lockout as the login's second step.
+func (s *Service) proveSecondFactor(ctx context.Context, u User, code string) error {
+	if err := requireEnabledSecondFactor(ctx, s.repo, u.ID); err != nil {
+		return err
+	}
+	return s.verifySecondFactorCode(ctx, u, code)
+}
+
+// RegenerateRecoveryCodes replaces the actor's recovery codes after they proved themselves with
+// a code (authenticator or recovery). The old set is void at once; the new plain codes are
+// returned this once. The contact email is told when mail works.
+//
+// Errors: 404 without a second factor, 422 code required / totpInvalid, 429 totpLocked.
+func (s *Service) RegenerateRecoveryCodes(ctx context.Context, actor Actor, code string) ([]string, error) {
+	u := actor.User
+	if err := s.proveSecondFactor(ctx, u, code); err != nil {
+		return nil, err
+	}
+	var codes []string
+	err := s.repo.InTx(ctx, func(tx Repository) error {
+		if err := requireEnabledSecondFactor(ctx, tx, u.ID); err != nil {
+			return err
+		}
+		var err error
+		if codes, err = s.replaceRecoveryCodes(ctx, tx, u.ID); err != nil {
+			return err
+		}
+		if err := tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{}); err != nil {
+			return err
+		}
+		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), recoveryCodesRegeneratedAudit(u.ID)); err != nil {
+			return err
+		}
+		return s.notifySecurity(ctx, tx, u.ID, u.Email, MailTemplateRecoveryCodesRegenerated, nil)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return codes, nil
+}
+
+// DisableSecondFactor turns the actor's second factor off, removing the authenticator and the
+// recovery codes, after they proved themselves with a code. A user the rules require to have a
+// second factor is refused (403 secondFactorEnforced) before any code is looked at.
+//
+// Errors: 404 without a second factor, 403 secondFactorEnforced, 422 code required /
+// totpInvalid, 429 totpLocked.
+func (s *Service) DisableSecondFactor(ctx context.Context, actor Actor, code string) error {
+	u := actor.User
+	if err := requireEnabledSecondFactor(ctx, s.repo, u.ID); err != nil {
+		return err
+	}
+	if enforced, err := s.secondFactorEnforcedFor(ctx, u); err != nil {
+		return err
+	} else if enforced {
+		return newKind(KindForbidden, CodeSecondFactorEnforced)
+	}
+	if err := s.proveSecondFactor(ctx, u, code); err != nil {
+		return err
+	}
+	return s.repo.InTx(ctx, func(tx Repository) error {
+		if err := requireEnabledSecondFactor(ctx, tx, u.ID); err != nil {
+			return err
+		}
+		if err := tx.DeleteAuthenticatorsAndRecoveryCodes(ctx, u.ID); err != nil {
+			return err
+		}
+		if err := tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{}); err != nil {
+			return err
+		}
+		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), secondFactorDisabledAudit(u.ID)); err != nil {
+			return err
+		}
+		return s.notifySecurity(ctx, tx, u.ID, u.Email, MailTemplateSecondFactorDisabled, nil)
+	})
+}

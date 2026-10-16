@@ -19,6 +19,8 @@ func (s *server) secondFactorRoutes() {
 	s.route("GET /api/me/second-factor", s.secondFactorStatus)
 	s.route("POST /api/me/second-factor/totp", s.startTOTP)
 	s.route("POST /api/me/second-factor/totp/confirm", s.confirmTOTP)
+	s.route("POST /api/me/second-factor/recovery-codes", s.regenerateRecoveryCodes)
+	s.route("POST /api/me/second-factor/disable", s.disableSecondFactor)
 }
 
 func (s *server) setSecondFactorCookie(w http.ResponseWriter, token string, expires time.Time) {
@@ -138,4 +140,33 @@ func (s *server) confirmTOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeSecondFactorStatus(w, r, codes)
+}
+
+func (s *server) regenerateRecoveryCodes(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Code string `json:"code"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	codes, err := s.svc.RegenerateRecoveryCodes(r.Context(), actorOf(r), body.Code)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	s.writeSecondFactorStatus(w, r, codes)
+}
+
+func (s *server) disableSecondFactor(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Code string `json:"code"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.svc.DisableSecondFactor(r.Context(), actorOf(r), body.Code); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	s.writeSecondFactorStatus(w, r, nil)
 }

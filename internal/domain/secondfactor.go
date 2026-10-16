@@ -295,7 +295,10 @@ func (s *Service) ConfirmTOTP(ctx context.Context, actor Actor, code string) ([]
 		if recovery, err = s.replaceRecoveryCodes(ctx, tx, u.ID); err != nil {
 			return err
 		}
-		return s.recordAudit(ctx, tx, AuditActorOf(actor), secondFactorEnabledAudit(u.ID, AuthenticatorTOTP))
+		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), secondFactorEnabledAudit(u.ID, AuthenticatorTOTP)); err != nil {
+			return err
+		}
+		return s.notifySecurity(ctx, tx, u.ID, u.Email, MailTemplateSecondFactorEnabled, nil)
 	})
 	if err != nil {
 		return nil, err
