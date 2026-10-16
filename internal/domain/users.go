@@ -36,7 +36,8 @@ type UserRepository interface {
 	// Returns ErrIdentityTaken on a conflict.
 	RenameEmailLogin(ctx context.Context, id UserID, loginEmail string) error
 	// ChangePassword replaces the password hash of the user's email identity and clears
-	// the must-change flag on the identity and on the user's sessions.
+	// its must-change flag. It leaves the sessions alone: the caller decides which ones
+	// survive (ClearSessionMustChangePassword, DeleteOtherUserSessions, DeleteUserSessions).
 	ChangePassword(ctx context.Context, id UserID, hash string) error
 	// SetTemporaryPassword replaces the password hash of the user's email identity and marks it
 	// as one the user must change at the next login (the command line, #23).

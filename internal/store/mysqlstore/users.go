@@ -84,11 +84,8 @@ func (s *Store) RenameEmailLogin(ctx context.Context, id domain.UserID, loginEma
 }
 
 func (s *Store) ChangePassword(ctx context.Context, id domain.UserID, hash string) error {
-	if _, err := s.q.ExecContext(ctx, "UPDATE login_identities SET password_hash = ?, must_change_password = FALSE WHERE user_id = ? AND kind = ?",
-		hash, id, string(domain.IdentityEmail)); err != nil {
-		return err
-	}
-	_, err := s.q.ExecContext(ctx, "UPDATE sessions SET must_change_password = FALSE WHERE user_id = ?", id)
+	_, err := s.q.ExecContext(ctx, "UPDATE login_identities SET password_hash = ?, must_change_password = FALSE WHERE user_id = ? AND kind = ?",
+		hash, id, string(domain.IdentityEmail))
 	return err
 }
 

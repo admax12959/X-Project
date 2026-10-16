@@ -66,6 +66,8 @@ type AuthTokenRepository interface {
 	DeleteUserSessions(ctx context.Context, userID UserID) error
 	// DeleteOtherUserSessions ends every session of the user except the one with keepTokenHash.
 	DeleteOtherUserSessions(ctx context.Context, userID UserID, keepTokenHash string) error
+	// ClearSessionMustChangePassword frees one session from the must-change restriction.
+	ClearSessionMustChangePassword(ctx context.Context, tokenHash string) error
 
 	// LockRateKeys serialises requests that share a rate-limit key: inside InTx it locks the keys
 	// until the transaction ends, so count-then-record cannot interleave. It must come before the

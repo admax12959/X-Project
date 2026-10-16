@@ -37,7 +37,7 @@ func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := s.svc.ChangePassword(r.Context(), actorOf(r), body.CurrentPassword, body.NewPassword); err != nil {
+	if err := s.svc.ChangePassword(r.Context(), actorOf(r), sessionToken(r), body.CurrentPassword, body.NewPassword); err != nil {
 		writeError(w, r, err)
 		return
 	}
