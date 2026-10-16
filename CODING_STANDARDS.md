@@ -8,10 +8,10 @@ Reviewing a change that sets a password, enrols or removes a second factor, bind
 
 - **Lock order.** One transaction takes the user row, then the email identity row (`LockEmailIdentity`), then the one-time token, then login challenges, then sessions. Resolve a token's user with the non-locking `FindAuthToken` first. A different order deadlocks against the command-line reset.
 - **Verify under the lock.** Reread the hash (or login name) after locking and compare it with the one that was verified. A login whose hash changed gets `invalidCredentials`.
-- **Claim, then act.** Spending a challenge or token is a delete that checks rows affected; the session insert belongs to the same transaction.
-- **Revoke together.** A credential change ends the user's other sessions and pending login challenges in the same transaction. Only the session that made the change is upgraded.
+- **Claim, then act.** A login challenge is spent by a delete that checks rows affected, and the session insert belongs to the same transaction. A one-time token is locked, revalidated under the lock, then marked used.
+- **Revoke together.** A password change or reset ends the user's other sessions and pending login challenges in the same transaction; only the session that made the change is upgraded. Exception: the administrator and command-line second-factor reset keeps open sessions.
 - **Notices are best-effort, but not blind.** A failed security-notice enqueue is logged and swallowed only when it is a statement-level failure; errors that abort the transaction (`IsTxAborting`) propagate.
-- **Every new session path** rechecks whether a second factor became enabled after the read.
+- **Every password-only session path** rechecks, after inserting the session, whether a second factor became enabled; a session that already passed the second factor skips the recheck.
 
 ## Tests for security fixes
 

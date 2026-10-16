@@ -16,5 +16,5 @@ each kind of change goes, so read it before exploring.
 - Run `make check >/tmp/check-N.log 2>&1; echo $?`; read `tail -40` of the
   log only on failure.
 - Commit WIP at every green step; when the brief lists several fixes,
-  commit after each one, never after the last. Do not push.
+  commit after each one, the last included. Do not push.
 - At ~250k context or ~120 turns: commit WIP, report where you stopped.

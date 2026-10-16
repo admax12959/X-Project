@@ -37,7 +37,7 @@ Re-run the review after fixes that touch the flagged code.
 
 ## Stop rule
 
-Each round of an adversarial review finds a narrower race than the last. Only a finding that lets someone authenticate, or keep access after a credential change, blocks the merge. Everything else is Deferred to a follow-up issue so the loop ends.
+Each round of an adversarial review finds a narrower race than the last. Any security finding blocks the merge: authentication or authorization bypass, access kept after a credential change, secret exposure, data loss. Everything else (availability races, deadlocks that fail one request, style) is Deferred to a follow-up issue so the loop ends.
 
 ## Before merging
 
