@@ -73,11 +73,8 @@ func (s *Service) limitEmailCodes(ctx context.Context, userID UserID, clientIP s
 		{fmt.Sprintf("emailcode:user:%d", userID), emailCodeLimitPerUser},
 		{"emailcode:ip:" + clientIP, emailCodeLimitPerIP},
 	}
-	return s.repo.InTx(ctx, func(tx Repository) error {
+	err := s.repo.InTx(ctx, func(tx Repository) error {
 		if err := tx.LockRateKeys(ctx, buckets[0].key, buckets[1].key); err != nil {
-			return err
-		}
-		if err := tx.PruneRateEvents(ctx, now.Add(-emailCodeWindow)); err != nil {
 			return err
 		}
 		for _, b := range buckets {
@@ -96,6 +93,8 @@ func (s *Service) limitEmailCodes(ctx context.Context, userID UserID, clientIP s
 		}
 		return nil
 	})
+	s.pruneRateEvents(ctx, now.Add(-emailCodeWindow))
+	return err
 }
 
 // RequestBindEmailCode mails a verification code to the address a user without an email

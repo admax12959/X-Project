@@ -31,7 +31,7 @@ export default {
   'term.loginEmail': 'Login email',
   'term.contactEmail': 'Contact email',
   'term.username': 'Username',
-  'term.secondFactor': 'Two-Factor Authentication',
+  'term.twoFactorAuthentication': 'Two-factor authentication',
   'term.authenticator': 'Authenticator',
   'term.recoveryCode': 'Recovery code',
   'term.mailService': 'Mail service',

@@ -94,7 +94,8 @@ func (s *Store) LockRateKeys(ctx context.Context, keys ...string) error {
 // PruneRateEvents deletes the old events without a range lock: it reads their ids (a plain
 // read, no locks) and deletes them by primary key in ascending order. A DELETE ... WHERE
 // occurred_at <= ? would lock the whole table and its gaps, and two requests doing that while
-// the table is nearly empty deadlock on their own inserts.
+// the table is nearly empty deadlock on their own inserts. Call it outside any transaction that
+// holds rate locks.
 func (s *Store) PruneRateEvents(ctx context.Context, before time.Time) error {
 	rows, err := s.q.QueryContext(ctx, "SELECT id FROM rate_events WHERE occurred_at <= ? ORDER BY id", before)
 	if err != nil {

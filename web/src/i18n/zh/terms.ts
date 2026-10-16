@@ -30,7 +30,7 @@ export default {
   'term.loginEmail': '登录邮箱',
   'term.contactEmail': '联系邮箱',
   'term.username': '用户名',
-  'term.secondFactor': '二次验证',
+  'term.twoFactorAuthentication': '二次验证',
   'term.authenticator': '验证器',
   'term.recoveryCode': '恢复码',
   'term.mailService': '邮件服务',

@@ -397,8 +397,16 @@ func (s *Service) verifySecondFactorCode(ctx context.Context, u User, code strin
 			return secondFactorLocked(lock.LockedUntil)
 		}
 		good, err := s.claimSecondFactorCode(ctx, tx, u, code)
-		if err != nil || good {
+		if err != nil {
 			return err
+		}
+		if good {
+			// A right code ends the count, here and not later in another transaction that could
+			// overwrite a failure recorded in between.
+			if lock.Failures == 0 && lock.LockedUntil.IsZero() {
+				return nil
+			}
+			return tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{})
 		}
 		return s.recordSecondFactorFailure(ctx, tx, u.ID, lock, now)
 	})

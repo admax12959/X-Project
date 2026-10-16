@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/admax12959/X-Project/internal/apitest"
 )
@@ -145,4 +146,26 @@ func TestSecondFactorLockoutHoldsUnderParallelRequests(t *testing.T) {
 	}
 	c, _ := firstFactor(t, env)
 	c.Post(secondFactorLoginPath, map[string]string{"code": totpAt(t, secret, at)}).ExpectError(http.StatusTooManyRequests, "", "totpLocked")
+}
+
+// The old events are pruned while parallel requests count: that must neither deadlock nor
+// change the counts.
+func TestRecoveryLimitHoldsUnderParallelRequestsWhileOldEventsArePruned(t *testing.T) {
+	t.Parallel()
+	env, admin := mailEnv(t)
+	bob := createUser(t, admin, map[string]any{"username": "bob"})
+	enableMail(t, admin)
+	for i := range 6 {
+		requestRecovery(env.Client(), fmt.Sprintf("old%d@example.com", i)).ExpectStatus(http.StatusAccepted)
+	}
+	env.Clock.Advance(61 * time.Minute)
+
+	got := burst(t, 24, func(int) *apitest.Response { return requestRecovery(env.Client(), bob.Email) })
+
+	if n := got[outcome{http.StatusAccepted, ""}]; n != 3 {
+		t.Errorf("accepted = %d, want exactly 3; outcomes = %v", n, got)
+	}
+	if n := got[outcome{http.StatusTooManyRequests, "rateLimited"}]; n != 21 {
+		t.Errorf("rateLimited = %d, want 21; outcomes = %v", n, got)
+	}
 }
