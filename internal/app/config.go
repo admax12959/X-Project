@@ -64,7 +64,7 @@ type Config struct {
 		LocalDir string `yaml:"local_dir"` // XP_STORAGE_DIR, default data/storage
 	} `yaml:"storage"`
 	Session struct {
-		TTL         time.Duration `yaml:"ttl"`           // XP_SESSION_TTL, default 12h
+		TTL          time.Duration `yaml:"ttl"`           // XP_SESSION_TTL, default 12h
 		CookieSecure bool          `yaml:"cookie_secure"` // XP_COOKIE_SECURE, set true behind HTTPS
 	} `yaml:"session"`
 }

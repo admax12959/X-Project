@@ -73,7 +73,9 @@ type sender struct {
 	tls  *tls.Config
 }
 
-func fail(code string, err error) error { return &domain.MailSendError{Code: code, Detail: detail(err)} }
+func fail(code string, err error) error {
+	return &domain.MailSendError{Code: code, Detail: detail(err)}
+}
 
 // detail is the error text for the administrator: the server's own words, one line, no
 // longer than a page.
