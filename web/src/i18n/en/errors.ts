@@ -58,6 +58,7 @@ export default {
   'error.smtpUnreachable': 'Cannot connect to the mail server. Check the host, the port and the network.',
   'error.smtpTlsFailed': 'The secure connection to the mail server failed. Check the encryption setting and the server certificate (add your own CA if it is a private one).',
   'error.smtpStartTlsMissing': 'The mail server does not offer STARTTLS. Choose another encryption setting, or the right port.',
+  'error.mailExpired': 'The link or code in this mail expired before it could be delivered, so it was not sent.',
   'error.smtpAuthFailed': 'The mail server refused the account or password.',
   'error.smtpSenderRejected': 'The mail server refused the sender address.',
   'error.smtpRecipientRejected': 'The mail server refused the recipient address.',
