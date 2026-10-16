@@ -95,8 +95,8 @@ func isTOTPCode(code string) bool {
 // claimRecoveryCode spends the unspent recovery code of the user that equals code. Every
 // stored hash is compared in constant time, with no early exit, so the time taken does not
 // tell which one matched. Of two requests with the same code only one gets it.
-func (s *Service) claimRecoveryCode(ctx context.Context, id UserID, code string) (bool, error) {
-	stored, err := s.repo.ListUnusedRecoveryCodes(ctx, id)
+func (s *Service) claimRecoveryCode(ctx context.Context, tx Repository, id UserID, code string) (bool, error) {
+	stored, err := tx.ListUnusedRecoveryCodes(ctx, id)
 	if err != nil {
 		return false, err
 	}
@@ -110,7 +110,7 @@ func (s *Service) claimRecoveryCode(ctx context.Context, id UserID, code string)
 	if hit == nil {
 		return false, nil
 	}
-	return s.repo.ClaimRecoveryCode(ctx, hit.ID, s.nowUTC())
+	return tx.ClaimRecoveryCode(ctx, hit.ID, s.nowUTC())
 }
 
 // ---------------------------------------------------------------- regenerate and disable (#31)

@@ -65,7 +65,7 @@ func (s *Store) ClaimAuthenticatorStep(ctx context.Context, id, step int64) (boo
 func (s *Store) GetSecondFactorLockout(ctx context.Context, userID domain.UserID) (domain.SecondFactorLockout, error) {
 	var l domain.SecondFactorLockout
 	var until sql.NullTime
-	err := s.q.QueryRowContext(ctx, "SELECT failures, locked_until FROM second_factor_lockouts WHERE user_id = ? FOR UPDATE", userID).Scan(&l.Failures, &until)
+	err := s.q.QueryRowContext(ctx, "SELECT failures, locked_until FROM second_factor_lockouts WHERE user_id = ?", userID).Scan(&l.Failures, &until)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.SecondFactorLockout{}, nil
 	}
