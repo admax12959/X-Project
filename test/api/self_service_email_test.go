@@ -451,3 +451,48 @@ func TestSelfServiceChangesAreRecordedWithTheUserAsOperator(t *testing.T) {
 		t.Errorf("identityUnbound = %+v", unbound)
 	}
 }
+
+func TestAnAdministratorChangingTheLoginEmailTellsTheOldAddressAndTheContactEmail(t *testing.T) {
+	t.Parallel()
+	env, admin, emma := emmaWithMail(t)
+	me := getMe(t, emma)
+	adminBind(admin, me.ID, map[string]any{"kind": "email", "loginName": emmaEmail, "password": "temp-pw-12345"}).ExpectStatus(http.StatusCreated)
+	noticesTo(t, env, emmaContact, 1)
+	before := len(env.Mailer.SentTo(emmaEmail))
+
+	patchUser(admin, me.ID, map[string]any{"loginEmail": "emma.new@example.com"}).ExpectStatus(http.StatusOK)
+
+	old := noticesTo(t, env, emmaEmail, before+1)
+	if got := old[len(old)-1]; !strings.Contains(got, "emma.new@example.com") || !strings.Contains(got, emmaEmail) {
+		t.Errorf("old address notice = %q, want both addresses named", got)
+	}
+	contact := noticesTo(t, env, emmaContact, 2)
+	if got := contact[1]; !strings.Contains(got, "emma.new@example.com") {
+		t.Errorf("contact notice = %q", got)
+	}
+	for _, m := range append(env.Mailer.SentTo(emmaEmail), env.Mailer.SentTo(emmaContact)...) {
+		if strings.Contains(m.Message.Text+m.Message.HTML, "temp-pw-12345") {
+			t.Errorf("a notice carries the password: %q", m.Message.Text)
+		}
+	}
+}
+
+func TestAnAdministratorChangingTheLoginEmailOfALocalUserSendsOneNotice(t *testing.T) {
+	t.Parallel()
+	env, admin := mailEnv(t)
+	jane := createUser(t, admin, nil)
+	enableMail(t, admin)
+	patchUser(admin, jane.ID, map[string]any{"loginEmail": "jane.new@example.com"}).ExpectStatus(http.StatusOK)
+
+	got := noticesTo(t, env, "jdoe@example.com", 1)
+	if !strings.Contains(got[len(got)-1], "jane.new@example.com") {
+		t.Errorf("notice = %q", got)
+	}
+	env.SettleBackground()
+	if n := len(env.Mailer.SentTo("jdoe@example.com")); n != 1 {
+		t.Errorf("mails to the old address = %d, want exactly one (login and contact email are the same)", n)
+	}
+	if n := len(env.Mailer.SentTo("jane.new@example.com")); n != 0 {
+		t.Errorf("mails to the new address = %d, want none", n)
+	}
+}

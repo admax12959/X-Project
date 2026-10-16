@@ -304,6 +304,7 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 			return newKind(KindNotFound, CodeNotFound)
 		}
 		u := cur.User
+		contactBefore := cur.User.Email
 		ldapBound := cur.hasIdentity(IdentityLDAP)
 		var c Collector
 
@@ -396,6 +397,17 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 			}
 			if err := s.recordAudit(ctx, tx, AuditActorOf(actor), loginEmailChangedAudit(id, oldLoginEmail, newLoginEmail)); err != nil {
 				return err
+			}
+			// Same notice as when the user changes it themselves: the old login address and, when
+			// it is another one, the contact email as it was. No secret goes into it.
+			data := map[string]string{"OldEmail": oldLoginEmail, "NewEmail": newLoginEmail}
+			if err := s.notifySecurity(ctx, tx, id, oldLoginEmail, MailTemplateLoginEmailChanged, data); err != nil {
+				return err
+			}
+			if contactBefore != oldLoginEmail {
+				if err := s.notifySecurity(ctx, tx, id, contactBefore, MailTemplateLoginEmailChanged, data); err != nil {
+					return err
+				}
 			}
 		}
 		if in.IsAdmin != nil && *in.IsAdmin != u.IsAdmin {
