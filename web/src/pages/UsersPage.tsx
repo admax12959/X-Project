@@ -1,4 +1,4 @@
-// Administration > Users: list, create local users, edit, disable / enable, reset two-step verification. Administrators only.
+// Administration > Users: list, create local users, edit, disable / enable, reset two-factor authentication. Administrators only.
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api, ApiError } from '../api/client.ts';

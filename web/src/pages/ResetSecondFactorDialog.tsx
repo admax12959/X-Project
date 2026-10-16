@@ -1,4 +1,4 @@
-// Administrator resets the two-step verification of a user (#23): a confirmation, then POST .../second-factor/reset.
+// Administrator resets the two-factor authentication of a user (#23): a confirmation, then POST .../second-factor/reset.
 import { Dialog } from '@base-ui/react/dialog';
 import { useState } from 'react';
 import { api } from '../api/client.ts';

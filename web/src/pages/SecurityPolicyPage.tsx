@@ -1,4 +1,4 @@
-// Administration > Security policy (#23, ADR-0006): require two-step verification of every user. Administrators are always
+// Administration > Security policy (#23, ADR-0006): require two-factor authentication of every user. Administrators are always
 // required; the page says so instead of offering a switch for them.
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router';
