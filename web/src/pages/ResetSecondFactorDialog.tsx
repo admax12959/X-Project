@@ -25,7 +25,7 @@ export function ResetSecondFactorDialog({ user, onClose, onReset }: { user: Admi
   };
 
   return (
-    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
+    <Dialog.Root open onOpenChange={(open) => !open && !busy && onClose()}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/30" />
         <Dialog.Popup className="fixed left-1/2 top-[10vh] max-h-[80vh] w-[480px] -translate-x-1/2 overflow-y-auto rounded border border-line bg-white p-6">
@@ -37,7 +37,7 @@ export function ResetSecondFactorDialog({ user, onClose, onReset }: { user: Admi
           )}
           <p className="text-[13px] text-text-2">{t('users.secondFactor.reset.body')}</p>
           <div className="mt-5 flex justify-end gap-2">
-            <Button type="button" onClick={onClose}>
+            <Button type="button" disabled={busy} onClick={onClose}>
               {t('users.cancel')}
             </Button>
             <Button kind="danger" type="button" disabled={busy} onClick={() => void reset()} autoFocus>

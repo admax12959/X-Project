@@ -11,6 +11,9 @@ describe('initialOf', () => {
   it('keeps a character outside the BMP whole', () => {
     expect(initialOf('𠮷野')).toBe('𠮷');
   });
+  it('keeps a combining accent with its letter', () => {
+    expect(initialOf('e\u0301clair')).toBe('E\u0301');
+  });
   it('falls back to a question mark for an empty name', () => {
     expect(initialOf('  ')).toBe('?');
   });

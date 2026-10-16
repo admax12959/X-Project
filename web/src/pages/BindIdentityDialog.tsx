@@ -97,7 +97,10 @@ export function BindIdentityDialog({
                 <Segmented
                   label={t(labels.kind)}
                   value={kind}
-                  onChange={setKind}
+                  onChange={(k) => {
+                    setKind(k);
+                    setLoginName(''); // an LDAP username is not a login email, and the other way round
+                  }}
                   options={kinds.map((k) => ({ value: k, label: t(`users.identity.${k}`) }))}
                 />
               </Field>

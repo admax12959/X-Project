@@ -12,7 +12,9 @@ function childrenIndex<T extends DepartmentNode>(depts: T[]): Map<string | null,
   for (const d of depts) {
     // A parent we do not know about makes the department top level rather than losing it.
     const key = d.parentId !== null && ids.has(d.parentId) ? d.parentId : null;
-    index.set(key, [...(index.get(key) ?? []), d]);
+    const bucket = index.get(key);
+    if (bucket) bucket.push(d);
+    else index.set(key, [d]);
   }
   for (const list of index.values()) list.sort(byName);
   return index;

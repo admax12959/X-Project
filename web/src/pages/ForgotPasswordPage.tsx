@@ -21,7 +21,9 @@ export function ForgotPasswordPage() {
   useEffect(() => {
     api.session.methods().then(
       (r) => setAvailable(r.passwordRecovery),
-      () => setAvailable(false),
+      // A failed lookup says nothing about the mail setup: keep the form and let the recovery
+      // endpoint report a configuration problem.
+      () => setAvailable(true),
     );
   }, []);
 
@@ -42,7 +44,7 @@ export function ForgotPasswordPage() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-subtle pt-[12vh]">
       <div className="mb-4 text-lg font-bold">{t('app.brand')}</div>
-      <form onSubmit={submit} noValidate className="w-[380px] rounded border border-line bg-white p-6">
+      <form onSubmit={submit} noValidate className="w-full max-w-[380px] rounded border border-line bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-xl font-bold">{t('recovery.title')}</h1>
           <LanguageSwitch />

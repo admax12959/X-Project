@@ -4,6 +4,7 @@ export default {
   'audit.title': 'Audit log',
   'audit.intro': 'Identity and security related operations: who did what, to whom, and when. Entries cannot be changed or deleted.',
   'audit.loadFailed': 'Could not load the audit log.',
+  'audit.usersFailed': 'Could not load the user list for the filters.',
   'audit.empty.title': 'Nothing has been recorded yet.',
   'audit.noMatch': 'No entries match the filters.',
   'audit.col.time': 'Time',

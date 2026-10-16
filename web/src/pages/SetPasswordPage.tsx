@@ -13,16 +13,18 @@ export function SetPasswordPage() {
   const { token = '' } = useParams();
   const [form, setForm] = useState({ password: '', confirm: '' });
   const [error, setError] = useState<unknown>(null);
-  const [mismatch, setMismatch] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const errors: Record<string, string> = error ? errorsByField(error) : {};
+  // Derived from the current values, so the error clears once the fields match again.
+  const mismatch = submitted && form.password !== form.confirm;
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    setMismatch(form.password !== form.confirm);
+    setSubmitted(true);
     if (form.password !== form.confirm) return;
     setBusy(true);
     try {
@@ -38,7 +40,7 @@ export function SetPasswordPage() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-subtle pt-[12vh]">
       <div className="mb-4 text-lg font-bold">{t('app.brand')}</div>
-      <form onSubmit={submit} noValidate className="w-[380px] rounded border border-line bg-white p-6">
+      <form onSubmit={submit} noValidate className="w-full max-w-[380px] rounded border border-line bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-xl font-bold">{t('setPassword.title')}</h1>
           <LanguageSwitch />
