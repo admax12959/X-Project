@@ -84,35 +84,38 @@ func (st *StorageSettings) fillDefaults() {
 	}
 }
 
+// storageSection declares the storage section for the shared skeleton (config_section.go).
+var storageSection = configSection[StorageSettings, StorageConfigInput]{
+	name: SectionStorage, defaults: storageDefaults, fill: (*StorageSettings).fillDefaults,
+	secrets: []sectionSecret[StorageSettings]{{name: storageSecretAccessKeyID}, {name: storageSecretSecretAccessKey}},
+	typed: func(in StorageConfigInput) map[string]string {
+		return map[string]string{storageSecretAccessKeyID: in.AccessKeyID, storageSecretSecretAccessKey: in.SecretAccessKey}
+	},
+	validate: func(in StorageConfigInput, stored configSecrets) (StorageSettings, map[string]string, error) {
+		v, err := validateStorage(in, stored)
+		return v.settings, map[string]string{storageSecretAccessKeyID: v.accessKeyID, storageSecretSecretAccessKey: v.secretAccessKey}, err
+	},
+}
+
 func (s *Service) readStorage(ctx context.Context, repo Repository) (settings StorageSettings, saved bool, at time.Time, err error) {
-	settings = storageDefaults()
-	saved, at, err = loadSection(ctx, repo, SectionStorage, &settings)
-	settings.fillDefaults()
-	return settings, saved, at, err
+	return readSettings(ctx, repo, storageSection)
 }
 
 // GetStorageConfig returns the storage configuration for the Storage page. Administrators only.
 func (s *Service) GetStorageConfig(ctx context.Context, actor Actor) (StorageConfigView, error) {
-	if err := requirePermission(actor, PermConfigManage); err != nil {
+	st, err := getSection(ctx, s, actor, storageSection)
+	if err != nil {
 		return StorageConfigView{}, err
 	}
-	return s.storageView(ctx, s.repo)
+	return s.storageViewOf(st), nil
 }
 
-func (s *Service) storageView(ctx context.Context, repo Repository) (StorageConfigView, error) {
-	settings, saved, at, err := s.readStorage(ctx, repo)
-	if err != nil {
-		return StorageConfigView{}, err
-	}
-	secrets, err := s.loadSecrets(ctx, repo, SectionStorage)
-	if err != nil {
-		return StorageConfigView{}, err
-	}
+func (s *Service) storageViewOf(st sectionState[StorageSettings]) StorageConfigView {
 	return StorageConfigView{
-		StorageSettings: settings, AccessKeyIDSet: secrets.set[storageSecretAccessKeyID],
-		SecretAccessKeySet: secrets.set[storageSecretSecretAccessKey], SecretsUnreadable: secrets.anyUnreadable(),
-		LocalDir: s.localDir, Configured: saved, UpdatedAt: at,
-	}, nil
+		StorageSettings: st.settings, AccessKeyIDSet: st.secrets.set[storageSecretAccessKeyID],
+		SecretAccessKeySet: st.secrets.set[storageSecretSecretAccessKey], SecretsUnreadable: st.secrets.anyUnreadable(),
+		LocalDir: s.localDir, Configured: st.saved, UpdatedAt: st.at,
+	}
 }
 
 // validatedStorage is a storage request that passed validation: the settings to save and the
@@ -201,71 +204,14 @@ func validateStorage(in StorageConfigInput, secrets configSecrets) (validatedSto
 	return validatedStorage{settings: st, accessKeyID: keyID, secretAccessKey: secret}, nil
 }
 
-// changedStorageFields names the fields that differ, in form order. Values are never listed.
-func changedStorageFields(a, b StorageSettings) []string {
-	var out []string
-	add := func(name string, differs bool) {
-		if differs {
-			out = append(out, name)
-		}
-	}
-	add("driver", a.Driver != b.Driver)
-	add("endpoint", a.Endpoint != b.Endpoint)
-	add("region", a.Region != b.Region)
-	add("bucket", a.Bucket != b.Bucket)
-	add("addressing", a.Addressing != b.Addressing)
-	return out
-}
-
 // UpdateStorageConfig saves the storage configuration and records which fields changed (names
 // only) in the audit log. Administrators only. The new configuration is in effect at once.
 func (s *Service) UpdateStorageConfig(ctx context.Context, actor Actor, in StorageConfigInput) (StorageConfigView, error) {
-	if err := requirePermission(actor, PermConfigManage); err != nil {
+	st, err := updateSection(ctx, s, actor, storageSection, in)
+	if err != nil {
 		return StorageConfigView{}, err
 	}
-	var view StorageConfigView
-	err := s.repo.InTx(ctx, func(tx Repository) error {
-		old, _, _, err := s.readStorage(ctx, tx)
-		if err != nil {
-			return err
-		}
-		secrets, err := s.loadSecrets(ctx, tx, SectionStorage)
-		if err != nil {
-			return err
-		}
-		v, err := validateStorage(in, secrets)
-		if err != nil {
-			return err
-		}
-		changes := changedStorageFields(old, v.settings)
-		data, err := jsonBytes(v.settings)
-		if err != nil {
-			return err
-		}
-		if err := tx.PutConfigSection(ctx, SectionStorage, data, s.nowUTC()); err != nil {
-			return err
-		}
-		// A typed secret that equals the stored one is not a change.
-		for _, f := range []struct{ field, typed string }{
-			{storageSecretAccessKeyID, in.AccessKeyID}, {storageSecretSecretAccessKey, in.SecretAccessKey},
-		} {
-			if f.typed == "" || f.typed == secrets.plain[f.field] {
-				continue
-			}
-			if err := s.saveSecret(ctx, tx, SectionStorage, f.field, f.typed); err != nil {
-				return err
-			}
-			changes = append(changes, f.field)
-		}
-		if len(changes) > 0 {
-			if err := s.recordAudit(ctx, tx, AuditActorOf(actor), configChangedAudit(SectionStorage, changes)); err != nil {
-				return err
-			}
-		}
-		view, err = s.storageView(ctx, tx)
-		return err
-	})
-	return view, err
+	return s.storageViewOf(st), nil
 }
 
 // TestStorageConfig checks that the storage described by the (unsaved) form works: it writes,

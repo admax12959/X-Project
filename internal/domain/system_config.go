@@ -17,11 +17,12 @@ import (
 // hands a stored secret to the HTTP layer; the domain decrypts them only to build the
 // adapter that needs them (for LDAP: the directory).
 //
-// To add a section (SMTP, storage, ...): define its settings struct (JSON tags = stored
-// fields), a validation function, and Get / Update / Test service methods built on
-// loadSection / saveSection / loadSecrets / saveSecret below, record changes with
-// configChangedAudit, and add the permission check requirePermission(actor, PermConfigManage).
-// ldap_config.go is the model.
+// To add a section with secrets (SMTP, storage, ...): define its settings struct (JSON tags =
+// stored fields), a validation function and a configSection declaration, and build Get / Update
+// on getSection / updateSection (config_section.go), which do the read, validation, audit diff,
+// secret handling and audit; add the Test method. ldap_config.go is the model. A section
+// without secrets (security_policy.go) uses loadSection / PutConfigSection and
+// configChangedAudit directly. Every method checks requirePermission(actor, PermConfigManage).
 
 // Section names are stored in system_config.section and appear as the audit target id.
 const (
