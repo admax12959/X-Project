@@ -239,11 +239,13 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 		if !now.Before(t.ExpiresAt) {
 			return Validation(Invalid("token", CodeTokenExpired, nil))
 		}
-		u, found, err := tx.GetUser(ctx, t.UserID)
+		// The identity is locked before anything else is read, so that a change of the password
+		// or a reset that is running is finished (and visible) when the token is judged.
+		ident, hasEmail, err := tx.LockEmailIdentity(ctx, t.UserID)
 		if err != nil {
 			return err
 		}
-		ident, hasEmail, err := tx.FindIdentityByUser(ctx, t.UserID, IdentityEmail)
+		u, found, err := tx.GetUser(ctx, t.UserID)
 		if err != nil {
 			return err
 		}

@@ -27,6 +27,12 @@ type UserRepository interface {
 	// LockUserWithIdentities reads one user and its identities, locking the user
 	// row for the rest of the transaction (call inside InTx).
 	LockUserWithIdentities(ctx context.Context, id UserID) (UserWithIdentities, bool, error)
+	// LockEmailIdentity locks the user's row and then the row of their email identity for the
+	// rest of the transaction (call inside InTx) and returns the identity as it is now. Every
+	// transaction that changes or relies on the email password takes it first, in this order:
+	// user, identity, then login challenges, then sessions. Not found: the user has no email
+	// identity (or no such user).
+	LockEmailIdentity(ctx context.Context, id UserID) (LoginIdentity, bool, error)
 	// GetUserWithIdentities reads one user and its identities without locking.
 	GetUserWithIdentities(ctx context.Context, id UserID) (UserWithIdentities, bool, error)
 	// UpdateUser overwrites the editable columns (username, display name, email,
