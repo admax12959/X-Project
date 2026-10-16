@@ -437,3 +437,30 @@ func TestAnInvitedUserCannotLogInWithTheDummyPassword(t *testing.T) {
 		t.Fatalf("a session was opened for an invited user: %d", got)
 	}
 }
+
+// Sending the invitation again and using the link run at the same moment: both lock the user
+// first and then the tokens, so one of them wins and the other is refused, and neither ends in a
+// deadlock (a 5xx).
+func TestResendingAnInvitationWhileItsLinkIsUsedNeverFails(t *testing.T) {
+	t.Parallel()
+	env, admin := mailEnv(t)
+	enableMail(t, admin)
+	for i := 0; i < 6; i++ {
+		u := createUserRaw(t, admin, map[string]any{"username": fmt.Sprintf("carol%d", i)})
+		token := tokenFromMail(t, env, u.Email, 1)
+
+		var resend, redeem int
+		done := make(chan struct{}, 2)
+		go func() { resend = admin.Post("/api/users/"+u.ID+"/invitation", nil).Status; done <- struct{}{} }()
+		go func() { redeem = setPassword(env.Client(), token, "carols-own-pw-1").Status; done <- struct{}{} }()
+		<-done
+		<-done
+
+		switch {
+		case redeem == http.StatusNoContent && resend == http.StatusUnprocessableEntity: // the link won
+		case redeem == http.StatusUnprocessableEntity && resend == http.StatusAccepted: // the resend won
+		default:
+			t.Fatalf("round %d: resend = %d, redeem = %d, want exactly one of them to win and no server error", i, resend, redeem)
+		}
+	}
+}
