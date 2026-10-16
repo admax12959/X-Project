@@ -51,6 +51,11 @@ func (s *Store) DeleteUserSessions(ctx context.Context, userID domain.UserID) er
 	return err
 }
 
+func (s *Store) DeleteOtherUserSessions(ctx context.Context, userID domain.UserID, keepTokenHash string) error {
+	_, err := s.q.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?", userID, keepTokenHash)
+	return err
+}
+
 func (s *Store) CountRateEvents(ctx context.Context, bucket string, since time.Time) (int, error) {
 	var n int
 	err := s.q.QueryRowContext(ctx, "SELECT COUNT(*) FROM rate_events WHERE bucket_key = ? AND occurred_at > ?", bucket, since).Scan(&n)

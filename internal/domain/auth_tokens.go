@@ -61,6 +61,8 @@ type AuthTokenRepository interface {
 	UseUserAuthTokens(ctx context.Context, userID UserID, purposes []TokenPurpose, at time.Time) error
 	// DeleteUserSessions ends every session of the user.
 	DeleteUserSessions(ctx context.Context, userID UserID) error
+	// DeleteOtherUserSessions ends every session of the user except the one with keepTokenHash.
+	DeleteOtherUserSessions(ctx context.Context, userID UserID, keepTokenHash string) error
 
 	// LockRateKeys serialises requests that share a rate-limit key: inside InTx it locks the keys
 	// until the transaction ends, so count-then-record cannot interleave. It must come before the

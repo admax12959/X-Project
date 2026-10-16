@@ -256,8 +256,10 @@ func (s *Service) openAuthenticatorSecret(a Authenticator) ([]byte, error) {
 
 // ConfirmTOTP enables the pending authenticator if code is right for it, and makes the
 // user's recovery codes, returned this once. The code's time step is used up, so the same
-// code cannot log in right after.
-func (s *Service) ConfirmTOTP(ctx context.Context, actor Actor, code string) ([]string, error) {
+// code cannot log in right after. Every other session of the user ends (sessionToken is the
+// one that enrols): a session opened with the password alone, which was held back to the setup
+// flow, must not become a full session because someone else enrolled.
+func (s *Service) ConfirmTOTP(ctx context.Context, actor Actor, sessionToken, code string) ([]string, error) {
 	var c Collector
 	if !c.Required("code", code) {
 		return nil, c.Err()
@@ -295,6 +297,9 @@ func (s *Service) ConfirmTOTP(ctx context.Context, actor Actor, code string) ([]
 			return newKind(KindNotFound, CodeNotFound)
 		}
 		if recovery, err = s.replaceRecoveryCodes(ctx, tx, u.ID); err != nil {
+			return err
+		}
+		if err := tx.DeleteOtherUserSessions(ctx, u.ID, hashToken(sessionToken)); err != nil {
 			return err
 		}
 		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), secondFactorEnabledAudit(u.ID, AuthenticatorTOTP)); err != nil {
