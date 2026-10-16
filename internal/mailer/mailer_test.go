@@ -348,7 +348,9 @@ func TestUnencryptedDeliveryWorksWhenChosenExplicitly(t *testing.T) {
 	t.Parallel()
 	s := startServer(t, newPKI(t), serverOpts{user: "mailer", pass: "pw-1"})
 
-	err := send(t, cfgFor(s, func(c *domain.SMTPConfig) { c.Security, c.Username, c.Password = domain.MailSecurityNone, "mailer", "pw-1" }))
+	err := send(t, cfgFor(s, func(c *domain.SMTPConfig) {
+		c.Security, c.Username, c.Password = domain.MailSecurityNone, "mailer", "pw-1"
+	}))
 
 	if err != nil {
 		t.Fatal(err)

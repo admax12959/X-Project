@@ -292,6 +292,17 @@ export const api = {
     uploadAvatar: (file: Blob) => request<AdminUser>('PUT', '/api/me/avatar', { file }),
     /** Removes the uploaded picture (the directory photo, if any, shows again). */
     removeAvatar: () => request<AdminUser>('DELETE', '/api/me/avatar'),
+    /**
+     * Mails a verification code to the address (202). Bind: a user without an email identity (422 kind identityKindBound otherwise);
+     * change: a user with one (422 email noEmailIdentity, loginEmailUnchanged). 422 email loginEmailTaken / invalid;
+     * 429 rateLimited; 503 mailNotConfigured.
+     */
+    requestEmailCode: (mode: 'bind' | 'change', email: string) =>
+      request<void>('POST', mode === 'bind' ? '/api/me/email-identity/code' : '/api/me/login-email/code', { body: { email } }),
+    /** Adds the email identity. 201. 422 code tokenInvalid / tokenExpired / tokenUsed, password rules, email/loginName loginEmailTaken; 429 rateLimited after many wrong codes. */
+    bindEmailIdentity: (input: { email: string; code: string; password: string }) => request<AdminUser>('POST', '/api/me/email-identity', { body: input }),
+    /** Changes the login email. 422 as above. */
+    changeLoginEmail: (input: { email: string; code: string }) => request<AdminUser>('PUT', '/api/me/login-email', { body: input }),
     /** 422 lastIdentity on the only identity. */
     unbindIdentity: (kind: IdentityKind) => request<AdminUser>('DELETE', `/api/me/identities/${kind}`),
   },
