@@ -14,7 +14,7 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ### Code review
 
-Every change gets a Codex review before its PR opens: `/codex:review`, plus `/codex:adversarial-review` for identity, auth, permissions, migrations, and public interfaces. These are user-typed commands: when implementation is done, hand the user the exact command and wait for the findings, unless the user tells you to run the review yourself (how: `docs/agents/code-review.md`). Flags, finding disposition, stop rule, and the done criterion are there too. Before merging a PR, read the review comments cubic and Codex post on it.
+Every change gets a Codex review before its PR opens: `/codex:review`, plus `/codex:adversarial-review` for identity, auth, permissions, migrations, and public interfaces. These are user-typed commands: when implementation is done, hand the user the exact command and wait for the findings, unless the user tells you to run the review yourself (how: `docs/agents/code-review.md`). Flags, finding disposition, stop rule, and the done criterion are there too. Before merging a PR, read the review comments Codex posts on it.
 
 Coding rules that need judgement (for the reviewer): `CODING_STANDARDS.md`. Mechanical rules are enforced by `make check` (`scripts/check-repo.sh`); enable the hook once per clone with `git config core.hooksPath .githooks`.
 

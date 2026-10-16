@@ -41,7 +41,7 @@ Each round of an adversarial review finds a narrower race than the last. Any sec
 
 ## Before merging
 
-Marking a PR ready triggers cubic and the Codex GitHub review. Read them (`gh api repos/<owner>/<repo>/pulls/<n>/comments`), fix what is security-relevant, defer the rest to the follow-up issue, and list the disposition in the PR description.
+Marking a PR ready triggers the Codex GitHub review. Read it (`gh api repos/<owner>/<repo>/pulls/<n>/comments`), fix what is security-relevant, defer the rest to the follow-up issue, and list the disposition in the PR description.
 
 ## Done
 
