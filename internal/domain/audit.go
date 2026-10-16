@@ -69,6 +69,12 @@ const (
 	// AuditSecondFactorEnabled: a user turned on a second-factor method for their own login
 	// (#22). Target: the user. Params: type = "totp". Never the secret.
 	AuditSecondFactorEnabled AuditAction = "secondFactorEnabled"
+	// AuditSecondFactorDisabled: a user turned their second factor off (#31). Target: the user.
+	// Params: none.
+	AuditSecondFactorDisabled AuditAction = "secondFactorDisabled"
+	// AuditRecoveryCodesRegenerated: a user made a new set of recovery codes; the old set is
+	// void (#31). Target: the user. Params: none. Never the codes.
+	AuditRecoveryCodesRegenerated AuditAction = "recoveryCodesRegenerated"
 )
 
 // AuditTargetType says what kind of object an entry is about.
@@ -137,6 +143,14 @@ func adminFlagChangedAudit(id UserID, from, to bool) auditEvent {
 
 func secondFactorEnabledAudit(id UserID, t AuthenticatorType) auditEvent {
 	return auditEvent{AuditSecondFactorEnabled, AuditTargetUser, userTargetID(id), map[string]any{"type": string(t)}}
+}
+
+func secondFactorDisabledAudit(id UserID) auditEvent {
+	return auditEvent{AuditSecondFactorDisabled, AuditTargetUser, userTargetID(id), map[string]any{}}
+}
+
+func recoveryCodesRegeneratedAudit(id UserID) auditEvent {
+	return auditEvent{AuditRecoveryCodesRegenerated, AuditTargetUser, userTargetID(id), map[string]any{}}
 }
 
 func departmentTargetID(id DepartmentID) string { return strconv.FormatInt(int64(id), 10) }

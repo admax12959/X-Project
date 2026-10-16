@@ -105,4 +105,6 @@ const (
 	CodeTotpLocked             = "totpLocked"             // HTTP 429; too many wrong codes; params {lockedUntil}
 	CodeTotpAlreadyEnabled     = "totpAlreadyEnabled"     // request-level; the user has an authenticator already
 	CodeSecondFactorUnreadable = "secondFactorUnreadable" // HTTP 503; the stored secret cannot be decrypted with the current master key
+	// recovery codes, turning the second factor off (#31)
+	CodeSecondFactorEnforced = "secondFactorEnforced" // HTTP 403; the user is required to have a second factor and cannot turn it off
 )

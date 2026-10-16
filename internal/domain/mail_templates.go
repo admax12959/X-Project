@@ -45,11 +45,18 @@ const (
 	// login identity was added or removed. Data: "Kind" ("ldap" or "email"), "LoginName".
 	MailTemplateIdentityBound   MailTemplate = "identityBound"
 	MailTemplateIdentityUnbound MailTemplate = "identityUnbound"
+	// MailTemplateSecondFactorEnabled / ...Disabled / MailTemplateRecoveryCodesRegenerated tell
+	// the contact email that the user's second factor was turned on or off, or that their
+	// recovery codes were replaced (#31). Data: none. Never carry a code.
+	MailTemplateSecondFactorEnabled      MailTemplate = "secondFactorEnabled"
+	MailTemplateSecondFactorDisabled     MailTemplate = "secondFactorDisabled"
+	MailTemplateRecoveryCodesRegenerated MailTemplate = "recoveryCodesRegenerated"
 )
 
 // mailTemplates is every bundled template.
 var mailTemplates = []MailTemplate{MailTemplateTest, MailTemplateInvite, MailTemplatePasswordReset, MailTemplateVerifyCode,
-	MailTemplateLoginEmailChanged, MailTemplateIdentityBound, MailTemplateIdentityUnbound}
+	MailTemplateLoginEmailChanged, MailTemplateIdentityBound, MailTemplateIdentityUnbound,
+	MailTemplateSecondFactorEnabled, MailTemplateSecondFactorDisabled, MailTemplateRecoveryCodesRegenerated}
 
 // MailTemplates lists the bundled templates.
 func MailTemplates() []MailTemplate { return append([]MailTemplate(nil), mailTemplates...) }

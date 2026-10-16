@@ -19,6 +19,8 @@ func (s *server) secondFactorRoutes() {
 	s.route("GET /api/me/second-factor", s.secondFactorStatus)
 	s.route("POST /api/me/second-factor/totp", s.startTOTP)
 	s.route("POST /api/me/second-factor/totp/confirm", s.confirmTOTP)
+	s.route("POST /api/me/second-factor/recovery-codes", s.regenerateRecoveryCodes)
+	s.route("POST /api/me/second-factor/disable", s.disableSecondFactor)
 }
 
 func (s *server) setSecondFactorCookie(w http.ResponseWriter, token string, expires time.Time) {
@@ -79,19 +81,35 @@ type authenticatorJSON struct {
 type secondFactorStatusJSON struct {
 	Enabled        bool                `json:"enabled"`
 	Authenticators []authenticatorJSON `json:"authenticators"`
+	// RecoveryCodesRemaining counts the unspent recovery codes. The codes themselves are only
+	// in the answers that make them (enabling, regenerating).
+	RecoveryCodesRemaining int `json:"recoveryCodesRemaining"`
 }
 
 func (s *server) secondFactorStatus(w http.ResponseWriter, r *http.Request) {
+	s.writeSecondFactorStatus(w, r, nil)
+}
+
+// writeSecondFactorStatus answers with the status, plus the fresh recovery codes when codes
+// is not nil.
+func (s *server) writeSecondFactorStatus(w http.ResponseWriter, r *http.Request, codes []string) {
 	st, err := s.svc.SecondFactorStatus(r.Context(), actorOf(r))
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	out := secondFactorStatusJSON{Enabled: st.Enabled, Authenticators: []authenticatorJSON{}}
+	out := secondFactorStatusJSON{Enabled: st.Enabled, Authenticators: []authenticatorJSON{}, RecoveryCodesRemaining: st.RecoveryCodesRemaining}
 	for _, a := range st.Authenticators {
 		out.Authenticators = append(out.Authenticators, authenticatorJSON{Type: string(a.Type), EnabledAt: formatTime(a.EnabledAt)})
 	}
-	writeJSON(w, http.StatusOK, out)
+	if codes == nil {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		secondFactorStatusJSON
+		RecoveryCodes []string `json:"recoveryCodes"`
+	}{out, codes})
 }
 
 func (s *server) startTOTP(w http.ResponseWriter, r *http.Request) {
@@ -116,9 +134,39 @@ func (s *server) confirmTOTP(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := s.svc.ConfirmTOTP(r.Context(), actorOf(r), body.Code); err != nil {
+	codes, err := s.svc.ConfirmTOTP(r.Context(), actorOf(r), body.Code)
+	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	s.secondFactorStatus(w, r)
+	s.writeSecondFactorStatus(w, r, codes)
+}
+
+func (s *server) regenerateRecoveryCodes(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Code string `json:"code"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	codes, err := s.svc.RegenerateRecoveryCodes(r.Context(), actorOf(r), body.Code)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	s.writeSecondFactorStatus(w, r, codes)
+}
+
+func (s *server) disableSecondFactor(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Code string `json:"code"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.svc.DisableSecondFactor(r.Context(), actorOf(r), body.Code); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	s.writeSecondFactorStatus(w, r, nil)
 }

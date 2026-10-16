@@ -1,0 +1,9 @@
+Subject: X-Project 账号的恢复码已重新生成
+
+你好{{if .Name}}，{{.Name}}{{end}}：
+
+你的 X-Project 账号重新生成了恢复码，旧的恢复码已全部作废。
+
+如果不是你本人操作，请立即联系管理员。
+
+X-Project

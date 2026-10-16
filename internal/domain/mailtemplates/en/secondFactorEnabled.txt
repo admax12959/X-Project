@@ -1,0 +1,9 @@
+Subject: Two-step verification was turned on for your X-Project account
+
+Hello{{if .Name}} {{.Name}}{{end}},
+
+Two-step verification was turned on for your X-Project account. From now on, logging in asks for a code from your authenticator app. Recovery codes were made for you; keep them somewhere safe.
+
+If this was not you, contact an administrator right away.
+
+X-Project
