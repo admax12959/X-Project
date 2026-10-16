@@ -1,7 +1,11 @@
-.PHONY: test test-ldap-contract test-storage-contract web-check web-build image check clean-test-containers
+.PHONY: repo-check test test-ldap-contract test-storage-contract web-check web-build image check clean-test-containers
 
 # Everything a ticket must pass before it is done.
-check: test web-check web-build
+check: repo-check test web-check web-build
+
+# Conflict markers, migration file names (scripts/check-repo.sh).
+repo-check:
+	@scripts/check-repo.sh
 
 # Go tests, including the HTTP API tests on a throwaway MySQL 8 container.
 test:

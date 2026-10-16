@@ -1,0 +1,7 @@
+#!/bin/sh
+# Enable once per clone: git config core.hooksPath .githooks
+# Checks the index, not the working tree: staged lines first, then the repo checks.
+if git diff --cached -U0 -- . ':!*.md' | grep -qE '^\+(<<<<<<< |>>>>>>> |=======$)'; then
+  echo "conflict marker in staged changes"; exit 1
+fi
+exec scripts/check-repo.sh
