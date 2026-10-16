@@ -153,6 +153,45 @@ func (s *Service) changeCredential(ctx context.Context, tx Repository, ch creden
 	return nil
 }
 
+// loginEmailChange is a replacement of the login email of a user's email identity, by the user
+// (ChangeOwnLoginEmail) or by an administrator (UpdateUser).
+type loginEmailChange struct {
+	User UserID
+	Old  string // the login email being replaced
+	New  string
+	// ContactBefore is the user's contact email as it was before the change, which the change
+	// itself may be moving to New.
+	ContactBefore string
+	By            AuditActor
+	// Field is the request field a login email that is taken is reported on.
+	Field string
+}
+
+// changeLoginEmail renames the login email and ends the password links mailed to the old one.
+// It ends no session. The old login address is told and, when the contact email was another
+// address, the contact email as well. No secret goes into the notice.
+func (s *Service) changeLoginEmail(ctx context.Context, tx Repository, c loginEmailChange) error {
+	data := map[string]string{"OldEmail": c.Old, "NewEmail": c.New}
+	notices := []securityNotice{{To: c.Old, Template: MailTemplateLoginEmailChanged, Data: data}}
+	if c.ContactBefore != c.Old {
+		notices = append(notices, securityNotice{To: c.ContactBefore, Template: MailTemplateLoginEmailChanged, Data: data})
+	}
+	return s.changeCredential(ctx, tx, credentialChange{
+		User:        c.User,
+		Revoke:      RevokeNone,
+		SpendTokens: passwordTokenPurposes, // a link mailed to the old address must not work any more
+		Apply: func(lockedCredential) error {
+			err := tx.RenameEmailLogin(ctx, c.User, c.New)
+			if errors.Is(err, ErrIdentityTaken) {
+				return loginEmailTaken(c.Field)
+			}
+			return err
+		},
+		Audit:   &credentialAudit{By: c.By, Event: loginEmailChangedAudit(c.User, c.Old, c.New)},
+		Notices: notices,
+	})
+}
+
 // notifySecurity queues a security notice about a login identity change to an address of the
 // user, when mail works and the address is deliverable. A notice that cannot be sent never
 // stops the change it is about, unless the transaction itself is lost (IsTxAborting).

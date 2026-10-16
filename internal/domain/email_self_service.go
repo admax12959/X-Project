@@ -315,36 +315,21 @@ func (s *Service) ChangeOwnLoginEmail(ctx context.Context, actor Actor, email, c
 		}
 		old, _ := cur.identity(IdentityEmail)
 		contactBefore := cur.User.Email
-		if err := tx.RenameEmailLogin(ctx, cur.User.ID, email); errors.Is(err, ErrIdentityTaken) {
-			return loginEmailTaken("email")
-		} else if err != nil {
-			return err
-		}
 		if !cur.hasIdentity(IdentityLDAP) {
 			cur.User.Email = email
 			if err := tx.UpdateUser(ctx, cur.User, s.nowUTC()); err != nil {
 				return mapUsernameTaken(err)
 			}
 		}
-		// A link mailed to the old address must not work any more.
-		if err := tx.UseUserAuthTokens(ctx, cur.User.ID, passwordTokenPurposes, s.nowUTC()); err != nil {
+		if err := s.changeLoginEmail(ctx, tx, loginEmailChange{
+			User: cur.User.ID, Old: old.LoginName, New: email, ContactBefore: contactBefore,
+			By: AuditActorOf(actor), Field: "email",
+		}); err != nil {
 			return err
 		}
 		for i := range cur.Identities {
 			if cur.Identities[i].Kind == IdentityEmail {
 				cur.Identities[i].LoginName = email
-			}
-		}
-		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), loginEmailChangedAudit(cur.User.ID, old.LoginName, email)); err != nil {
-			return err
-		}
-		data := map[string]string{"OldEmail": old.LoginName, "NewEmail": email}
-		if err := s.notifySecurity(ctx, tx, cur.User.ID, old.LoginName, MailTemplateLoginEmailChanged, data); err != nil {
-			return err
-		}
-		if contactBefore != old.LoginName {
-			if err := s.notifySecurity(ctx, tx, cur.User.ID, contactBefore, MailTemplateLoginEmailChanged, data); err != nil {
-				return err
 			}
 		}
 		result = cur
