@@ -28,39 +28,36 @@ func (s *Service) ChangePassword(ctx context.Context, actor Actor, sessionToken,
 	if err := c.Err(); err != nil {
 		return err
 	}
+	keep := hashToken(sessionToken)
 	return s.repo.InTx(ctx, func(tx Repository) error {
-		ident, found, err := tx.LockEmailIdentity(ctx, actor.User.ID)
-		if err != nil {
-			return err
-		}
-		if !found { // a directory-only user has no password here
-			return newKind(KindNotFound, CodeNotFound)
-		}
-		keep := hashToken(sessionToken)
-		if sess, ok, err := tx.FindSession(ctx, keep); err != nil {
-			return err
-		} else if !ok || sess.UserID != actor.User.ID {
-			return newKind(KindUnauthenticated, CodeUnauthenticated)
-		}
-		if bcrypt.CompareHashAndPassword([]byte(ident.PasswordHash), []byte(current)) != nil {
-			return Validation(Invalid("currentPassword", CodeInvalidCredentials, nil))
-		}
-		if current == next {
-			return Validation(Invalid("newPassword", CodePasswordUnchanged, nil))
-		}
-		hash, err := hashPassword(next)
-		if err != nil {
-			return err
-		}
-		if err := tx.ChangePassword(ctx, actor.User.ID, hash); err != nil {
-			return err
-		}
-		if err := tx.ClearSessionMustChangePassword(ctx, keep); err != nil {
-			return err
-		}
-		if err := tx.DeleteUserLoginChallenges(ctx, actor.User.ID); err != nil {
-			return err
-		}
-		return tx.DeleteOtherUserSessions(ctx, actor.User.ID, keep)
+		return s.changeCredential(ctx, tx, credentialChange{
+			User:        actor.User.ID,
+			Revoke:      RevokeOthers,
+			KeepSession: keep,
+			Apply: func(l lockedCredential) error {
+				if !l.HasEmail { // a directory-only user has no password here
+					return newKind(KindNotFound, CodeNotFound)
+				}
+				if sess, ok, err := tx.FindSession(ctx, keep); err != nil {
+					return err
+				} else if !ok || sess.UserID != actor.User.ID {
+					return newKind(KindUnauthenticated, CodeUnauthenticated)
+				}
+				if bcrypt.CompareHashAndPassword([]byte(l.Identity.PasswordHash), []byte(current)) != nil {
+					return Validation(Invalid("currentPassword", CodeInvalidCredentials, nil))
+				}
+				if current == next {
+					return Validation(Invalid("newPassword", CodePasswordUnchanged, nil))
+				}
+				hash, err := hashPassword(next)
+				if err != nil {
+					return err
+				}
+				if err := tx.ChangePassword(ctx, actor.User.ID, hash); err != nil {
+					return err
+				}
+				return tx.ClearSessionMustChangePassword(ctx, keep)
+			},
+		})
 	})
 }
