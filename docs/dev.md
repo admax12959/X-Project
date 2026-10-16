@@ -56,7 +56,7 @@ Optional YAML file named by `XP_CONFIG` (see `config.example.yaml`); environment
 | `XP_DB_DSN` | `database.dsn` | (required) | go-sql-driver DSN. `parseTime`, UTC and `time_zone='+00:00'` are forced. |
 | `XP_DB_CONNECT_TIMEOUT` | `database.connect_timeout` | `90s` | Keep retrying the DB at startup this long. |
 | `XP_SECRET_KEY` / `XP_SECRET_KEY_FILE` | `secret_key` / `secret_key_file` | (exactly one required) | The master key (ADR-0005): encrypts every secret stored in the database (AES-256-GCM). The file form reads a Docker secret such as `/run/secrets/xp_secret_key`. Missing, both set, or an unreadable/empty file stops startup with a message naming both sources. Keep it stable: after a change, stored secrets are unreadable until entered again. |
-| `XP_SECRET_KEY_VERSION` | `secret_key_version` | `1` | Recorded with every stored secret; raise it when you rotate the key. |
+| `XP_SECRET_KEY_VERSION` | `secret_key_version` | `1` | Recorded with the versioned configuration secrets and the authenticator secrets (not with code-platform tokens); raise it when you rotate the key. |
 | `XP_LISTEN` | `listen` | `:8080` | HTTP listen address. |
 | `XP_WEB_DIR` | `web_dir` | empty (image: `/srv/web`) | Built SPA; empty serves the API only. |
 | `XP_ADMIN_USERNAME` / `XP_ADMIN_EMAIL` / `XP_ADMIN_PASSWORD` | `admin.username` / `admin.email` / `admin.password` | — | Initial administrator; the email is the login email (log in with it, not the username). Required only on the very first start. |
@@ -326,7 +326,7 @@ Real adapter details worth knowing: GitLab gets `GET {base}/api/v4/projects/{pat
 
 ### System configuration in the database (ADR-0005, #19)
 
-- Table `system_config` holds one row per section (sections: `ldap`, `smtp` — see "Mail" below); secret fields are sealed with the master key and carry its version. `GET/PUT /api/system-config/ldap` (permission `config.manage`) never return a secret, only whether it is set; a PUT with an empty password keeps the stored one. `POST /api/system-config/ldap/test` tries the unsaved form and saves nothing.
+- Table `system_config` holds one row per section (sections: `ldap`, `smtp`, `storage`, `security`; each is described in its own section below); secret fields are sealed with the master key and carry its version. `GET/PUT /api/system-config/ldap` (permission `config.manage`) never return a secret, only whether it is set; a PUT with an empty password keeps the stored one. `POST /api/system-config/ldap/test` tries the unsaved form and saves nothing.
 - A saved change is in effect at once, without restart, and is audited with the changed field names and never values.
 - New sections follow `system_config.go`: add a section name, a typed struct, an audit entry, and the permission check.
 

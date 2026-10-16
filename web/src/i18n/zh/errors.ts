@@ -52,7 +52,7 @@ export default {
   'error.tokenExpired': '该链接或验证码已过期，请重新获取。',
   'error.tokenUsed': '该链接或验证码已被使用，如仍需要，请重新获取。',
   'error.rateLimited': '请求过于频繁，请稍后再试。',
-  'error.inviteNotPending': '该用户已设置密码，无需再发送邀请。',
+  'error.inviteNotPending': '无法向该用户发送邀请：可能已设置密码、已被停用，或没有邮箱登录方式。',
   'error.noContactEmail': '你的账号没有联系邮箱，无法发送测试邮件。',
   'error.smtpUnreachable': '无法连接邮件服务器，请检查主机、端口和网络。',
   'error.smtpTlsFailed': '与邮件服务器的加密连接失败。请检查加密方式和服务器证书（私有 CA 请填写自定义 CA）。',

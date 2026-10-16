@@ -32,7 +32,7 @@ export default {
   'ldap.password.unreadable': 'The stored password cannot be read with the current master key. Enter it again.',
   'ldap.test': 'Test connection',
   'ldap.testing': 'Testing…',
-  'ldap.test.ok': 'Connection works: the server is reachable, the service account can sign in and the base DN can be searched.',
+  'ldap.test.ok': 'Connection works: the server is reachable, and the base DN can be searched with the configured bind settings.',
   'ldap.test.failed': 'Connection test failed: {reason}',
   'ldap.save': 'Save',
   'ldap.saving': 'Saving…',

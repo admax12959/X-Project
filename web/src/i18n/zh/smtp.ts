@@ -57,4 +57,12 @@ export default {
   'smtp.template.invite': '邀请',
   'smtp.template.passwordReset': '重置密码',
   'smtp.template.verifyCode': '验证码',
+  'smtp.template.identityBound': '登录方式已添加',
+  'smtp.template.identityUnbound': '登录方式已移除',
+  'smtp.template.loginEmailChanged': '登录邮箱已修改',
+  'smtp.template.passwordChangedByOperator': '管理员重置密码',
+  'smtp.template.recoveryCodesRegenerated': '恢复码已重新生成',
+  'smtp.template.secondFactorEnabled': '已启用二次验证',
+  'smtp.template.secondFactorDisabled': '已关闭二次验证',
+  'smtp.template.secondFactorReset': '二次验证已重置',
 };

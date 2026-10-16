@@ -53,7 +53,7 @@ export default {
   'error.tokenExpired': 'This link or code has expired. Ask for a new one.',
   'error.tokenUsed': 'This link or code has already been used. Ask for a new one if you still need it.',
   'error.rateLimited': 'Too many requests. Please try again later.',
-  'error.inviteNotPending': 'This user has already set a password, so there is no invitation to send.',
+  'error.inviteNotPending': 'No invitation can be sent to this user: they may have set a password already, be disabled, or have no email login.',
   'error.noContactEmail': 'Your account has no contact email to send the test message to.',
   'error.smtpUnreachable': 'Cannot connect to the mail server. Check the host, the port and the network.',
   'error.smtpTlsFailed': 'The secure connection to the mail server failed. Check the encryption setting and the server certificate (add your own CA if it is a private one).',
