@@ -241,10 +241,14 @@ func (s *Service) openSession(ctx context.Context, u User, mustChange bool) (Log
 	if on {
 		return s.issueLoginChallenge(ctx, u, mustChange)
 	}
-	return s.createSession(ctx, u, mustChange)
+	return s.createSession(ctx, u, mustChange, false)
 }
 
-func (s *Service) createSession(ctx context.Context, u User, mustChange bool) (LoginResult, error) {
+// createSession inserts a session. A password-only session (secondFactorPassed false) is checked
+// again once it exists: if the user enabled a second factor between the decision to open it and
+// its insertion (ConfirmTOTP ends the other sessions, but this one was not there yet), it would
+// pass for fully authenticated, so it is deleted and the login becomes a challenge instead.
+func (s *Service) createSession(ctx context.Context, u User, mustChange, secondFactorPassed bool) (LoginResult, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return LoginResult{}, err
@@ -254,6 +258,18 @@ func (s *Service) createSession(ctx context.Context, u User, mustChange bool) (L
 	sess := Session{TokenHash: hashToken(token), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(s.sessionTTL), MustChangePassword: mustChange}
 	if err := s.repo.CreateSession(ctx, sess); err != nil {
 		return LoginResult{}, err
+	}
+	if !secondFactorPassed {
+		on, err := hasEnabledTOTP(ctx, s.repo, u.ID)
+		if err != nil {
+			return LoginResult{}, err
+		}
+		if on {
+			if err := s.repo.DeleteSession(ctx, sess.TokenHash); err != nil {
+				return LoginResult{}, err
+			}
+			return s.issueLoginChallenge(ctx, u, mustChange)
+		}
 	}
 	setup, err := s.secondFactorSetupRequiredFor(ctx, u)
 	if err != nil {

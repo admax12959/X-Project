@@ -377,7 +377,7 @@ func (s *Service) SubmitSecondFactor(ctx context.Context, token, code string) (L
 	if !claimed {
 		return LoginResult{}, unauth
 	}
-	return s.createSession(ctx, u, ch.MustChangePassword)
+	return s.createSession(ctx, u, ch.MustChangePassword, true)
 }
 
 // verifySecondFactorCode checks code as the user's second factor: an authenticator code or an
