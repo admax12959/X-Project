@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/admax12959/X-Project/internal/apitest"
 )
@@ -107,4 +108,28 @@ func TestARecoveryCodeLogsInInPlaceOfTheAuthenticatorCodeAndWorksOnlyOnce(t *tes
 	if got := recoveryStatusOf(t, c3).RecoveryCodesRemaining; got != 8 {
 		t.Fatalf("remaining = %d, want 8", got)
 	}
+}
+
+func TestWrongRecoveryCodesAndWrongAuthenticatorCodesFillTheSameCounterAndALockedStepRefusesRecoveryCodes(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	frozenMidStep(env)
+	_, codes, _ := tinaWithCodes(t, env)
+
+	c, _ := firstFactor(t, env)
+	c.Post(secondFactorLoginPath, map[string]string{"code": "AAAA-AAAA-AAAA"}).ExpectError(http.StatusUnprocessableEntity, "code", "totpInvalid")
+	c.Post(secondFactorLoginPath, map[string]string{"code": "000000"}).ExpectError(http.StatusUnprocessableEntity, "code", "totpInvalid")
+	c.Post(secondFactorLoginPath, map[string]string{"code": "BBBB-BBBB-BBBB"}).ExpectError(http.StatusUnprocessableEntity, "code", "totpInvalid")
+	c.Post(secondFactorLoginPath, map[string]string{"code": "111111"}).ExpectError(http.StatusUnprocessableEntity, "code", "totpInvalid")
+	// The fifth wrong try, of either kind, locks.
+	c.Post(secondFactorLoginPath, map[string]string{"code": "CCCC-CCCC-CCCC"}).ExpectError(http.StatusTooManyRequests, "", "totpLocked")
+
+	c.Post(secondFactorLoginPath, map[string]string{"code": codes[0]}).ExpectError(http.StatusTooManyRequests, "", "totpLocked")
+	c2, _ := firstFactor(t, env)
+	c2.Post(secondFactorLoginPath, map[string]string{"code": codes[0]}).ExpectError(http.StatusTooManyRequests, "", "totpLocked")
+
+	// After the lock a right recovery code works, and was not spent by the refused tries.
+	env.Clock.Advance(16 * time.Minute)
+	c3, _ := firstFactor(t, env)
+	c3.Post(secondFactorLoginPath, map[string]string{"code": codes[0]}).ExpectStatus(http.StatusOK)
 }
