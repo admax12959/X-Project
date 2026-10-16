@@ -21,7 +21,13 @@ var migrationFS embed.FS
 // File rules (docs/dev.md): name YYYYMMDDHHMMSS_description.sql; statements end
 // with ";" at end of line; no ";" inside a statement; "--" comment lines only.
 // MySQL DDL is not transactional, so keep each file small.
-func Migrate(ctx context.Context, db *sql.DB) error {
+func Migrate(ctx context.Context, db *sql.DB) error { return migrate(ctx, db, "") }
+
+// MigrateBefore applies the migrations that sort before the file named stopAt, for tests that
+// need the schema as it was before that file.
+func MigrateBefore(ctx context.Context, db *sql.DB, stopAt string) error { return migrate(ctx, db, stopAt) }
+
+func migrate(ctx context.Context, db *sql.DB, stopAt string) error {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err
@@ -68,6 +74,9 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		name := strings.TrimPrefix(path, "migrations/")
 		if applied[name] {
 			continue
+		}
+		if stopAt != "" && name >= stopAt {
+			break
 		}
 		body, err := migrationFS.ReadFile(path)
 		if err != nil {
