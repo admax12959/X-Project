@@ -209,11 +209,16 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	if err != nil {
 		return LoginResult{}, err
 	}
+	// An unknown email and an invited user (no password yet) are compared against the dummy hash
+	// so the timing matches, but the outcome is rejected whatever the comparison says: the dummy's
+	// own plaintext must never authenticate.
+	usable := found && ident.PasswordHash != ""
 	hash := dummyHash
-	if found && ident.PasswordHash != "" { // an invited user has no password yet: compare against the dummy, as for an unknown email
+	if usable {
 		hash = []byte(ident.PasswordHash)
 	}
-	if bcrypt.CompareHashAndPassword(hash, []byte(in.Password)) != nil || !found {
+	matched := bcrypt.CompareHashAndPassword(hash, []byte(in.Password)) == nil
+	if !usable || !matched {
 		return LoginResult{}, invalidCredentials()
 	}
 	u, ok, err := s.repo.GetUser(ctx, ident.UserID)

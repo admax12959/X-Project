@@ -425,3 +425,15 @@ func TestChangingTheLoginEmailKillsLinksSentToTheOldAddress(t *testing.T) {
 	admin.Post("/api/users/"+carol.ID+"/invitation", nil).ExpectStatus(http.StatusAccepted)
 	tokenFromMail(t, env, "carol.new@example.com", 1)
 }
+
+func TestAnInvitedUserCannotLogInWithTheDummyPassword(t *testing.T) {
+	t.Parallel()
+	env, admin := mailEnv(t)
+	enableMail(t, admin)
+	u := createUserRaw(t, admin, map[string]any{"username": "carol"})
+	c := env.Client()
+	c.LoginEmail(u.Email, "x-project-dummy").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	if got := c.Get("/api/session").Status; got != http.StatusUnauthorized {
+		t.Fatalf("a session was opened for an invited user: %d", got)
+	}
+}
