@@ -11,7 +11,7 @@ export default {
   'login.forgot': 'Forgot password?',
   'login.forgot.unavailable': 'Password recovery needs email, which is not set up on this system. Ask an administrator to reset your access.',
   'login.secondFactor.title': 'Two-Factor Authentication',
-  'login.secondFactor.hint': 'Open your authenticator app and enter the 6-digit code for X-Project.',
+  'login.secondFactor.hint': 'Open your authenticator app and enter the 6-digit code for X-Project, or enter one of your recovery codes if you cannot use the app.',
   'login.secondFactor.code': 'Verification code',
   'login.secondFactor.submit': 'Verify',
   'login.secondFactor.submitting': 'Verifying…',

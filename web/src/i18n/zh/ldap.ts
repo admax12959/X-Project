@@ -32,7 +32,7 @@ export default {
   'ldap.password.unreadable': '已保存的密码无法用当前主密钥读取，请重新输入。',
   'ldap.test': '测试连接',
   'ldap.testing': '测试中…',
-  'ldap.test.ok': '连接正常：服务器可达，服务账号可以登录，Base DN 可以搜索。',
+  'ldap.test.ok': '连接正常：服务器可达，Base DN 可以按当前的绑定设置搜索。',
   'ldap.test.failed': '连接测试失败：{reason}',
   'ldap.save': '保存',
   'ldap.saving': '保存中…',

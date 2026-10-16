@@ -2,7 +2,7 @@ Subject: Two-factor authentication was turned on for your X-Project account
 
 Hello{{if .Name}} {{.Name}}{{end}},
 
-Two-factor authentication was turned on for your X-Project account. From now on, logging in asks for a code from your authenticator app. Recovery codes were made for you; keep them somewhere safe.
+Two-factor authentication was turned on for your X-Project account. From now on, logging in asks for a code from your authenticator app. Recovery codes were made for you; keep them somewhere safe, because a recovery code works in place of the authenticator code when the app is not available.
 
 If this was not you, contact an administrator right away.
 

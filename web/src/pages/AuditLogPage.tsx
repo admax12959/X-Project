@@ -28,7 +28,10 @@ export function AuditLogPage() {
 function dayBound(date: string, end: boolean): string | undefined {
   if (!date) return undefined;
   const d = new Date(`${date}T${end ? '23:59:59.999' : '00:00:00.000'}`);
-  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  if (Number.isNaN(d.getTime())) return undefined;
+  const iso = d.toISOString();
+  // The log stores microseconds, so the end of the day is .999999, not .999.
+  return end ? iso.replace(/\.999Z$/, '.999999Z') : iso;
 }
 
 function AuditLog() {
@@ -47,6 +50,8 @@ function AuditLog() {
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [appInput, setAppInput] = useState(app);
   const [attempt, setAttempt] = useState(0); // bumped by Retry
+  const [usersFailed, setUsersFailed] = useState(false);
+  const [usersAttempt, setUsersAttempt] = useState(0); // bumped by Retry of the user list
 
   // Changing a filter goes back to the first page.
   const update = (changes: Record<string, string>) =>
@@ -64,14 +69,15 @@ function AuditLog() {
 
   useEffect(() => {
     let live = true;
+    setUsersFailed(false);
     api.users.list().then(
       (r) => live && setUsers(r.items),
-      () => undefined, // the filters then only offer "all"; the list reports its own errors
+      () => live && setUsersFailed(true), // the user filters have no choices until a retry works
     );
     return () => {
       live = false;
     };
-  }, []);
+  }, [usersAttempt]);
 
   // The application key box types freely and updates the URL after a pause.
   useEffect(() => {
@@ -112,6 +118,15 @@ function AuditLog() {
         </h1>
         <p className="text-text-2">{t('audit.intro')}</p>
       </div>
+
+      {usersFailed && (
+        <p role="alert" className="flex items-center gap-2 rounded border border-danger/40 bg-danger/5 px-3 py-2 text-[13px] text-danger">
+          {t('audit.usersFailed')}
+          <Button small onClick={() => setUsersAttempt((n) => n + 1)}>
+            {t('common.retry')}
+          </Button>
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <Select aria-label={t('audit.filter.operator')} className="w-52" value={actor} onChange={(e) => update({ actor: e.target.value })}>

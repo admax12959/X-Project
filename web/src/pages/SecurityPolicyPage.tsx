@@ -87,6 +87,7 @@ function PolicyForm({ policy, onSaved }: { policy: SecurityPolicy; onSaved: (p: 
               type="checkbox"
               name="forceSecondFactor"
               checked={force}
+              disabled={busy}
               onChange={(e) => {
                 setForce(e.target.checked);
                 setSaved(false);

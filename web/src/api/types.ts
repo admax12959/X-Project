@@ -288,7 +288,7 @@ export type AuditPage = List<AuditEntry> & { total: number; page: number; pageSi
 /** actor: a user ID or "cli". from / to: RFC 3339 instants, both inclusive. */
 export type AuditQuery = {
   actor?: string;
-  targetType?: 'user' | 'application' | 'systemConfig';
+  targetType?: 'user' | 'application' | 'department' | 'systemConfig';
   targetId?: string;
   action?: string;
   from?: string;

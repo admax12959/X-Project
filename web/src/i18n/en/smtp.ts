@@ -58,4 +58,12 @@ export default {
   'smtp.template.invite': 'Invitation',
   'smtp.template.passwordReset': 'Password reset',
   'smtp.template.verifyCode': 'Verification code',
+  'smtp.template.identityBound': 'Login method added',
+  'smtp.template.identityUnbound': 'Login method removed',
+  'smtp.template.loginEmailChanged': 'Login email changed',
+  'smtp.template.passwordChangedByOperator': 'Password reset by an administrator',
+  'smtp.template.recoveryCodesRegenerated': 'Recovery codes replaced',
+  'smtp.template.secondFactorEnabled': 'Two-factor authentication turned on',
+  'smtp.template.secondFactorDisabled': 'Two-factor authentication turned off',
+  'smtp.template.secondFactorReset': 'Two-factor authentication reset',
 };

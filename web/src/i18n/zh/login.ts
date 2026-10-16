@@ -11,7 +11,7 @@ export default {
   'login.forgot': '忘记密码？',
   'login.forgot.unavailable': '找回密码需要邮件服务，当前系统尚未配置。请联系管理员处理。',
   'login.secondFactor.title': '二次验证',
-  'login.secondFactor.hint': '打开验证器应用，输入 X-Project 当前显示的 6 位验证码。',
+  'login.secondFactor.hint': '打开验证器应用，输入 X-Project 当前显示的 6 位验证码；无法使用验证器时，可输入一个恢复码。',
   'login.secondFactor.code': '验证码',
   'login.secondFactor.submit': '验证',
   'login.secondFactor.submitting': '正在验证…',

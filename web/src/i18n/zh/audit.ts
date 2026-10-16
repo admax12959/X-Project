@@ -4,6 +4,7 @@ export default {
   'audit.title': '审计日志',
   'audit.intro': '身份和安全相关的操作：谁在什么时候对谁做了什么。记录不能修改或删除。',
   'audit.loadFailed': '无法加载审计日志。',
+  'audit.usersFailed': '无法加载筛选用的用户列表。',
   'audit.empty.title': '还没有任何记录。',
   'audit.noMatch': '没有符合筛选条件的记录。',
   'audit.col.time': '时间',
