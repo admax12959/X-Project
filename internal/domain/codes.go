@@ -87,6 +87,7 @@ const (
 	CodeMailNotConfigured     = "mailNotConfigured"     // 503; the feature needs SMTP, and the administrator has not configured it
 	CodeSiteURLRequired       = "siteUrlRequired"       // 503; a mail with a link needs the site's external address, which is not configured
 	CodeNoContactEmail        = "noContactEmail"        // request-level; the administrator has no contact email to send the test mail to
+	CodeMailExpired           = "mailExpired"           // outbox: given up because the one-time link or code in the mail ran out before it could be delivered
 	CodeSmtpUnreachable       = "smtpUnreachable"       // SMTP failure (test mail, outbox): cannot connect, DNS failure or timeout
 	CodeSmtpTLSFailed         = "smtpTlsFailed"         // the TLS handshake or the server certificate verification failed
 	CodeSmtpStartTLSMissing   = "smtpStartTlsMissing"   // STARTTLS was required but the server does not offer it

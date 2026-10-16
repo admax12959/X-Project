@@ -342,3 +342,28 @@ func TestOnlyAdministratorsMaySeeTheOutbox(t *testing.T) {
 	env.Client().Get("/api/mail-outbox").ExpectStatus(http.StatusUnauthorized)
 	env.AdminClient().Get("/api/mail-outbox?status=bogus").ExpectError(http.StatusUnprocessableEntity, "status", "invalid")
 }
+
+func TestAOneTimeCredentialIsNotDeliveredByARetryAfterItHasExpired(t *testing.T) {
+	t.Parallel()
+	env, admin := mailEnv(t)
+	bob := createUser(t, admin, map[string]any{"username": "bob"})
+	enableMail(t, admin)
+	frozenMidStep(env) // frozen: the retry the first failure schedules is not due yet
+	env.Mailer.FailNext(1, &domain.MailSendError{Code: "smtpUnreachable", Detail: "dial tcp: i/o timeout"})
+
+	if err := env.EnqueueMail(domain.MailRequest{Template: domain.MailTemplatePasswordReset, Recipient: userIDOf(t, bob), To: bob.Email, LinkPath: "/set-password/tok"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the first attempt", func() bool { return env.Mailer.Attempts() == 1 })
+	env.Clock.Advance(61 * time.Minute) // the reset link is good for an hour
+
+	eventually(t, "the mail to be given up", func() bool { b, _ := getOutbox(t, admin, "failed"); return len(b.Items) == 1 })
+	b, _ := getOutbox(t, admin, "failed")
+	if it := b.Items[0]; it.LastErrorCode != "mailExpired" || it.Attempts != 1 {
+		t.Fatalf("outbox item = %+v, want given up as expired after the one attempt", it)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if n := env.Mailer.Attempts(); n != 1 || len(env.Mailer.Sent()) != 0 {
+		t.Fatalf("attempts = %d, sent = %d, want the expired link never delivered", n, len(env.Mailer.Sent()))
+	}
+}
