@@ -17,6 +17,10 @@ in phase 2 re-read the same files to learn what is written here.
 | Test doubles | `internal/fakes/` (clock, mailer, object store); wiring in `internal/apitest/env.go` |
 | API tests | `test/api/<feature>_test.go`, against a MySQL 8 container; prior art: `password_recovery_test.go`, `totp_login_test.go` |
 
+## A credential change touches
+
+Setting a password, enrolling or removing a second factor, renaming the login email, binding or unbinding an identity: `changeCredential` in `internal/domain/credential_change.go` (glossary: 凭据变更). Call it inside `InTx` with a `credentialChange` (what changes in `Apply`, a required `RevokePolicy`, the audit entry, the notices); do not call `LockEmailIdentity`, `DeleteUserSessions`, `DeleteOtherUserSessions` or `notifySecurity` yourself (`scripts/check-repo.sh` fails). Login-email renames go through `changeLoginEmail` in the same file. Tests: add the call site to `TestCredentialChangeCallSites` in `internal/domain/credential_change_test.go` (the recording fake `internal/fakes/recording_repo.go`, ADR-0008) and a refusal to `TestCredentialChangeRefusals`.
+
 ## A UI change touches
 
 | Step | Where |
