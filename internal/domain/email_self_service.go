@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net/mail"
 	"strings"
@@ -359,14 +360,18 @@ func (s *Service) ChangeOwnLoginEmail(ctx context.Context, actor Actor, email, c
 // user, when mail works and the address is deliverable. A notice that cannot be sent never
 // stops the change it is about.
 func (s *Service) notifySecurity(ctx context.Context, tx Repository, userID UserID, to string, tpl MailTemplate, data map[string]string) error {
-	settings, _, _, err := s.readSMTP(ctx, tx)
+	_, usable, err := s.readUsableSMTP(ctx, tx)
 	if err != nil {
 		return err
 	}
 	to = strings.TrimSpace(to)
-	if a, perr := mail.ParseAddress(to); !settings.configured() || perr != nil || a.Address != to || strings.ContainsAny(to, "\r\n") {
+	if a, perr := mail.ParseAddress(to); !usable || perr != nil || a.Address != to || strings.ContainsAny(to, "\r\n") {
 		return nil
 	}
-	_, err = s.enqueueMail(ctx, tx, MailRequest{Template: tpl, To: to, Recipient: userID, Data: data})
-	return err
+	if _, err := s.enqueueMail(ctx, tx, MailRequest{Template: tpl, To: to, Recipient: userID, Data: data}); err != nil {
+		// Best effort, as documented: a statement that fails inside the transaction does not abort
+		// it, so the change it is about still commits.
+		slog.Warn("mail: a security notice could not be queued", "user", userID, "template", tpl, "err", err)
+	}
+	return nil
 }

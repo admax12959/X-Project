@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"net/http"
 	"regexp"
 	"strings"
@@ -386,4 +387,51 @@ func TestWithoutSMTPTheOperationsWorkAndNoMailIsSent(t *testing.T) {
 	if got := env.Mailer.Sent(); len(got) != 0 {
 		t.Fatalf("mails = %d, want none", len(got))
 	}
+}
+
+// breakMailQueue makes every insert into the mail queue fail (the new column has no default), like
+// a queue that has a problem, while mail stays configured.
+func breakMailQueue(t *testing.T, env *apitest.Env) {
+	t.Helper()
+	db, err := sql.Open("mysql", env.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec("ALTER TABLE mail_outbox ADD COLUMN broken INT NOT NULL"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestASecurityNoticeThatCannotBeQueuedDoesNotStopTheChangeItIsAbout(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	frozenMidStep(env)
+	tina := plainUserClient(t, env, "tina")
+	admin := env.AdminClient()
+	jane := createUser(t, admin, nil)
+	enableMail(t, admin)
+	breakMailQueue(t, env)
+
+	secret, old := enableWithCodes(t, tina, "initial-pw-1") // the confirmation
+	if !secondFactorOf(t, tina).Enabled {
+		t.Fatal("the second factor is not enabled")
+	}
+	env.Clock.Advance(2 * totpStep)
+	var fresh recoveryStatus
+	regenerate(tina, nowCode(t, env, secret)).ExpectStatus(http.StatusOK).JSON(&fresh)
+	if len(fresh.RecoveryCodes) != 10 || slicesContain(old, fresh.RecoveryCodes[0]) {
+		t.Fatalf("regenerated codes = %v, want a new set", fresh.RecoveryCodes)
+	}
+	c, _ := firstFactor(t, env)
+	c.Post(secondFactorLoginPath, map[string]string{"code": fresh.RecoveryCodes[0]}).ExpectStatus(http.StatusOK)
+	env.Clock.Advance(totpStep)
+	disable(tina, nowCode(t, env, secret)).ExpectStatus(http.StatusOK)
+	if secondFactorOf(t, tina).Enabled {
+		t.Fatal("the second factor is still enabled")
+	}
+
+	// An administrator changing a login email.
+	patchUser(admin, jane.ID, map[string]any{"loginEmail": "jane2@example.com"}).ExpectStatus(http.StatusOK)
+	env.Client().LoginEmail("jane2@example.com", "initial-pw-1").ExpectStatus(http.StatusOK)
 }

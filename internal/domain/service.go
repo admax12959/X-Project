@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -109,7 +110,7 @@ func (s *Service) Bootstrap(ctx context.Context, admin InitialAdmin) error {
 		if !usernamePattern.MatchString(admin.Username) {
 			return errors.New("first start: initial administrator username must match " + usernamePattern.String())
 		}
-		if !emailPattern.MatchString(admin.Email) || len(admin.Email) > maxEmailLength {
+		if !emailPattern.MatchString(admin.Email) || !isPlainMailAddress(admin.Email) || utf8.RuneCountInString(admin.Email) > maxLoginEmailLength {
 			return errors.New("first start: initial administrator email is not a valid email address")
 		}
 		hash, err := hashPassword(admin.Password)
@@ -237,7 +238,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 // verified is the email identity whose password hash the login has just checked (nil for a
 // directory login, which has no local hash). The password was checked outside any lock, so a
 // reset could commit before the session exists: the session or challenge is therefore inserted in
-// a transaction that locks the identity row, and a hash that is no longer the verified one ends
+// a transaction that locks the identity row, and a hash or login email that is no longer the verified one ends
 // the login with invalidCredentials. The restriction (mustChange) is the one under the lock.
 //
 // Whether the user has a second factor is read before the transaction, so that the recheck in
@@ -256,7 +257,7 @@ func (s *Service) openSession(ctx context.Context, u User, verified *LoginIdenti
 		if err != nil {
 			return err
 		}
-		if !found || cur.PasswordHash != verified.PasswordHash {
+		if !found || cur.PasswordHash != verified.PasswordHash || cur.LoginName != verified.LoginName {
 			return invalidCredentials()
 		}
 		res, err = s.finishOpen(ctx, tx, u, cur.MustChangePassword, on)

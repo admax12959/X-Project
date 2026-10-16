@@ -134,7 +134,7 @@ func TestMailLinksAreBuiltFromTheConfiguredSiteAddress(t *testing.T) {
 	if err := env.EnqueueMail(req); err != nil {
 		t.Fatal(err)
 	}
-	admin.Put(smtpConfigPath, smtpForm(map[string]any{"password": "", "siteUrl": "https://corp.example/xp/"})).ExpectStatus(http.StatusOK)
+	admin.Put(smtpConfigPath, smtpForm(map[string]any{"password": "", "siteUrl": "https://corp.example:8443/"})).ExpectStatus(http.StatusOK)
 	if err := env.EnqueueMail(req); err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestMailLinksAreBuiltFromTheConfiguredSiteAddress(t *testing.T) {
 	for _, c := range []struct {
 		m    domain.MailMessage
 		link string
-	}{{first, "https://xp.corp.example/invite/tok-abc"}, {second, "https://corp.example/xp/invite/tok-abc"}} {
+	}{{first, "https://xp.corp.example/invite/tok-abc"}, {second, "https://corp.example:8443/invite/tok-abc"}} {
 		if !strings.Contains(c.m.Text, c.link) || !strings.Contains(c.m.HTML, `href="`+c.link+`"`) {
 			t.Errorf("the mail does not carry the link %s:\n%s\n%s", c.link, c.m.Text, c.m.HTML)
 		}
@@ -341,4 +341,29 @@ func TestOnlyAdministratorsMaySeeTheOutbox(t *testing.T) {
 	bob.Get("/api/mail-outbox").ExpectError(http.StatusForbidden, "", "forbidden")
 	env.Client().Get("/api/mail-outbox").ExpectStatus(http.StatusUnauthorized)
 	env.AdminClient().Get("/api/mail-outbox?status=bogus").ExpectError(http.StatusUnprocessableEntity, "status", "invalid")
+}
+
+func TestAOneTimeCredentialIsNotDeliveredByARetryAfterItHasExpired(t *testing.T) {
+	t.Parallel()
+	env, admin := mailEnv(t)
+	bob := createUser(t, admin, map[string]any{"username": "bob"})
+	enableMail(t, admin)
+	frozenMidStep(env) // frozen: the retry the first failure schedules is not due yet
+	env.Mailer.FailNext(1, &domain.MailSendError{Code: "smtpUnreachable", Detail: "dial tcp: i/o timeout"})
+
+	if err := env.EnqueueMail(domain.MailRequest{Template: domain.MailTemplatePasswordReset, Recipient: userIDOf(t, bob), To: bob.Email, LinkPath: "/set-password/tok"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the first attempt", func() bool { return env.Mailer.Attempts() == 1 })
+	env.Clock.Advance(61 * time.Minute) // the reset link is good for an hour
+
+	eventually(t, "the mail to be given up", func() bool { b, _ := getOutbox(t, admin, "failed"); return len(b.Items) == 1 })
+	b, _ := getOutbox(t, admin, "failed")
+	if it := b.Items[0]; it.LastErrorCode != "mailExpired" || it.Attempts != 1 {
+		t.Fatalf("outbox item = %+v, want given up as expired after the one attempt", it)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if n := env.Mailer.Attempts(); n != 1 || len(env.Mailer.Sent()) != 0 {
+		t.Fatalf("attempts = %d, sent = %d, want the expired link never delivered", n, len(env.Mailer.Sent()))
+	}
 }

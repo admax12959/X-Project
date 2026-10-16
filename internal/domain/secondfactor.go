@@ -270,7 +270,21 @@ func (s *Service) ConfirmTOTP(ctx context.Context, actor Actor, sessionToken, co
 	}
 	u := actor.User
 	var recovery []string
-	err := s.repo.InTx(ctx, func(tx Repository) error {
+	// The guesses share the user's second-factor lockout with the login: a setup-only session
+	// must not be able to try all six-digit codes. A wrong code is on record even though the
+	// request is refused (inTxKeeping commits it).
+	err := s.inTxKeeping(ctx, func(tx Repository) error {
+		if err := tx.LockRateKeys(ctx, secondFactorLockKey(u.ID)); err != nil {
+			return err
+		}
+		lock, err := tx.GetSecondFactorLockout(ctx, u.ID)
+		if err != nil {
+			return err
+		}
+		now := s.nowUTC()
+		if now.Before(lock.LockedUntil) {
+			return secondFactorLocked(lock.LockedUntil)
+		}
 		all, err := tx.ListAuthenticators(ctx, u.ID)
 		if err != nil {
 			return err
@@ -291,9 +305,14 @@ func (s *Service) ConfirmTOTP(ctx context.Context, actor Actor, sessionToken, co
 		if err != nil {
 			return err
 		}
-		step, ok := matchTOTP(secret, code, s.nowUTC(), 0)
+		step, ok := matchTOTP(secret, code, now, 0)
 		if !ok {
-			return totpInvalid()
+			return s.recordSecondFactorFailure(ctx, tx, u.ID, lock, now)
+		}
+		if lock.Failures != 0 || !lock.LockedUntil.IsZero() {
+			if err := tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{}); err != nil {
+				return err
+			}
 		}
 		if on, err := tx.EnableAuthenticator(ctx, pending.ID, step, s.nowUTC()); err != nil {
 			return err

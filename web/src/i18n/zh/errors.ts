@@ -57,6 +57,7 @@ export default {
   'error.smtpUnreachable': '无法连接邮件服务器，请检查主机、端口和网络。',
   'error.smtpTlsFailed': '与邮件服务器的加密连接失败。请检查加密方式和服务器证书（私有 CA 请填写自定义 CA）。',
   'error.smtpStartTlsMissing': '邮件服务器不支持 STARTTLS。请更换加密方式或端口。',
+  'error.mailExpired': '邮件中的链接或验证码在送达前已过期，未再发送。',
   'error.smtpAuthFailed': '邮件服务器拒绝了该账号或密码。',
   'error.smtpSenderRejected': '邮件服务器拒绝了发件人地址。',
   'error.smtpRecipientRejected': '邮件服务器拒绝了收件人地址。',

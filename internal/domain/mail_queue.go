@@ -105,11 +105,11 @@ func (s *Service) EnqueueMail(ctx context.Context, req MailRequest) error {
 // not configured, when the template cannot be rendered with the data given and when the
 // address is not a plain address, so a mail that is queued can be delivered.
 func (s *Service) enqueueMail(ctx context.Context, tx Repository, req MailRequest) (int64, error) {
-	settings, _, _, err := s.readSMTP(ctx, tx)
+	settings, usable, err := s.readUsableSMTP(ctx, tx)
 	if err != nil {
 		return 0, err
 	}
-	if !settings.configured() {
+	if !usable {
 		return 0, newKind(KindUnavailable, CodeMailNotConfigured)
 	}
 	if !knownMailTemplate(req.Template) {
@@ -224,7 +224,27 @@ func (s *Service) SendDueMail(ctx context.Context) error {
 	return ctx.Err()
 }
 
+// mailCredentialLifetime is how long the one-time credential a template carries stays good,
+// counted from when the mail was queued (the token is issued in the same transaction). 0: the
+// mail carries none.
+func mailCredentialLifetime(t MailTemplate) time.Duration {
+	switch t {
+	case MailTemplateInvite:
+		return inviteTokenTTL
+	case MailTemplatePasswordReset:
+		return passwordResetTokenTTL
+	case MailTemplateVerifyCode:
+		return emailCodeTTL
+	}
+	return 0
+}
+
 func (s *Service) deliver(ctx context.Context, sender MailSender, from string, e MailEntry) error {
+	// A retry must not hand out a link or code that no longer works.
+	if life := mailCredentialLifetime(MailTemplate(e.Template)); life > 0 && !s.nowUTC().Before(e.CreatedAt.Add(life)) {
+		slog.Warn("mail: giving up, the credential in it has expired", "id", e.ID, "template", e.Template, "attempts", e.Attempts)
+		return s.repo.MarkMailFailed(ctx, e.ID, e.Attempts, s.nowUTC(), CodeMailExpired, "the link or code in this mail expired before it could be delivered")
+	}
 	sendCtx, cancel := context.WithTimeout(ctx, 2*smtpTimeout)
 	defer cancel()
 	sendErr := sender.Send(sendCtx, MailMessage{From: from, To: e.To, Subject: e.Subject, Text: e.Text, HTML: e.HTML})
