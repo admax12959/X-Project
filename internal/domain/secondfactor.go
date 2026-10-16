@@ -274,66 +274,76 @@ func (s *Service) ConfirmTOTP(ctx context.Context, actor Actor, sessionToken, co
 	// must not be able to try all six-digit codes. A wrong code is on record even though the
 	// request is refused (inTxKeeping commits it).
 	err := s.inTxKeeping(ctx, func(tx Repository) error {
+		// The rate lock comes before the user's rows, as in the login's second step.
 		if err := tx.LockRateKeys(ctx, secondFactorLockKey(u.ID)); err != nil {
 			return err
 		}
-		lock, err := tx.GetSecondFactorLockout(ctx, u.ID)
-		if err != nil {
-			return err
-		}
-		now := s.nowUTC()
-		if now.Before(lock.LockedUntil) {
-			return secondFactorLocked(lock.LockedUntil)
-		}
-		all, err := tx.ListAuthenticators(ctx, u.ID)
-		if err != nil {
-			return err
-		}
-		var pending *Authenticator
-		for i, a := range all {
-			if a.Type == AuthenticatorTOTP && a.Enabled {
-				return totpAlreadyEnabled()
-			}
-			if a.Type == AuthenticatorTOTP {
-				pending = &all[i]
-			}
-		}
-		if pending == nil {
-			return newKind(KindNotFound, CodeNotFound)
-		}
-		secret, err := s.openAuthenticatorSecret(*pending)
-		if err != nil {
-			return err
-		}
-		step, ok := matchTOTP(secret, code, now, 0)
-		if !ok {
-			return s.recordSecondFactorFailure(ctx, tx, u.ID, lock, now)
-		}
-		if lock.Failures != 0 || !lock.LockedUntil.IsZero() {
-			if err := tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{}); err != nil {
+		return s.changeCredential(ctx, tx, credentialChange{
+			User:        u.ID,
+			Revoke:      RevokeOthers,
+			KeepSession: hashToken(sessionToken),
+			Apply: func(lockedCredential) error {
+				var err error
+				recovery, err = s.enableTOTP(ctx, tx, u.ID, code)
 				return err
-			}
-		}
-		if on, err := tx.EnableAuthenticator(ctx, pending.ID, step, s.nowUTC()); err != nil {
-			return err
-		} else if !on {
-			return newKind(KindNotFound, CodeNotFound)
-		}
-		if recovery, err = s.replaceRecoveryCodes(ctx, tx, u.ID); err != nil {
-			return err
-		}
-		if err := tx.DeleteOtherUserSessions(ctx, u.ID, hashToken(sessionToken)); err != nil {
-			return err
-		}
-		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), secondFactorEnabledAudit(u.ID, AuthenticatorTOTP)); err != nil {
-			return err
-		}
-		return s.notifySecurity(ctx, tx, u.ID, u.Email, MailTemplateSecondFactorEnabled, nil)
+			},
+			Audit:   &credentialAudit{By: AuditActorOf(actor), Event: secondFactorEnabledAudit(u.ID, AuthenticatorTOTP)},
+			Notices: []securityNotice{{To: u.Email, Template: MailTemplateSecondFactorEnabled}},
+		})
 	})
 	if err != nil {
 		return nil, err
 	}
 	return recovery, nil
+}
+
+// enableTOTP is the change ConfirmTOTP makes under the user's locks: it checks the lockout and
+// the code, enables the pending authenticator and makes the recovery codes (returned). A wrong
+// code is recorded and comes back as the error to answer with, to be committed.
+func (s *Service) enableTOTP(ctx context.Context, tx Repository, id UserID, code string) ([]string, error) {
+	lock, err := tx.GetSecondFactorLockout(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	now := s.nowUTC()
+	if now.Before(lock.LockedUntil) {
+		return nil, secondFactorLocked(lock.LockedUntil)
+	}
+	all, err := tx.ListAuthenticators(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	var pending *Authenticator
+	for i, a := range all {
+		if a.Type == AuthenticatorTOTP && a.Enabled {
+			return nil, totpAlreadyEnabled()
+		}
+		if a.Type == AuthenticatorTOTP {
+			pending = &all[i]
+		}
+	}
+	if pending == nil {
+		return nil, newKind(KindNotFound, CodeNotFound)
+	}
+	secret, err := s.openAuthenticatorSecret(*pending)
+	if err != nil {
+		return nil, err
+	}
+	step, ok := matchTOTP(secret, code, now, 0)
+	if !ok {
+		return nil, s.recordSecondFactorFailure(ctx, tx, id, lock, now)
+	}
+	if lock.Failures != 0 || !lock.LockedUntil.IsZero() {
+		if err := tx.PutSecondFactorLockout(ctx, id, SecondFactorLockout{}); err != nil {
+			return nil, err
+		}
+	}
+	if on, err := tx.EnableAuthenticator(ctx, pending.ID, step, s.nowUTC()); err != nil {
+		return nil, err
+	} else if !on {
+		return nil, newKind(KindNotFound, CodeNotFound)
+	}
+	return s.replaceRecoveryCodes(ctx, tx, id)
 }
 
 // ---------------------------------------------------------------- the login's second step

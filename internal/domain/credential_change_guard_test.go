@@ -93,9 +93,9 @@ func TestChangeCredentialStopsWhereTheChangeIsRefused(t *testing.T) {
 	r := &stepRepo{}
 	err := runChange(r, credentialChange{
 		User: 7, Revoke: RevokeAll, SpendTokens: passwordTokenPurposes,
-		Apply:  func(lockedCredential) error { return errStep },
-		Audit:  &credentialAudit{Event: passwordResetAudit(7)},
-		Notice: &securityNotice{To: "u@example.com", Template: MailTemplatePasswordChangedByOperator},
+		Apply:   func(lockedCredential) error { return errStep },
+		Audit:   &credentialAudit{Event: passwordResetAudit(7)},
+		Notices: []securityNotice{{To: "u@example.com", Template: MailTemplatePasswordChangedByOperator}},
 	})
 	if !errors.Is(err, errStep) {
 		t.Fatalf("err = %v, want the refusal", err)
@@ -149,8 +149,8 @@ func TestChangeCredentialAuditsBeforeItNotifies(t *testing.T) {
 	full := &stepRepo{}
 	err := runChange(full, credentialChange{
 		User: 7, Revoke: RevokeOthers, KeepSession: "keep", Apply: noop,
-		Audit:  &credentialAudit{Event: passwordResetAudit(7)},
-		Notice: &securityNotice{To: "u@example.com", Template: MailTemplatePasswordChangedByOperator},
+		Audit:   &credentialAudit{Event: passwordResetAudit(7)},
+		Notices: []securityNotice{{To: "u@example.com", Template: MailTemplatePasswordChangedByOperator}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -162,8 +162,8 @@ func TestChangeCredentialStopsWhenTheAuditFails(t *testing.T) {
 	r := &stepRepo{auditErr: errStep}
 	err := runChange(r, credentialChange{
 		User: 7, Revoke: RevokeAll, Apply: noop,
-		Audit:  &credentialAudit{Event: passwordResetAudit(7)},
-		Notice: &securityNotice{To: "u@example.com", Template: MailTemplatePasswordChangedByOperator},
+		Audit:   &credentialAudit{Event: passwordResetAudit(7)},
+		Notices: []securityNotice{{To: "u@example.com", Template: MailTemplatePasswordChangedByOperator}},
 	})
 	if !errors.Is(err, errStep) {
 		t.Fatalf("err = %v, want the audit error", err)
@@ -174,13 +174,13 @@ func TestChangeCredentialStopsWhenTheAuditFails(t *testing.T) {
 // The notice is best effort (a statement that fails is swallowed) unless the transaction is lost:
 // then the change fails with it.
 func TestChangeCredentialNoticeFailure(t *testing.T) {
-	notice := &securityNotice{To: "u@example.com", Template: MailTemplatePasswordChangedByOperator}
+	notice := []securityNotice{{To: "u@example.com", Template: MailTemplatePasswordChangedByOperator}}
 	swallowed := &stepRepo{noticeRepo: noticeRepo{insertErr: errors.New("fake: field has no default value (1364)")}}
-	if err := runChange(swallowed, credentialChange{User: 7, Revoke: RevokeAll, Apply: noop, Notice: notice}); err != nil {
+	if err := runChange(swallowed, credentialChange{User: 7, Revoke: RevokeAll, Apply: noop, Notices: notice}); err != nil {
 		t.Fatalf("err = %v, want the statement failure swallowed", err)
 	}
 	lost := &stepRepo{noticeRepo: noticeRepo{insertErr: errFakeDeadlock}}
-	if err := runChange(lost, credentialChange{User: 7, Revoke: RevokeAll, Apply: noop, Notice: notice}); !errors.Is(err, errFakeDeadlock) {
+	if err := runChange(lost, credentialChange{User: 7, Revoke: RevokeAll, Apply: noop, Notices: notice}); !errors.Is(err, errFakeDeadlock) {
 		t.Fatalf("err = %v, want the lost transaction returned", err)
 	}
 }

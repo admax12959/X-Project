@@ -389,32 +389,15 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 			}
 		}
 		if newLoginEmail != "" {
-			if err := tx.RenameEmailLogin(ctx, id, newLoginEmail); errors.Is(err, ErrIdentityTaken) {
-				return loginEmailTaken("loginEmail")
-			} else if err != nil {
-				return err
-			}
-			// A link mailed to the old address must not work any more.
-			if err := tx.UseUserAuthTokens(ctx, id, passwordTokenPurposes, s.nowUTC()); err != nil {
+			if err := s.changeLoginEmail(ctx, tx, loginEmailChange{
+				User: id, Old: oldLoginEmail, New: newLoginEmail, ContactBefore: contactBefore,
+				By: AuditActorOf(actor), Field: "loginEmail",
+			}); err != nil {
 				return err
 			}
 			for i := range cur.Identities {
 				if cur.Identities[i].Kind == IdentityEmail {
 					cur.Identities[i].LoginName = newLoginEmail
-				}
-			}
-			if err := s.recordAudit(ctx, tx, AuditActorOf(actor), loginEmailChangedAudit(id, oldLoginEmail, newLoginEmail)); err != nil {
-				return err
-			}
-			// Same notice as when the user changes it themselves: the old login address and, when
-			// it is another one, the contact email as it was. No secret goes into it.
-			data := map[string]string{"OldEmail": oldLoginEmail, "NewEmail": newLoginEmail}
-			if err := s.notifySecurity(ctx, tx, id, oldLoginEmail, MailTemplateLoginEmailChanged, data); err != nil {
-				return err
-			}
-			if contactBefore != oldLoginEmail {
-				if err := s.notifySecurity(ctx, tx, id, contactBefore, MailTemplateLoginEmailChanged, data); err != nil {
-					return err
 				}
 			}
 		}

@@ -115,19 +115,20 @@ func (s *Service) UnbindOwnIdentity(ctx context.Context, actor Actor, kind strin
 			return Validation(Invalid("kind", CodeLastIdentity, nil))
 		}
 		removed, _ := cur.identity(IdentityKind(kind))
-		if err := tx.DeleteIdentity(ctx, cur.User.ID, IdentityKind(kind)); err != nil {
-			return err
-		}
+		var spend []TokenPurpose
 		if removed.Kind == IdentityEmail {
-			// Links mailed to the removed identity's address must not work any more.
-			if err := tx.UseUserAuthTokens(ctx, cur.User.ID, passwordTokenPurposes, s.nowUTC()); err != nil {
-				return err
-			}
+			spend = passwordTokenPurposes // links mailed to the removed identity's address must not work any more
 		}
-		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), identityUnboundAudit(cur.User.ID, removed.Kind, removed.LoginName)); err != nil {
-			return err
-		}
-		if err := s.notifySecurity(ctx, tx, cur.User.ID, cur.User.Email, MailTemplateIdentityUnbound, map[string]string{"Kind": string(removed.Kind), "LoginName": removed.LoginName}); err != nil {
+		if err := s.changeCredential(ctx, tx, credentialChange{
+			User:        cur.User.ID,
+			Revoke:      RevokeNone,
+			SpendTokens: spend,
+			Apply: func(lockedCredential) error {
+				return tx.DeleteIdentity(ctx, cur.User.ID, IdentityKind(kind))
+			},
+			Audit:   &credentialAudit{By: AuditActorOf(actor), Event: identityUnboundAudit(cur.User.ID, removed.Kind, removed.LoginName)},
+			Notices: []securityNotice{{To: cur.User.Email, Template: MailTemplateIdentityUnbound, Data: map[string]string{"Kind": string(removed.Kind), "LoginName": removed.LoginName}}},
+		}); err != nil {
 			return err
 		}
 		cur.Identities = slices.DeleteFunc(cur.Identities, func(i LoginIdentity) bool { return i.Kind == IdentityKind(kind) })
@@ -235,23 +236,29 @@ func (s *Service) bindIdentity(ctx context.Context, userID UserID, sp bindSpec) 
 			UserID: userID, Kind: sp.kind, LoginName: sp.loginName, PasswordHash: sp.hash, PasswordSet: sp.hash != "",
 			BoundAt: s.nowUTC(), BoundVia: sp.via, MustChangePassword: sp.mustChange,
 		}
-		if err := tx.CreateIdentity(ctx, ident); errors.Is(err, ErrIdentityTaken) { // lost a race for the login name
-			return taken()
-		} else if err != nil {
-			return err
-		}
-		cur.Identities = append(cur.Identities, ident)
+		// The directory's profile is taken before the identity is created, so that the notice goes
+		// to the contact email as it is afterwards. Both are undone together if the bind fails.
 		if sp.entry != nil {
 			if err := s.syncFromDirectory(ctx, tx, &cur.User, *sp.entry); err != nil {
 				return err
 			}
 		}
-		if err := s.recordAudit(ctx, tx, sp.by, identityBoundAudit(userID, sp.kind, sp.loginName, sp.via)); err != nil {
+		if err := s.changeCredential(ctx, tx, credentialChange{
+			User:   userID,
+			Revoke: RevokeNone,
+			Apply: func(lockedCredential) error {
+				err := tx.CreateIdentity(ctx, ident)
+				if errors.Is(err, ErrIdentityTaken) { // lost a race for the login name
+					return taken()
+				}
+				return err
+			},
+			Audit:   &credentialAudit{By: sp.by, Event: identityBoundAudit(userID, sp.kind, sp.loginName, sp.via)},
+			Notices: []securityNotice{{To: cur.User.Email, Template: MailTemplateIdentityBound, Data: map[string]string{"Kind": string(sp.kind), "LoginName": sp.loginName}}},
+		}); err != nil {
 			return err
 		}
-		if err := s.notifySecurity(ctx, tx, userID, cur.User.Email, MailTemplateIdentityBound, map[string]string{"Kind": string(sp.kind), "LoginName": sp.loginName}); err != nil {
-			return err
-		}
+		cur.Identities = append(cur.Identities, ident)
 		result = cur
 		return nil
 	})

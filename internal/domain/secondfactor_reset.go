@@ -14,19 +14,22 @@ import (
 
 // resetSecondFactor removes the user's second factor and everything attached to it (pending
 // authenticators, recovery codes, the failed-attempt counter), records who did it and tells
-// the contact email when mail works. Call inside InTx. The user's open sessions stay: they were
-// opened with a second factor; the user is not logged out by the loss of a device.
+// the contact email when mail works. Call inside InTx. It is a credential change that ends
+// nothing (RevokeNone): the user's open sessions stay, they were opened with a second factor,
+// and the user is not logged out by the loss of a device.
 func (s *Service) resetSecondFactor(ctx context.Context, tx Repository, by AuditActor, u User) error {
-	if err := tx.DeleteAuthenticatorsAndRecoveryCodes(ctx, u.ID); err != nil {
-		return err
-	}
-	if err := tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{}); err != nil {
-		return err
-	}
-	if err := s.recordAudit(ctx, tx, by, secondFactorResetAudit(u.ID)); err != nil {
-		return err
-	}
-	return s.notifySecurity(ctx, tx, u.ID, u.Email, MailTemplateSecondFactorReset, nil)
+	return s.changeCredential(ctx, tx, credentialChange{
+		User:   u.ID,
+		Revoke: RevokeNone,
+		Apply: func(lockedCredential) error {
+			if err := tx.DeleteAuthenticatorsAndRecoveryCodes(ctx, u.ID); err != nil {
+				return err
+			}
+			return tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{})
+		},
+		Audit:   &credentialAudit{By: by, Event: secondFactorResetAudit(u.ID)},
+		Notices: []securityNotice{{To: u.Email, Template: MailTemplateSecondFactorReset}},
+	})
 }
 
 // ResetSecondFactor removes a user's second factor. Administrators only (user.manage). The user
@@ -172,8 +175,8 @@ func (s *Service) ResetUserByCLI(ctx context.Context, in CLIResetInput) (CLIRese
 				res.Password = temp
 				return nil
 			},
-			Audit:  &credentialAudit{By: AuditActorCLI, Event: passwordResetAudit(cur.User.ID)},
-			Notice: &securityNotice{To: cur.User.Email, Template: MailTemplatePasswordChangedByOperator},
+			Audit:   &credentialAudit{By: AuditActorCLI, Event: passwordResetAudit(cur.User.ID)},
+			Notices: []securityNotice{{To: cur.User.Email, Template: MailTemplatePasswordChangedByOperator}},
 		})
 	})
 	if err != nil {

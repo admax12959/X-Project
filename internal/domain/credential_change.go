@@ -22,8 +22,8 @@ const (
 	revokeUnset RevokePolicy = iota // the zero value: refused, a caller that forgot to choose
 
 	// RevokeNone leaves sessions and pending login challenges alone, as the second-factor
-	// resets do: the user is not logged out by the loss of a device. No caller needs it yet
-	// (the second-factor changes migrate in a later ticket).
+	// resets do: the user is not logged out by the loss of a device. The changes that today end
+	// nothing use it as well (an email change, a bind), until a later ticket decides otherwise.
 	RevokeNone
 	// RevokeOthers ends the pending login challenges and every session but the one in
 	// credentialChange.KeepSession: the session that made the change stays.
@@ -83,9 +83,9 @@ type credentialChange struct {
 	// the challenges and sessions end. A caller that does not spend tokens leaves it empty.
 	SpendTokens []TokenPurpose
 
-	// Audit and Notice are skipped when nil.
-	Audit  *credentialAudit
-	Notice *securityNotice
+	// Audit is skipped when nil; Notices are sent in order, none when empty.
+	Audit   *credentialAudit
+	Notices []securityNotice
 }
 
 // changeCredential runs ch inside tx (call it within InTx). The order is fixed: the user's row
@@ -93,7 +93,7 @@ type credentialChange struct {
 // spent, the pending login challenges, the sessions (challenges before sessions: a login
 // completing its second step holds the row of its challenge, so the delete waits for its session
 // and the delete of the sessions that follows then sees it; see completeSecondFactorLogin),
-// the audit entry, the notice.
+// the audit entry, the notices.
 func (s *Service) changeCredential(ctx context.Context, tx Repository, ch credentialChange) error {
 	if ch.Apply == nil {
 		return errors.New("credential change: no change given")
@@ -145,10 +145,51 @@ func (s *Service) changeCredential(ctx context.Context, tx Repository, ch creden
 			return err
 		}
 	}
-	if n := ch.Notice; n != nil {
-		return s.notifySecurity(ctx, tx, ch.User, n.To, n.Template, n.Data)
+	for _, n := range ch.Notices {
+		if err := s.notifySecurity(ctx, tx, ch.User, n.To, n.Template, n.Data); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// loginEmailChange is a replacement of the login email of a user's email identity, by the user
+// (ChangeOwnLoginEmail) or by an administrator (UpdateUser).
+type loginEmailChange struct {
+	User UserID
+	Old  string // the login email being replaced
+	New  string
+	// ContactBefore is the user's contact email as it was before the change, which the change
+	// itself may be moving to New.
+	ContactBefore string
+	By            AuditActor
+	// Field is the request field a login email that is taken is reported on.
+	Field string
+}
+
+// changeLoginEmail renames the login email and ends the password links mailed to the old one.
+// It ends no session. The old login address is told and, when the contact email was another
+// address, the contact email as well. No secret goes into the notice.
+func (s *Service) changeLoginEmail(ctx context.Context, tx Repository, c loginEmailChange) error {
+	data := map[string]string{"OldEmail": c.Old, "NewEmail": c.New}
+	notices := []securityNotice{{To: c.Old, Template: MailTemplateLoginEmailChanged, Data: data}}
+	if c.ContactBefore != c.Old {
+		notices = append(notices, securityNotice{To: c.ContactBefore, Template: MailTemplateLoginEmailChanged, Data: data})
+	}
+	return s.changeCredential(ctx, tx, credentialChange{
+		User:        c.User,
+		Revoke:      RevokeNone,
+		SpendTokens: passwordTokenPurposes, // a link mailed to the old address must not work any more
+		Apply: func(lockedCredential) error {
+			err := tx.RenameEmailLogin(ctx, c.User, c.New)
+			if errors.Is(err, ErrIdentityTaken) {
+				return loginEmailTaken(c.Field)
+			}
+			return err
+		},
+		Audit:   &credentialAudit{By: c.By, Event: loginEmailChangedAudit(c.User, c.Old, c.New)},
+		Notices: notices,
+	})
 }
 
 // notifySecurity queues a security notice about a login identity change to an address of the
