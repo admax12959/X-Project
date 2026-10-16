@@ -288,7 +288,7 @@ func TestCredentialChangeCallSites(t *testing.T) {
 	}
 }
 
-// The refusals of the three call sites. The whole recorded sequence is compared again: a refusal
+// The refusals of the call sites. The whole recorded sequence is compared again: a refusal
 // is made with the locks held and before anything is written, so nothing after the locks may
 // run, and each call site keeps its own error and its own order of checks.
 func TestCredentialChangeRefusals(t *testing.T) {
@@ -323,10 +323,28 @@ func TestCredentialChangeRefusals(t *testing.T) {
 	cases := []struct {
 		name    string
 		setup   func(*fakes.RecordingRepo)
+		prepare func(*domain.Service, *fakes.RecordingRepo)
 		run     func(*domain.Service) error
 		wantErr func(error) bool
 		want    []string
 	}{
+		{
+			name: "ConfirmTOTP: a wrong code is counted and refused, and ends no challenge or session",
+			prepare: func(s *domain.Service, r *fakes.RecordingRepo) {
+				if _, err := s.StartTOTPSetup(context.Background(), domain.Actor{User: domain.User{ID: 7}}, old); err != nil {
+					t.Fatal(err)
+				}
+			},
+			run: func(s *domain.Service) error {
+				_, err := s.ConfirmTOTP(context.Background(), domain.Actor{User: domain.User{ID: 7}}, "tok", "000000")
+				return err
+			},
+			wantErr: kind(domain.KindValidation),
+			want: []string{
+				"LockRateKeys", "LockEmailIdentity", "GetSecondFactorLockout", "ListAuthenticators",
+				"PutSecondFactorLockout",
+			},
+		},
 		{
 			name:    "ChangePassword: a user without an email identity is not found, before the session is read",
 			setup:   func(r *fakes.RecordingRepo) { r.NoEmailIdentity = true },
@@ -433,7 +451,12 @@ func TestCredentialChangeRefusals(t *testing.T) {
 			if tc.setup != nil {
 				tc.setup(repo)
 			}
-			err := tc.run(domain.NewService(repo, domain.Options{}))
+			svc := domain.NewService(repo, domain.Options{SecretKey: "test-secret-key"})
+			if tc.prepare != nil {
+				tc.prepare(svc, repo)
+				repo.Calls = nil
+			}
+			err := tc.run(svc)
 			if err == nil || !tc.wantErr(err) {
 				t.Fatalf("err = %v, not the refusal wanted", err)
 			}
