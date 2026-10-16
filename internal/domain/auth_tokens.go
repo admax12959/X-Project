@@ -237,6 +237,14 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 		return err
 	}
 	return s.repo.InTx(ctx, func(tx Repository) error {
+		// The user is locked before the token row, as SendInvitation, a login email change and
+		// the reset CLI do (they lock the user and then write the tokens); the other order
+		// deadlocks with them. The user comes from the plain read above; the token is read again
+		// under the locks and judged again.
+		ident, hasEmail, err := tx.LockEmailIdentity(ctx, first.UserID)
+		if err != nil {
+			return err
+		}
 		t, found, err := tx.LockAuthToken(ctx, hashToken(token))
 		if err != nil {
 			return err
@@ -244,13 +252,10 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 		if err := s.judgePasswordToken(t, found); err != nil {
 			return err
 		}
-		now := s.nowUTC()
-		// The identity is locked before anything else is read, so that a change of the password
-		// or a reset that is running is finished (and visible) when the token is judged.
-		ident, hasEmail, err := tx.LockEmailIdentity(ctx, t.UserID)
-		if err != nil {
-			return err
+		if t.UserID != first.UserID {
+			return tokenInvalid()
 		}
+		now := s.nowUTC()
 		u, found, err := tx.GetUser(ctx, t.UserID)
 		if err != nil {
 			return err
