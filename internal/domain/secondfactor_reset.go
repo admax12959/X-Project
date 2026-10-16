@@ -172,8 +172,8 @@ func (s *Service) ResetUserByCLI(ctx context.Context, in CLIResetInput) (CLIRese
 				res.Password = temp
 				return nil
 			},
-			Audit:  &credentialAudit{By: AuditActorCLI, Event: passwordResetAudit(cur.User.ID)},
-			Notice: &securityNotice{To: cur.User.Email, Template: MailTemplatePasswordChangedByOperator},
+			Audit:   &credentialAudit{By: AuditActorCLI, Event: passwordResetAudit(cur.User.ID)},
+			Notices: []securityNotice{{To: cur.User.Email, Template: MailTemplatePasswordChangedByOperator}},
 		})
 	})
 	if err != nil {

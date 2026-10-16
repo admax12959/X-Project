@@ -22,8 +22,8 @@ const (
 	revokeUnset RevokePolicy = iota // the zero value: refused, a caller that forgot to choose
 
 	// RevokeNone leaves sessions and pending login challenges alone, as the second-factor
-	// resets do: the user is not logged out by the loss of a device. No caller needs it yet
-	// (the second-factor changes migrate in a later ticket).
+	// resets do: the user is not logged out by the loss of a device. The changes that today end
+	// nothing use it as well (an email change, a bind), until a later ticket decides otherwise.
 	RevokeNone
 	// RevokeOthers ends the pending login challenges and every session but the one in
 	// credentialChange.KeepSession: the session that made the change stays.
@@ -83,9 +83,9 @@ type credentialChange struct {
 	// the challenges and sessions end. A caller that does not spend tokens leaves it empty.
 	SpendTokens []TokenPurpose
 
-	// Audit and Notice are skipped when nil.
-	Audit  *credentialAudit
-	Notice *securityNotice
+	// Audit is skipped when nil; Notices are sent in order, none when empty.
+	Audit   *credentialAudit
+	Notices []securityNotice
 }
 
 // changeCredential runs ch inside tx (call it within InTx). The order is fixed: the user's row
@@ -93,7 +93,7 @@ type credentialChange struct {
 // spent, the pending login challenges, the sessions (challenges before sessions: a login
 // completing its second step holds the row of its challenge, so the delete waits for its session
 // and the delete of the sessions that follows then sees it; see completeSecondFactorLogin),
-// the audit entry, the notice.
+// the audit entry, the notices.
 func (s *Service) changeCredential(ctx context.Context, tx Repository, ch credentialChange) error {
 	if ch.Apply == nil {
 		return errors.New("credential change: no change given")
@@ -145,8 +145,10 @@ func (s *Service) changeCredential(ctx context.Context, tx Repository, ch creden
 			return err
 		}
 	}
-	if n := ch.Notice; n != nil {
-		return s.notifySecurity(ctx, tx, ch.User, n.To, n.Template, n.Data)
+	for _, n := range ch.Notices {
+		if err := s.notifySecurity(ctx, tx, ch.User, n.To, n.Template, n.Data); err != nil {
+			return err
+		}
 	}
 	return nil
 }
