@@ -86,7 +86,6 @@ var smtpSection = configSection[SMTPSettings, SMTPConfigInput]{
 	secrets: []sectionSecret[SMTPSettings]{{
 		name:       smtpSecretPassword,
 		unusedWhen: func(m SMTPSettings) bool { return m.Username == "" }, // no account: no password to keep
-		resaveSame: true,
 	}},
 	typed: func(in SMTPConfigInput) map[string]string {
 		return map[string]string{smtpSecretPassword: in.Password}

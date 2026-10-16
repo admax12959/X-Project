@@ -218,3 +218,64 @@ func TestOnlyAnAdministratorSavesASection(t *testing.T) {
 		t.Fatalf("something was written: %v, %d audits", repo.sections, len(repo.audits))
 	}
 }
+
+func smtpInput(password string, mutate func(*SMTPSettings)) SMTPConfigInput {
+	in := SMTPConfigInput{Password: password, SMTPSettings: SMTPSettings{
+		Enabled: true, Host: "smtp.corp.example", Port: 587, Security: MailSecurityStartTLS, Username: "mailer",
+		From: "noreply@corp.example", SiteURL: "https://xp.corp.example",
+	}}
+	if mutate != nil {
+		mutate(&in.SMTPSettings)
+	}
+	return in
+}
+
+func storageInput(keyID, secret string) StorageConfigInput {
+	return StorageConfigInput{AccessKeyID: keyID, SecretAccessKey: secret, StorageSettings: StorageSettings{
+		Driver: StorageS3, Endpoint: "https://s3.corp.example", Bucket: "xp-objects",
+	}}
+}
+
+// A secret typed again with the value that is already stored is not a change: it is not
+// encrypted and stored again and not audited, whatever the section.
+func TestATypedSecretEqualToTheStoredOneIsNotAChange(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name    string
+		section string
+		save    func(*Service) error // saves the same form every time, with the secrets typed
+		puts    int                  // secrets stored by the first save
+	}{
+		{"ldap", SectionLDAP, func(s *Service) error {
+			_, err := s.UpdateLDAPConfig(ctx, configAdmin(), ldapInput("pw-one-1", nil))
+			return err
+		}, 1},
+		{"smtp", SectionSMTP, func(s *Service) error {
+			_, err := s.UpdateSMTPConfig(ctx, configAdmin(), smtpInput("pw-one-1", nil))
+			return err
+		}, 1},
+		{"storage", SectionStorage, func(s *Service) error {
+			_, err := s.UpdateStorageConfig(ctx, configAdmin(), storageInput("key-id-1", "secret-1"))
+			return err
+		}, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := newConfigRepo()
+			svc := newConfigService(repo)
+			if err := tc.save(svc); err != nil {
+				t.Fatal(err)
+			}
+			if repo.secretPuts != tc.puts {
+				t.Fatalf("first save stored %d secrets, want %d", repo.secretPuts, tc.puts)
+			}
+			audits := len(repo.audits)
+			if err := tc.save(svc); err != nil {
+				t.Fatal(err)
+			}
+			if repo.secretPuts != tc.puts || len(repo.audits) != audits {
+				t.Fatalf("same form saved again: %d secrets stored (want %d), %d audit entries (want %d)",
+					repo.secretPuts, tc.puts, len(repo.audits), audits)
+			}
+		})
+	}
+}

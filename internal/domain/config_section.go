@@ -25,7 +25,6 @@ type sectionSecret[S any] struct {
 	// unusedWhen reports that the settings no longer use the secret (an LDAP section without a
 	// bind DN has no password to keep); a stored secret is then deleted. nil: never deleted.
 	unusedWhen func(S) bool
-	resaveSame bool // a typed value equal to the stored one is stored again and audited
 }
 
 // configSection declares one section. S is its settings, In the request of a save or a test.
@@ -118,7 +117,7 @@ func updateSection[S, In any](ctx context.Context, s *Service, actor Actor, sec 
 					return err
 				}
 				changes = append(changes, sc.name)
-			case typed[sc.name] != "" && (sc.resaveSame || typed[sc.name] != old.secrets.plain[sc.name]):
+			case typed[sc.name] != "" && typed[sc.name] != old.secrets.plain[sc.name]: // a typed value equal to the stored one is not a change
 				if err := s.saveSecret(ctx, tx, sec.name, sc.name, typed[sc.name]); err != nil {
 					return err
 				}

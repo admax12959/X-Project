@@ -96,7 +96,6 @@ var ldapSection = configSection[LDAPSettings, LDAPConfigInput]{
 	secrets: []sectionSecret[LDAPSettings]{{
 		name:       ldapSecretBindPassword,
 		unusedWhen: func(l LDAPSettings) bool { return l.BindDN == "" }, // anonymous search: no password to keep
-		resaveSame: true,
 	}},
 	typed: func(in LDAPConfigInput) map[string]string {
 		return map[string]string{ldapSecretBindPassword: in.BindPassword}
