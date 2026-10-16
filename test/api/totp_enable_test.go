@@ -134,3 +134,22 @@ func TestAnLDAPOnlyUserProvesThePasswordToTheDirectory(t *testing.T) {
 		t.Fatal("not enabled")
 	}
 }
+
+func TestWrongConfirmationCodesLockTheSecondStepLikeLoginGuesses(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	at := frozenMidStep(env)
+	c := plainUserClient(t, env, "tina")
+	s := startTOTP(t, c, "initial-pw-1")
+
+	wrong := totpAt(t, s.Secret, at.Add(5*totpStep))
+	for i := 0; i < 4; i++ {
+		c.Post(totpConfirmPath, map[string]string{"code": wrong}).ExpectError(http.StatusUnprocessableEntity, "code", "totpInvalid")
+	}
+	c.Post(totpConfirmPath, map[string]string{"code": wrong}).ExpectError(http.StatusTooManyRequests, "", "totpLocked")
+	// Locked: even the right code is refused, and the second factor stays off.
+	c.Post(totpConfirmPath, map[string]string{"code": totpAt(t, s.Secret, at)}).ExpectError(http.StatusTooManyRequests, "", "totpLocked")
+	if secondFactorOf(t, c).Enabled {
+		t.Fatal("the second factor was enabled while the second step was locked")
+	}
+}
