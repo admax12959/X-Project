@@ -34,6 +34,10 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) > 1 && !slices.Contains(cli.Commands, os.Args[1]) {
+		fmt.Fprintln(os.Stderr, cli.Usage)
+		return errExit(2)
+	}
 	cfg, err := app.Load()
 	if err != nil {
 		return err
@@ -72,10 +76,6 @@ func (e errExit) Error() string { return "exit " + strconv.Itoa(int(e)) }
 
 // runCommand runs a command of the container's command line (internal/cli) instead of the server.
 func runCommand(cfg app.Config, args []string) error {
-	if !slices.Contains(cli.Commands, args[0]) {
-		fmt.Fprintln(os.Stderr, cli.Usage)
-		return errExit(2)
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	svc, closeDB, err := app.OpenService(ctx, cfg)
