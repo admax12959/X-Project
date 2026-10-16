@@ -32,6 +32,9 @@ type sessionJSON struct {
 	// MustChangePassword: the password was chosen by an administrator. Until the user
 	// changes it (PUT /api/me/password) every other endpoint answers 403 passwordChangeRequired.
 	MustChangePassword bool `json:"mustChangePassword"`
+	// SecondFactorSetupRequired: the user is required to have a second factor and has none (#23).
+	// Until they set one up every other endpoint answers 403 secondFactorSetupRequired.
+	SecondFactorSetupRequired bool `json:"secondFactorSetupRequired"`
 }
 
 // memberRefJSON is a user inside another record (Owner/PE lists, event and status-change actors).
@@ -130,7 +133,7 @@ func (s *server) setPassword(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) currentSession(w http.ResponseWriter, r *http.Request) {
 	a := actorOf(r)
-	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(a.User), MustChangePassword: a.MustChangePassword})
+	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(a.User), MustChangePassword: a.MustChangePassword, SecondFactorSetupRequired: a.SecondFactorSetupRequired})
 }
 
 func (s *server) logout(w http.ResponseWriter, r *http.Request) {

@@ -12,6 +12,7 @@ import type {
   BindIdentityInput,
   ChangePasswordInput,
   SecondFactorRequired,
+  SecurityPolicy,
   SecondFactorStatus,
   SecondFactorWithCodes,
   TotpSetup,
@@ -74,6 +75,12 @@ export function onUnauthenticated(fn: () => void) {
   unauthenticatedHandler = fn;
 }
 
+let setupRequiredHandler: () => void = () => {};
+/** Called on a 403 secondFactorSetupRequired: the policy was switched on while the session was open. The session layer then shows the setup page. */
+export function onSetupRequired(fn: () => void) {
+  setupRequiredHandler = fn;
+}
+
 type Options = { body?: unknown; /** A file sent as it is (the avatar), not JSON. */ file?: Blob; expect401?: boolean };
 
 async function request<T>(method: string, path: string, opts: Options = {}): Promise<T> {
@@ -93,6 +100,7 @@ async function request<T>(method: string, path: string, opts: Options = {}): Pro
   if (res.ok) return data as T;
   const errors = (data as { errors?: ApiFieldError[] } | undefined)?.errors ?? [{ code: res.status >= 500 ? 'internal' : 'unknown' }];
   if (res.status === 401 && !opts.expect401) unauthenticatedHandler();
+  if (res.status === 403 && errors.some((e) => e.code === 'secondFactorSetupRequired')) setupRequiredHandler();
   throw new ApiError(res.status, errors);
 }
 
@@ -231,6 +239,11 @@ export const api = {
       /** Sends a test email with the unsaved form values to the signed-in administrator's contact email; saves nothing. A failed delivery is 200 {ok: false, code, detail}. */
       test: (input: SmtpConfigInput) => request<MailTestResult>('POST', '/api/system-config/smtp/test', { body: input }),
     },
+    security: {
+      get: () => request<SecurityPolicy>('GET', '/api/system-config/security'),
+      /** Saved changes are in effect at once, for sessions that are already open too. */
+      update: (forceSecondFactor: boolean) => request<SecurityPolicy>('PUT', '/api/system-config/security', { body: { forceSecondFactor } }),
+    },
     storage: {
       get: () => request<StorageConfig>('GET', '/api/system-config/storage'),
       /** 422 field errors per form field (S3 fields only for driver s3). Saved changes are in effect at once. */
@@ -269,6 +282,8 @@ export const api = {
     disable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/disable`),
     enable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/enable`),
     /** Sends the invitation mail again; the earlier link stops working. 422 inviteNotPending, 503 mailNotConfigured. */
+    /** Removes the user's second factor and recovery codes; the user is mailed when mail works. 404 when the user has none. */
+    resetSecondFactor: (id: string) => request<AdminUser>('POST', `/api/users/${id}/second-factor/reset`),
     sendInvitation: (id: string) => request<void>('POST', `/api/users/${id}/invitation`),
     /** 422 field errors (identityKindBound, identityTaken, loginEmailTaken, ldapLoginNotFound, password rules); 503 ldapUnreachable. */
     bindIdentity: (id: string, input: BindIdentityInput) => request<AdminUser>('POST', `/api/users/${id}/identities`, { body: input }),

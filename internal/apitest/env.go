@@ -9,6 +9,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -51,6 +52,10 @@ type Env struct {
 
 	server *httptest.Server
 	app    *app.App
+
+	adminMu      sync.Mutex
+	adminCookies []*http.Cookie
+	adminSecret  string
 }
 
 // EnqueueMail puts a mail into the outgoing mail queue, as a feature of the application does
@@ -166,11 +171,10 @@ func (e *Env) Client() *Client {
 	return &Client{t: e.t, env: e, http: &http.Client{Jar: jar}}
 }
 
-// AdminClient returns a client already logged in as the initial administrator.
+// AdminClient returns a client already logged in as the initial administrator, who has the
+// second factor turned on (see admin.go). All of them share one session.
 func (e *Env) AdminClient() *Client {
-	c := e.Client()
-	c.LoginEmail(AdminEmail, AdminPassword).ExpectStatus(http.StatusOK)
-	return c
+	return e.Client().WithCookies(e.enrollAdmin())
 }
 
 // Client talks to the Env's server over HTTP, keeping cookies like a browser.

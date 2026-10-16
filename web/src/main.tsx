@@ -13,6 +13,7 @@ import { AuditLogPage } from './pages/AuditLogPage.tsx';
 import { DepartmentsPage } from './pages/DepartmentsPage.tsx';
 import { LdapConfigPage } from './pages/LdapConfigPage.tsx';
 import { MailConfigPage } from './pages/MailConfigPage.tsx';
+import { SecurityPolicyPage } from './pages/SecurityPolicyPage.tsx';
 import { StorageConfigPage } from './pages/StorageConfigPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { PlatformsPage } from './pages/PlatformsPage.tsx';
@@ -66,6 +67,7 @@ function App() {
         <Route path="admin/ldap" element={<LdapConfigPage />} />
         <Route path="admin/mail" element={<MailConfigPage />} />
         <Route path="admin/storage" element={<StorageConfigPage />} />
+        <Route path="admin/security" element={<SecurityPolicyPage />} />
         <Route path="admin/roles" element={<RolesPage />} />
         <Route path="admin/audit" element={<AuditLogPage />} />
         <Route path="*" element={<NotFound />} />

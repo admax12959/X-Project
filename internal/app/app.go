@@ -42,6 +42,26 @@ func (a *App) Close() {
 	_ = a.db.Close()
 }
 
+// OpenService connects to the database and builds the domain service for the command line
+// (#23): no migration, no bootstrap, no background workers and no HTTP, so it can run next to
+// a live server (only deps.Now is used, a test clock). Mail it queues is delivered by the server's worker. The schema must exist
+// already (the server has started once). The returned function closes the database.
+func OpenService(ctx context.Context, cfg Config, deps Deps) (*domain.Service, func(), error) {
+	masterKey, err := cfg.MasterKey()
+	if err != nil {
+		return nil, nil, err
+	}
+	db, err := mysqlstore.Open(ctx, cfg.Database.DSN, cfg.Database.ConnectTimeout)
+	if err != nil {
+		return nil, nil, err
+	}
+	svc := domain.NewService(mysqlstore.New(db), domain.Options{
+		Now: deps.Now, SessionTTL: cfg.Session.TTL, SecretKey: masterKey, SecretKeyVersion: cfg.SecretKeyVersion,
+		MailRetryBackoff: cfg.Mail.RetryBackoff, LocalStorageDir: cfg.Storage.LocalDir,
+	})
+	return svc, func() { svc.WaitBackground(); _ = db.Close() }, nil
+}
+
 // avatarSweepInterval is how often orphan avatar objects are cleaned up.
 const avatarSweepInterval = 6 * time.Hour
 

@@ -25,7 +25,12 @@ export type User = {
 export type Language = 'zh' | 'en';
 
 /** mustChangePassword: the password was set by an administrator; until it is changed the server refuses everything else (403 passwordChangeRequired). */
-export type SessionInfo = { user: User; mustChangePassword: boolean };
+export type SessionInfo = {
+  user: User;
+  mustChangePassword: boolean;
+  /** The user is required to have a second factor and has none: the server refuses everything but the setup (403 secondFactorSetupRequired). */
+  secondFactorSetupRequired: boolean;
+};
 
 /** The first factor passed but the user has a second factor: no session yet, POST /api/session/second-factor with the code finishes the login. */
 export type SecondFactorRequired = { secondFactorRequired: true; expiresAt: string };
@@ -201,9 +206,14 @@ export type AdminUser = {
   language: Language | '';
   status: 'enabled' | 'disabled';
   isAdmin: boolean;
+  /** The user has a second factor turned on (an administrator can reset it). */
+  secondFactorEnabled: boolean;
   avatarUrl: string | null;
   identities: LoginIdentity[];
 };
+
+/** GET/PUT /api/system-config/security (administrators only). Administrators are required to have a second factor whatever this says. */
+export type SecurityPolicy = { forceSecondFactor: boolean; configured: boolean; updatedAt?: string };
 
 export type IdentityKind = 'email' | 'ldap';
 

@@ -51,12 +51,19 @@ const (
 	MailTemplateSecondFactorEnabled      MailTemplate = "secondFactorEnabled"
 	MailTemplateSecondFactorDisabled     MailTemplate = "secondFactorDisabled"
 	MailTemplateRecoveryCodesRegenerated MailTemplate = "recoveryCodesRegenerated"
+	// MailTemplateSecondFactorReset tells the contact email that an administrator (or the
+	// command line) removed the user's second factor (#23). Data: none.
+	MailTemplateSecondFactorReset MailTemplate = "secondFactorReset"
+	// MailTemplatePasswordChangedByOperator tells the contact email that the command line gave
+	// the account a new temporary password (#23). Data: none. Never carries the password.
+	MailTemplatePasswordChangedByOperator MailTemplate = "passwordChangedByOperator"
 )
 
 // mailTemplates is every bundled template.
 var mailTemplates = []MailTemplate{MailTemplateTest, MailTemplateInvite, MailTemplatePasswordReset, MailTemplateVerifyCode,
 	MailTemplateLoginEmailChanged, MailTemplateIdentityBound, MailTemplateIdentityUnbound,
-	MailTemplateSecondFactorEnabled, MailTemplateSecondFactorDisabled, MailTemplateRecoveryCodesRegenerated}
+	MailTemplateSecondFactorEnabled, MailTemplateSecondFactorDisabled, MailTemplateRecoveryCodesRegenerated,
+	MailTemplateSecondFactorReset, MailTemplatePasswordChangedByOperator}
 
 // MailTemplates lists the bundled templates.
 func MailTemplates() []MailTemplate { return append([]MailTemplate(nil), mailTemplates...) }

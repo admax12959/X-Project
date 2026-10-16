@@ -115,15 +115,6 @@ func (s *Service) claimRecoveryCode(ctx context.Context, id UserID, code string)
 
 // ---------------------------------------------------------------- regenerate and disable (#31)
 
-// secondFactorEnforcedFor says whether the user is required to have a second factor, in which
-// case they cannot turn it off.
-//
-// TODO(#23): the enforcement rule (by role, department or user) lands with #23. Until then no
-// one is required, and this is the one place that ticket has to fill in.
-func (s *Service) secondFactorEnforcedFor(ctx context.Context, u User) (bool, error) {
-	return false, nil
-}
-
 // requireEnabledSecondFactor says notFound for a user without an enabled authenticator, before
 // any code is looked at: a wrong code of such a user must not count against their lockout.
 func requireEnabledSecondFactor(ctx context.Context, tx Repository, id UserID) error {

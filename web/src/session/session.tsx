@@ -3,18 +3,19 @@
 // and RequireSession redirects to /login?next=<where you were>.
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
-import { api, ApiError, onUnauthenticated } from '../api/client.ts';
+import { api, ApiError, onSetupRequired, onUnauthenticated } from '../api/client.ts';
 import type { LoginInput, User } from '../api/types.ts';
 import { setLocale, useT } from '../i18n/index.ts';
 import { ForcedChangePasswordPage } from '../pages/ChangePassword.tsx';
+import { ForcedSecondFactorPage } from '../pages/ForcedSecondFactorPage.tsx';
 
 /** The language saved on the user wins over this browser's choice, so it follows them across devices. */
 function applySavedLanguage(user: User) {
   if (user.language === 'zh' || user.language === 'en') setLocale(user.language);
 }
 
-/** mustChangePassword: opened with an administrator-set password; RequireSession shows only the change-password page. */
-type State = { status: 'loading' } | { status: 'anonymous' } | { status: 'error' } | { status: 'authenticated'; user: User; mustChangePassword: boolean };
+/** mustChangePassword: opened with an administrator-set password; RequireSession shows only the change-password page. secondFactorSetupRequired: a second factor is required and missing; it then shows only the setup page. */
+type State = { status: 'loading' } | { status: 'anonymous' } | { status: 'error' } | { status: 'authenticated'; user: User; mustChangePassword: boolean; secondFactorSetupRequired: boolean };
 
 type SessionApi = {
   state: State;
@@ -37,7 +38,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     api.session.get().then(
       (s) => {
         applySavedLanguage(s.user);
-        setState({ status: 'authenticated', user: s.user, mustChangePassword: s.mustChangePassword });
+        setState({ status: 'authenticated', user: s.user, mustChangePassword: s.mustChangePassword, secondFactorSetupRequired: s.secondFactorSetupRequired });
       },
       (e: unknown) => setState(e instanceof ApiError && e.status === 401 ? { status: 'anonymous' } : { status: 'error' }),
     );
@@ -45,6 +46,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     onUnauthenticated(() => setState({ status: 'anonymous' }));
+    // The policy was switched on during the session: show the setup page without reloading (a reload would drop a setup in progress).
+    onSetupRequired(() => setState((prev) => (prev.status === 'authenticated' && !prev.secondFactorSetupRequired ? { ...prev, secondFactorSetupRequired: true } : prev)));
     reload();
   }, [reload]);
 
@@ -52,18 +55,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const s = await api.session.login(input);
     if ('secondFactorRequired' in s) return 'secondFactor' as const;
     applySavedLanguage(s.user);
-    setState({ status: 'authenticated', user: s.user, mustChangePassword: s.mustChangePassword });
+    setState({ status: 'authenticated', user: s.user, mustChangePassword: s.mustChangePassword, secondFactorSetupRequired: s.secondFactorSetupRequired });
     return 'done' as const;
   }, []);
 
   const submitSecondFactor = useCallback(async (code: string) => {
     const s = await api.session.submitSecondFactor(code);
     applySavedLanguage(s.user);
-    setState({ status: 'authenticated', user: s.user, mustChangePassword: s.mustChangePassword });
+    setState({ status: 'authenticated', user: s.user, mustChangePassword: s.mustChangePassword, secondFactorSetupRequired: s.secondFactorSetupRequired });
   }, []);
 
   const setUser = useCallback(
-    (user: User) => setState((prev) => ({ status: 'authenticated', user, mustChangePassword: prev.status === 'authenticated' && prev.mustChangePassword })),
+    (user: User) => setState((prev) => ({ status: 'authenticated', user, mustChangePassword: prev.status === 'authenticated' && prev.mustChangePassword, secondFactorSetupRequired: prev.status === 'authenticated' && prev.secondFactorSetupRequired })),
     [],
   );
 
@@ -116,6 +119,7 @@ export function RequireSession({ children }: { children: ReactNode }) {
       return <Navigate to={next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`} replace />;
     }
     case 'authenticated':
-      return state.mustChangePassword ? <ForcedChangePasswordPage onDone={reload} /> : <>{children}</>;
+      if (state.mustChangePassword) return <ForcedChangePasswordPage onDone={reload} />;
+      return state.secondFactorSetupRequired ? <ForcedSecondFactorPage onDone={reload} /> : <>{children}</>;
   }
 }

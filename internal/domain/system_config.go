@@ -25,9 +25,10 @@ import (
 
 // Section names are stored in system_config.section and appear as the audit target id.
 const (
-	SectionLDAP    = "ldap"
-	SectionSMTP    = "smtp" // the mail service (#20): mail_config.go
-	SectionStorage = "storage"
+	SectionLDAP     = "ldap"
+	SectionSMTP     = "smtp" // the mail service (#20): mail_config.go
+	SectionStorage  = "storage"
+	SectionSecurity = "security" // the second-factor policy (#23): security_policy.go
 )
 
 // StoredSecret is an encrypted secret as the repository keeps it.

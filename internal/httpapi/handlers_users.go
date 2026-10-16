@@ -18,12 +18,14 @@ type adminUserJSON struct {
 	Phone               string `json:"phone"`
 	DirectoryDepartment string `json:"directoryDepartment"`
 	// DepartmentID is the department in the organization (null = none), not the directory department.
-	DepartmentID *string        `json:"departmentId"`
-	Language     string         `json:"language"`
-	Status       string         `json:"status"`
-	IsAdmin      bool           `json:"isAdmin"`
-	Identities   []identityJSON `json:"identities"`
-	AvatarURL    *string        `json:"avatarUrl"`
+	DepartmentID *string `json:"departmentId"`
+	Language     string  `json:"language"`
+	Status       string  `json:"status"`
+	IsAdmin      bool    `json:"isAdmin"`
+	// SecondFactorEnabled: the user has a second factor turned on (#23).
+	SecondFactorEnabled bool           `json:"secondFactorEnabled"`
+	Identities          []identityJSON `json:"identities"`
+	AvatarURL           *string        `json:"avatarUrl"`
 }
 
 type identityJSON struct {
@@ -39,7 +41,7 @@ func toAdminUserJSON(v domain.UserWithIdentities) adminUserJSON {
 	u := v.User
 	out := adminUserJSON{
 		ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName,
-		Email: u.Email, Phone: u.Phone, DirectoryDepartment: u.DirectoryDepartment, Language: u.Language, Status: string(u.Status), IsAdmin: u.IsAdmin, AvatarURL: avatarURL(u.ID, u.AvatarHash),
+		Email: u.Email, Phone: u.Phone, DirectoryDepartment: u.DirectoryDepartment, Language: u.Language, Status: string(u.Status), IsAdmin: u.IsAdmin, AvatarURL: avatarURL(u.ID, u.AvatarHash), SecondFactorEnabled: v.SecondFactorEnabled,
 		Identities: make([]identityJSON, 0, len(v.Identities)),
 	}
 	if u.DepartmentID != 0 {
@@ -62,6 +64,7 @@ func (s *server) userRoutes() {
 	s.route("POST /api/users/{id}/invitation", s.sendInvitation)
 	s.route("POST /api/users/{id}/disable", s.statusHandler(s.svc.DisableUser))
 	s.route("POST /api/users/{id}/enable", s.statusHandler(s.svc.EnableUser))
+	s.route("POST /api/users/{id}/second-factor/reset", s.statusHandler(s.svc.ResetSecondFactor)) // #23
 	// Deliberately no DELETE: users can only be disabled.
 }
 

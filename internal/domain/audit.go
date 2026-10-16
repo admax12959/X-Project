@@ -75,6 +75,13 @@ const (
 	// AuditRecoveryCodesRegenerated: a user made a new set of recovery codes; the old set is
 	// void (#31). Target: the user. Params: none. Never the codes.
 	AuditRecoveryCodesRegenerated AuditAction = "recoveryCodesRegenerated"
+	// AuditSecondFactorReset: an administrator or the command line removed a user's second
+	// factor, for example after the phone was lost (#23). Target: the user. Params: none. The
+	// operator is the entry's actor.
+	AuditSecondFactorReset AuditAction = "secondFactorReset"
+	// AuditPasswordReset: the command line gave a user a new temporary password (#23); the
+	// user has to change it at the next login. Target: the user. Params: none. Never the password.
+	AuditPasswordReset AuditAction = "passwordReset"
 )
 
 // AuditTargetType says what kind of object an entry is about.
@@ -151,6 +158,14 @@ func secondFactorDisabledAudit(id UserID) auditEvent {
 
 func recoveryCodesRegeneratedAudit(id UserID) auditEvent {
 	return auditEvent{AuditRecoveryCodesRegenerated, AuditTargetUser, userTargetID(id), map[string]any{}}
+}
+
+func secondFactorResetAudit(id UserID) auditEvent {
+	return auditEvent{AuditSecondFactorReset, AuditTargetUser, userTargetID(id), map[string]any{}}
+}
+
+func passwordResetAudit(id UserID) auditEvent {
+	return auditEvent{AuditPasswordReset, AuditTargetUser, userTargetID(id), map[string]any{}}
 }
 
 func departmentTargetID(id DepartmentID) string { return strconv.FormatInt(int64(id), 10) }

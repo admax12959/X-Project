@@ -79,6 +79,7 @@ export function Shell() {
               <NavItem to="/admin/ldap" label="ldap.title" />
               <NavItem to="/admin/mail" label="smtp.title" />
               <NavItem to="/admin/storage" label="storage.title" />
+              <NavItem to="/admin/security" label="security.title" />
               <NavItem to="/admin/roles" label="roles.title" />
               <NavItem to="/admin/audit" label="audit.title" />
             </>

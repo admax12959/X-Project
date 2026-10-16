@@ -96,6 +96,18 @@ var mustChangeAllowed = map[string]bool{
 	"PUT /api/me/password": true,
 }
 
+// setupAllowed are the only routes a session of a user who is required to have a second
+// factor and has none may use (#23): see who it is, set the second factor up, log out. The
+// password change stays open for a session that has to make one first.
+var setupAllowed = map[string]bool{
+	"GET /api/session":                        true,
+	"DELETE /api/session":                     true,
+	"PUT /api/me/password":                    true,
+	"GET /api/me/second-factor":               true,
+	"POST /api/me/second-factor/totp":         true,
+	"POST /api/me/second-factor/totp/confirm": true,
+}
+
 func (s *server) route(pattern string, h http.HandlerFunc) { s.mux.HandleFunc(pattern, h) }
 
 func (s *server) publicRoute(pattern string, h http.HandlerFunc) {
@@ -116,6 +128,10 @@ func (s *server) serveAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		if actor.MustChangePassword && !mustChangeAllowed[pattern] {
 			writeCode(w, http.StatusForbidden, domain.CodePasswordChangeRequired)
+			return
+		}
+		if actor.SecondFactorSetupRequired && !setupAllowed[pattern] {
+			writeCode(w, http.StatusForbidden, domain.CodeSecondFactorSetupRequired)
 			return
 		}
 		r = r.WithContext(context.WithValue(r.Context(), actorKey{}, actor))

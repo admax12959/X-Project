@@ -25,7 +25,8 @@ function qrSrc(svg: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-export function SecondFactorPanel() {
+/** onReady (optional): told whenever the panel is at rest, true when a second factor is on and its recovery codes were saved. */
+export function SecondFactorPanel({ onReady }: { onReady?: (enabled: boolean) => void } = {}) {
   const { t } = useT();
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   // Set once the password was accepted; cleared when the setup is cancelled or confirmed.
@@ -45,6 +46,11 @@ export function SecondFactorPanel() {
       live = false;
     };
   }, []);
+
+  const settled = load.status === 'ok' ? load.value.enabled && codes === null : false;
+  useEffect(() => {
+    if (load.status === 'ok') onReady?.(settled);
+  }, [load.status, settled, onReady]);
 
   if (load.status === 'loading') return <p className="text-text-2">{t('common.loading')}</p>;
   if (load.status === 'error') return <ErrorLine message={errorsByField(load.error)[''] ?? t('settings.loadFailed')} />;

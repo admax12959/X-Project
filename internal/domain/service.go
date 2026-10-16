@@ -75,6 +75,9 @@ type Actor struct {
 	// MustChangePassword: the session was opened with an administrator-chosen password.
 	// The HTTP layer lets such a session do nothing but change the password and log out.
 	MustChangePassword bool
+	// SecondFactorSetupRequired: the user is required to have a second factor and has none
+	// (security_policy.go). The HTTP layer lets such a session do nothing but set one up.
+	SecondFactorSetupRequired bool
 }
 
 // ---------------------------------------------------------------- bootstrap
@@ -152,6 +155,8 @@ type LoginResult struct {
 	ExpiresAt          time.Time
 	User               User
 	MustChangePassword bool
+	// SecondFactorSetupRequired: see Actor.
+	SecondFactorSetupRequired bool
 	// SecondFactorToken is set instead of Token when the user has a second factor: the first
 	// factor passed, but there is no session until SubmitSecondFactor gets a right code.
 	SecondFactorToken     string
@@ -245,7 +250,11 @@ func (s *Service) createSession(ctx context.Context, u User, mustChange bool) (L
 	if err := s.repo.CreateSession(ctx, sess); err != nil {
 		return LoginResult{}, err
 	}
-	return LoginResult{Token: token, ExpiresAt: sess.ExpiresAt, User: u, MustChangePassword: mustChange}, nil
+	setup, err := s.secondFactorSetupRequiredFor(ctx, u)
+	if err != nil {
+		return LoginResult{}, err
+	}
+	return LoginResult{Token: token, ExpiresAt: sess.ExpiresAt, User: u, MustChangePassword: mustChange, SecondFactorSetupRequired: setup}, nil
 }
 
 // Authenticate resolves a session token to an Actor, or returns an unauthenticated error.
@@ -268,7 +277,11 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Actor, error)
 	if !ok || u.Status != UserEnabled {
 		return Actor{}, unauth
 	}
-	return Actor{User: u, MustChangePassword: sess.MustChangePassword}, nil
+	setup, err := s.secondFactorSetupRequiredFor(ctx, u)
+	if err != nil {
+		return Actor{}, err
+	}
+	return Actor{User: u, MustChangePassword: sess.MustChangePassword, SecondFactorSetupRequired: setup}, nil
 }
 
 // Logout ends the session identified by token. Unknown tokens are ignored.

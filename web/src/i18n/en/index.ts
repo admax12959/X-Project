@@ -11,6 +11,7 @@ import login from './login.ts';
 import password from './password.ts';
 import platforms from './platforms.ts';
 import roles from './roles.ts';
+import security from './security.ts';
 import settings from './settings.ts';
 import smtp from './smtp.ts';
 import storage from './storage.ts';
@@ -18,8 +19,8 @@ import terms from './terms.ts';
 import users from './users.ts';
 import versions from './versions.ts';
 
-export const sections = { applications, audit, common, departments, errors, history, ldap, lineage, login, password, platforms, roles, settings, smtp, storage, terms, users, versions };
+export const sections = { applications, audit, common, departments, errors, history, ldap, lineage, login, password, platforms, roles, security, settings, smtp, storage, terms, users, versions };
 
-export const en = { ...applications, ...audit, ...common, ...departments, ...errors, ...history, ...ldap, ...lineage, ...login, ...password, ...platforms, ...roles, ...settings, ...smtp, ...storage, ...terms, ...users, ...versions };
+export const en = { ...applications, ...audit, ...common, ...departments, ...errors, ...history, ...ldap, ...lineage, ...login, ...password, ...platforms, ...roles, ...security, ...settings, ...smtp, ...storage, ...terms, ...users, ...versions };
 
 export type MessageKey = keyof typeof en;

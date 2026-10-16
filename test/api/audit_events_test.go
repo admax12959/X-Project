@@ -172,6 +172,9 @@ func TestChangingTheAdministratorFlagIsRecordedAndTakesEffect(t *testing.T) {
 	if !promoted.IsAdmin {
 		t.Fatalf("user after granting = %+v, want an administrator", promoted)
 	}
+	// An administrator must have a second factor (#23): until she sets one up, nothing else opens.
+	janeC.Get("/api/users").ExpectError(http.StatusForbidden, "", "secondFactorSetupRequired")
+	enableTOTP(t, janeC, "initial-pw-1")
 	janeC.Get("/api/users").ExpectStatus(http.StatusOK)
 	// Sending the current value is not a change.
 	patchUser(admin, jane.ID, map[string]any{"isAdmin": true}).ExpectStatus(http.StatusOK)
