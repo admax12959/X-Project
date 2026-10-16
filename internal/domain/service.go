@@ -241,25 +241,53 @@ func (s *Service) openSession(ctx context.Context, u User, mustChange bool) (Log
 	if on {
 		return s.issueLoginChallenge(ctx, u, mustChange)
 	}
-	return s.createSession(ctx, u, mustChange)
+	return s.createSession(ctx, u, mustChange, false)
 }
 
-func (s *Service) createSession(ctx context.Context, u User, mustChange bool) (LoginResult, error) {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
+// createSession inserts a session. A password-only session (secondFactorPassed false) is checked
+// again once it exists: if the user enabled a second factor between the decision to open it and
+// its insertion (ConfirmTOTP ends the other sessions, but this one was not there yet), it would
+// pass for fully authenticated, so it is deleted and the login becomes a challenge instead.
+func (s *Service) createSession(ctx context.Context, u User, mustChange, secondFactorPassed bool) (LoginResult, error) {
+	sess, token, err := s.newSession(u, mustChange)
+	if err != nil {
 		return LoginResult{}, err
 	}
-	token := base64.RawURLEncoding.EncodeToString(raw)
-	now := s.nowUTC()
-	sess := Session{TokenHash: hashToken(token), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(s.sessionTTL), MustChangePassword: mustChange}
 	if err := s.repo.CreateSession(ctx, sess); err != nil {
 		return LoginResult{}, err
 	}
+	if !secondFactorPassed {
+		on, err := hasEnabledTOTP(ctx, s.repo, u.ID)
+		if err != nil {
+			return LoginResult{}, err
+		}
+		if on {
+			if err := s.repo.DeleteSession(ctx, sess.TokenHash); err != nil {
+				return LoginResult{}, err
+			}
+			return s.issueLoginChallenge(ctx, u, mustChange)
+		}
+	}
+	return s.sessionResult(ctx, u, sess, token)
+}
+
+// newSession makes a session and the token that opens it; nothing is stored.
+func (s *Service) newSession(u User, mustChange bool) (Session, string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return Session{}, "", err
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	now := s.nowUTC()
+	return Session{TokenHash: hashToken(token), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(s.sessionTTL), MustChangePassword: mustChange}, token, nil
+}
+
+func (s *Service) sessionResult(ctx context.Context, u User, sess Session, token string) (LoginResult, error) {
 	setup, err := s.secondFactorSetupRequiredFor(ctx, u)
 	if err != nil {
 		return LoginResult{}, err
 	}
-	return LoginResult{Token: token, ExpiresAt: sess.ExpiresAt, User: u, MustChangePassword: mustChange, SecondFactorSetupRequired: setup}, nil
+	return LoginResult{Token: token, ExpiresAt: sess.ExpiresAt, User: u, MustChangePassword: sess.MustChangePassword, SecondFactorSetupRequired: setup}, nil
 }
 
 // Authenticate resolves a session token to an Actor, or returns an unauthenticated error.

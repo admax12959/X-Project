@@ -2,6 +2,8 @@ package domain
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -13,8 +15,8 @@ import (
 )
 
 // Avatars (#32, ADR-0007). A user has at most one current avatar object in the object store,
-// "avatars/<user id>/<content hash>.jpg"; the users row says which. Browsers never see the
-// store: GET /api/avatars/{id} checks the session and streams the object.
+// "avatars/<user id>/<content hash>-<random>.jpg"; the users row says which. Browsers never see
+// the store: GET /api/avatars/{id} checks the session and streams the object.
 
 // AvatarSource says who put the current avatar there.
 type AvatarSource string
@@ -37,8 +39,16 @@ const (
 	AvatarOrphanMinAge = time.Hour
 )
 
-func avatarKey(id UserID, hash string) string {
-	return avatarPrefix + strconv.FormatInt(int64(id), 10) + "/" + hash + ".jpg"
+// avatarKey is the key of one upload: the content hash and a random suffix. The key is not
+// content-addressed, on purpose: with A, B and A again in quick succession a content key would
+// bring the user back to an object that the slower request replacing A is about to delete.
+// A key, once replaced, can never become current again.
+func avatarKey(id UserID, hash string) (string, error) {
+	suffix := make([]byte, 8)
+	if _, err := rand.Read(suffix); err != nil {
+		return "", err
+	}
+	return avatarPrefix + strconv.FormatInt(int64(id), 10) + "/" + hash + "-" + hex.EncodeToString(suffix) + ".jpg", nil
 }
 
 // AvatarRepository is the part of the persistence port the avatars need.
@@ -135,7 +145,10 @@ func (s *Service) RemoveAvatar(ctx context.Context, actor Actor) (UserWithIdenti
 // first, old second, so a failure in between leaves a harmless orphan and never a user with a
 // dangling avatar. applied=false when replaceUpload is false and the user has an upload.
 func (s *Service) storeAvatar(ctx context.Context, store ObjectStore, id UserID, jpg []byte, hash string, source AvatarSource, replaceUpload bool) (applied bool, err error) {
-	key := avatarKey(id, hash)
+	key, err := avatarKey(id, hash)
+	if err != nil {
+		return false, err
+	}
 	if err := store.Put(ctx, key, jpg, "image/jpeg"); err != nil {
 		return false, storageFailure("put avatar", err)
 	}
@@ -148,7 +161,7 @@ func (s *Service) storeAvatar(ctx context.Context, store ObjectStore, id UserID,
 	if err != nil {
 		return false, err // the new object stays behind; the periodic cleanup removes it
 	}
-	if previous != "" && previous != key { // the same picture again has the same key: keep it
+	if previous != "" { // keys are unique per upload: the previous object is never the new one
 		s.deleteAvatarObject(ctx, previous)
 	}
 	return applied, nil

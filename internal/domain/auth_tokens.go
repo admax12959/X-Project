@@ -66,6 +66,8 @@ type AuthTokenRepository interface {
 	DeleteUserSessions(ctx context.Context, userID UserID) error
 	// DeleteOtherUserSessions ends every session of the user except the one with keepTokenHash.
 	DeleteOtherUserSessions(ctx context.Context, userID UserID, keepTokenHash string) error
+	// ClearSessionMustChangePassword frees one session from the must-change restriction.
+	ClearSessionMustChangePassword(ctx context.Context, tokenHash string) error
 
 	// LockRateKeys serialises requests that share a rate-limit key: inside InTx it locks the keys
 	// until the transaction ends, so count-then-record cannot interleave. It must come before the
@@ -256,11 +258,12 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 		if err := tx.UseUserAuthTokens(ctx, t.UserID, passwordTokenPurposes, now); err != nil {
 			return err
 		}
-		if err := tx.DeleteUserSessions(ctx, t.UserID); err != nil {
+		// A first step passed with the old password must not turn into a session. The
+		// challenges go before the sessions: see completeSecondFactorLogin.
+		if err := tx.DeleteUserLoginChallenges(ctx, t.UserID); err != nil {
 			return err
 		}
-		// A first step passed with the old password must not turn into a session.
-		return tx.DeleteUserLoginChallenges(ctx, t.UserID)
+		return tx.DeleteUserSessions(ctx, t.UserID)
 	})
 }
 

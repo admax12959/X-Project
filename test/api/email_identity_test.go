@@ -118,7 +118,10 @@ func TestUserWithATemporaryPasswordCanOnlyChangeItBeforeDoingAnythingElse(t *tes
 	}
 }
 
-func TestChangingThePasswordFreesEveryOpenSessionOpenedWithTheTemporaryOne(t *testing.T) {
+// Someone who holds a restricted session made with the temporary password must not gain full
+// access when the legitimate user changes it: only the session that changed it is freed, every
+// other session of the user ends.
+func TestChangingThePasswordEndsTheOtherSessionsInsteadOfFreeingThem(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	createUserRaw(t, env.AdminClient(), map[string]any{"username": "jdoe", "password": "temp-pw-0001"})
@@ -128,7 +131,9 @@ func TestChangingThePasswordFreesEveryOpenSessionOpenedWithTheTemporaryOne(t *te
 	phone.LoginEmail("jdoe@example.com", "temp-pw-0001").ExpectStatus(http.StatusOK)
 
 	changePassword(laptop, "temp-pw-0001", "my-own-pw-0002").ExpectStatus(http.StatusNoContent)
-	phone.Get("/api/applications").ExpectStatus(http.StatusOK)
+	laptop.Get("/api/applications").ExpectStatus(http.StatusOK)
+	phone.Get("/api/applications").ExpectError(http.StatusUnauthorized, "", "unauthenticated")
+	phone.Get("/api/session").ExpectError(http.StatusUnauthorized, "", "unauthenticated")
 }
 
 func TestAnAdministratorBoundEmailIdentityAlsoStartsWithATemporaryPassword(t *testing.T) {

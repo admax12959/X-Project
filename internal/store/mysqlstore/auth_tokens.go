@@ -58,6 +58,11 @@ func (s *Store) DeleteOtherUserSessions(ctx context.Context, userID domain.UserI
 	return err
 }
 
+func (s *Store) ClearSessionMustChangePassword(ctx context.Context, tokenHash string) error {
+	_, err := s.q.ExecContext(ctx, "UPDATE sessions SET must_change_password = FALSE WHERE token_hash = ?", tokenHash)
+	return err
+}
+
 func (s *Store) CountRateEvents(ctx context.Context, bucket string, since time.Time) (int, error) {
 	var n int
 	err := s.q.QueryRowContext(ctx, "SELECT COUNT(*) FROM rate_events WHERE bucket_key = ? AND occurred_at > ?", bucket, since).Scan(&n)
