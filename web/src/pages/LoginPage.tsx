@@ -78,7 +78,7 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await submitSecondFactor(code);
+      await submitSecondFactor(code.trim());
       navigate(next, { replace: true });
     } catch (err) {
       // 401: the short-lived token is gone (expired); the password has to be typed again.
@@ -109,10 +109,13 @@ export function LoginPage() {
             <Field label={t('login.secondFactor.code')} error={errors.code}>
               <Input
                 name="code"
-                inputMode="numeric"
+                inputMode="text"
                 autoComplete="one-time-code"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
                 autoFocus
-                maxLength={7}
+                maxLength={20}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
               />

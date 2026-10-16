@@ -110,6 +110,18 @@ func TestARecoveryCodeLogsInInPlaceOfTheAuthenticatorCodeAndWorksOnlyOnce(t *tes
 	}
 }
 
+// The login page shows a recovery code as XXXX-XXXX-XXXX and the field takes it as typed.
+func TestARecoveryCodeIsAcceptedWithItsDashesInLowerCase(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	frozenMidStep(env)
+	_, codes, _ := tinaWithCodes(t, env)
+
+	c, _ := firstFactor(t, env)
+	c.Post(secondFactorLoginPath, map[string]string{"code": " " + strings.ToLower(codes[2]) + " "}).ExpectStatus(http.StatusOK)
+	c.Get("/api/session").ExpectStatus(http.StatusOK)
+}
+
 func TestWrongRecoveryCodesAndWrongAuthenticatorCodesFillTheSameCounterAndALockedStepRefusesRecoveryCodes(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
