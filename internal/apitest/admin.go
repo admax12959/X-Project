@@ -1,6 +1,7 @@
 package apitest
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha1" //nolint:gosec // RFC 6238 TOTP is defined over HMAC-SHA1
@@ -10,6 +11,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/admax12959/X-Project/internal/cli"
 )
 
 // Administrators are always required to have a second factor (#23), and one who has none can
@@ -31,6 +34,20 @@ func TOTPCode(secret string, at time.Time) string {
 	off := sum[len(sum)-1] & 0x0f
 	n := (uint32(sum[off]&0x7f) << 24) | uint32(sum[off+1])<<16 | uint32(sum[off+2])<<8 | uint32(sum[off+3])
 	return fmt.Sprintf("%06d", n%1_000_000)
+}
+
+// CLIResult is what one run of the container's command line printed and returned.
+type CLIResult struct {
+	Stdout, Stderr string
+	Exit           int
+}
+
+// CLI runs a command of the container's command line (xproject reset-user ...) against this
+// environment's database, in the same process.
+func (e *Env) CLI(args ...string) CLIResult {
+	var out, errOut bytes.Buffer
+	code := cli.Run(context.Background(), e.app.Service, args, &out, &errOut)
+	return CLIResult{Stdout: out.String(), Stderr: errOut.String(), Exit: code}
 }
 
 // AdminTOTPSecret is the authenticator secret of the test administrator, enrolled on the

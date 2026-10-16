@@ -1,6 +1,12 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"crypto/rand"
+	"errors"
+	"math/big"
+	"strings"
+)
 
 // Resetting a second factor (#23, ADR-0006): the way back in for a user who lost the
 // authenticator and the recovery codes. An administrator does it from user management; the
@@ -52,4 +58,145 @@ func (s *Service) ResetSecondFactor(ctx context.Context, actor Actor, id UserID)
 		return nil
 	})
 	return result, err
+}
+
+// ---------------------------------------------------------------- the command line
+
+// CLIResetInput is a request of the command line: which user (username or login email) and
+// what to reset.
+type CLIResetInput struct {
+	User         string
+	SecondFactor bool
+	Password     bool
+}
+
+// CLIResetResult says what the command line did. Password is the new temporary password, set
+// only when one was made; it goes to the operator's terminal and nowhere else.
+type CLIResetResult struct {
+	User              string // the username
+	SecondFactorReset bool   // false: the user had none
+	Password          string
+}
+
+// Errors of the command line, shown to the operator.
+var (
+	ErrCLIUserNotFound = errors.New("no such user")
+	ErrCLINoPassword   = errors.New("the user has no email login, so there is no password to reset (the directory owns it)")
+	ErrCLINothingAsked = errors.New("nothing to do: ask for --second-factor, --password or both")
+)
+
+// cliPasswordLength is the length of a generated temporary password: 24 characters of an
+// alphabet without look-alikes is about 120 bits.
+const cliPasswordLength = 24
+
+const cliPasswordAlphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+func newTemporaryPassword() (string, error) {
+	out := make([]byte, cliPasswordLength)
+	max := big.NewInt(int64(len(cliPasswordAlphabet)))
+	for i := range out {
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return "", err
+		}
+		out[i] = cliPasswordAlphabet[n.Int64()]
+	}
+	return string(out), nil
+}
+
+// ResetUserByCLI is the container's emergency entry for an administrator who is locked out
+// (ADR-0006). There is no authentication: whoever can run the command in the container can
+// reach the database anyway. Both resets are audited with the command line as the operator.
+//
+// A second-factor reset works as the administrator's (the user is told by mail when mail
+// works). A password reset gives the user a random temporary password that the user must change
+// at the next login, spends the user's invitation and recovery tokens and ends every session.
+func (s *Service) ResetUserByCLI(ctx context.Context, in CLIResetInput) (CLIResetResult, error) {
+	if !in.SecondFactor && !in.Password {
+		return CLIResetResult{}, ErrCLINothingAsked
+	}
+	var temp, hash string
+	if in.Password {
+		var err error
+		if temp, err = newTemporaryPassword(); err != nil {
+			return CLIResetResult{}, err
+		}
+		if hash, err = hashPassword(temp); err != nil {
+			return CLIResetResult{}, err
+		}
+	}
+	var res CLIResetResult
+	err := s.repo.InTx(ctx, func(tx Repository) error {
+		u, found, err := s.findUserForCLI(ctx, tx, in.User)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return ErrCLIUserNotFound
+		}
+		cur, found, err := tx.LockUserWithIdentities(ctx, u.ID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return ErrCLIUserNotFound
+		}
+		res = CLIResetResult{User: cur.User.Username}
+		if in.Password {
+			if _, ok := cur.identity(IdentityEmail); !ok {
+				return ErrCLINoPassword
+			}
+		}
+		if in.SecondFactor {
+			on, err := hasEnabledTOTP(ctx, tx, cur.User.ID)
+			if err != nil {
+				return err
+			}
+			if on {
+				if err := s.resetSecondFactor(ctx, tx, AuditActorCLI, cur.User); err != nil {
+					return err
+				}
+				res.SecondFactorReset = true
+			}
+		}
+		if in.Password {
+			if err := tx.SetTemporaryPassword(ctx, cur.User.ID, hash); err != nil {
+				return err
+			}
+			if err := tx.UseUserAuthTokens(ctx, cur.User.ID, passwordTokenPurposes, s.nowUTC()); err != nil {
+				return err
+			}
+			if err := tx.DeleteUserSessions(ctx, cur.User.ID); err != nil {
+				return err
+			}
+			if err := s.recordAudit(ctx, tx, AuditActorCLI, passwordResetAudit(cur.User.ID)); err != nil {
+				return err
+			}
+			if err := s.notifySecurity(ctx, tx, cur.User.ID, cur.User.Email, MailTemplatePasswordChangedByOperator, nil); err != nil {
+				return err
+			}
+			res.Password = temp
+		}
+		return nil
+	})
+	if err != nil {
+		return CLIResetResult{}, err
+	}
+	return res, nil
+}
+
+// findUserForCLI finds a user by username, else by the login email of an email identity.
+func (s *Service) findUserForCLI(ctx context.Context, tx Repository, name string) (User, bool, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return User{}, false, nil
+	}
+	if u, ok, err := tx.FindUserByUsername(ctx, name); err != nil || ok {
+		return u, ok, err
+	}
+	ident, ok, err := tx.FindIdentity(ctx, IdentityEmail, normalizeLoginEmail(name))
+	if err != nil || !ok {
+		return User{}, false, err
+	}
+	return tx.GetUser(ctx, ident.UserID)
 }

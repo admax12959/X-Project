@@ -92,6 +92,12 @@ func (s *Store) ChangePassword(ctx context.Context, id domain.UserID, hash strin
 	return err
 }
 
+func (s *Store) SetTemporaryPassword(ctx context.Context, id domain.UserID, hash string) error {
+	_, err := s.q.ExecContext(ctx, "UPDATE login_identities SET password_hash = ?, must_change_password = TRUE WHERE user_id = ? AND kind = ?",
+		hash, id, string(domain.IdentityEmail))
+	return err
+}
+
 func (s *Store) SetUserStatus(ctx context.Context, id domain.UserID, status domain.UserStatus, at time.Time) error {
 	_, err := s.q.ExecContext(ctx, "UPDATE users SET status = ?, updated_at = ? WHERE id = ?", string(status), at, id)
 	return err

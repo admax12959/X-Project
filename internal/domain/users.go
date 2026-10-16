@@ -38,6 +38,9 @@ type UserRepository interface {
 	// ChangePassword replaces the password hash of the user's email identity and clears
 	// the must-change flag on the identity and on the user's sessions.
 	ChangePassword(ctx context.Context, id UserID, hash string) error
+	// SetTemporaryPassword replaces the password hash of the user's email identity and marks it
+	// as one the user must change at the next login (the command line, #23).
+	SetTemporaryPassword(ctx context.Context, id UserID, hash string) error
 	SetUserStatus(ctx context.Context, id UserID, status UserStatus, at time.Time) error
 	// SetUserAdmin sets the administrator flag.
 	SetUserAdmin(ctx context.Context, id UserID, isAdmin bool, at time.Time) error
