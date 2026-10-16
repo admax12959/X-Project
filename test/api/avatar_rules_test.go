@@ -166,6 +166,44 @@ func TestAvatarIsCroppedFromTheCentre(t *testing.T) {
 
 // ---------------------------------------------------------------- replace and remove
 
+// Every upload gets an object key of its own, even the same picture again: a request that is
+// late to delete "the previous object" can then never delete what the user points to now (A, B,
+// then A again must not leave the user at a key a slower request is about to delete).
+func TestEveryUploadGetsItsOwnObjectKeyEvenForTheSamePicture(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	jane := plainUserClient(t, env, "jane")
+	picA := pngBytes(t, twoBand(300, 300))
+	picB := pngBytes(t, solid(300, 300, color.NRGBA{R: 10, G: 10, B: 200, A: 255}))
+
+	keyOf := func() string {
+		t.Helper()
+		objs, err := env.Objects.List(t.Context(), "avatars/")
+		if err != nil || len(objs) != 1 {
+			t.Fatalf("objects = %v, %v, want exactly one", objs, err)
+		}
+		return objs[0].Key
+	}
+	urlA := uploadedAvatarURL(t, jane, picA)
+	keyA := keyOf()
+	uploadedAvatarURL(t, jane, picB)
+	if again := uploadedAvatarURL(t, jane, picA); again != urlA {
+		t.Fatalf("the same picture has URL %q, then %q: the URL is its content hash", urlA, again)
+	}
+	keyA2 := keyOf() // the object of B is gone, the user points at the new one
+	if keyA2 == keyA {
+		t.Fatalf("A uploaded again got the key %q it had before", keyA)
+	}
+	// The same picture twice in a row: a new key, the old object deleted, the avatar served.
+	uploadedAvatarURL(t, jane, picA)
+	if keyA3 := keyOf(); keyA3 == keyA2 {
+		t.Fatalf("the same picture twice in a row kept the key %q", keyA2)
+	}
+	if img, _ := fetchAvatar(t, jane, urlA); img == nil {
+		t.Fatal("the avatar cannot be read")
+	}
+}
+
 func TestReplacingAnAvatarKeepsOnlyTheNewObject(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
