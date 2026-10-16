@@ -249,13 +249,10 @@ func (s *Service) openSession(ctx context.Context, u User, mustChange bool) (Log
 // its insertion (ConfirmTOTP ends the other sessions, but this one was not there yet), it would
 // pass for fully authenticated, so it is deleted and the login becomes a challenge instead.
 func (s *Service) createSession(ctx context.Context, u User, mustChange, secondFactorPassed bool) (LoginResult, error) {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
+	sess, token, err := s.newSession(u, mustChange)
+	if err != nil {
 		return LoginResult{}, err
 	}
-	token := base64.RawURLEncoding.EncodeToString(raw)
-	now := s.nowUTC()
-	sess := Session{TokenHash: hashToken(token), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(s.sessionTTL), MustChangePassword: mustChange}
 	if err := s.repo.CreateSession(ctx, sess); err != nil {
 		return LoginResult{}, err
 	}
@@ -271,11 +268,26 @@ func (s *Service) createSession(ctx context.Context, u User, mustChange, secondF
 			return s.issueLoginChallenge(ctx, u, mustChange)
 		}
 	}
+	return s.sessionResult(ctx, u, sess, token)
+}
+
+// newSession makes a session and the token that opens it; nothing is stored.
+func (s *Service) newSession(u User, mustChange bool) (Session, string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return Session{}, "", err
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	now := s.nowUTC()
+	return Session{TokenHash: hashToken(token), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(s.sessionTTL), MustChangePassword: mustChange}, token, nil
+}
+
+func (s *Service) sessionResult(ctx context.Context, u User, sess Session, token string) (LoginResult, error) {
 	setup, err := s.secondFactorSetupRequiredFor(ctx, u)
 	if err != nil {
 		return LoginResult{}, err
 	}
-	return LoginResult{Token: token, ExpiresAt: sess.ExpiresAt, User: u, MustChangePassword: mustChange, SecondFactorSetupRequired: setup}, nil
+	return LoginResult{Token: token, ExpiresAt: sess.ExpiresAt, User: u, MustChangePassword: sess.MustChangePassword, SecondFactorSetupRequired: setup}, nil
 }
 
 // Authenticate resolves a session token to an Actor, or returns an unauthenticated error.

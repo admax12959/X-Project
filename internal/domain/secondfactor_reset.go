@@ -166,10 +166,13 @@ func (s *Service) ResetUserByCLI(ctx context.Context, in CLIResetInput) (CLIRese
 			if err := tx.UseUserAuthTokens(ctx, cur.User.ID, passwordTokenPurposes, s.nowUTC()); err != nil {
 				return err
 			}
-			if err := tx.DeleteUserSessions(ctx, cur.User.ID); err != nil {
+			// Challenges first: a login completing its second step holds the row of its
+			// challenge, so the delete waits for its session, and the delete of the sessions
+			// that follows then sees it (completeSecondFactorLogin).
+			if err := tx.DeleteUserLoginChallenges(ctx, cur.User.ID); err != nil {
 				return err
 			}
-			if err := tx.DeleteUserLoginChallenges(ctx, cur.User.ID); err != nil {
+			if err := tx.DeleteUserSessions(ctx, cur.User.ID); err != nil {
 				return err
 			}
 			if err := s.recordAudit(ctx, tx, AuditActorCLI, passwordResetAudit(cur.User.ID)); err != nil {

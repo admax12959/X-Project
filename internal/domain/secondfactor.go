@@ -368,16 +368,50 @@ func (s *Service) SubmitSecondFactor(ctx context.Context, token, code string) (L
 	}
 
 	// The lockout was already reset under its lock by the verification; resetting it again here
-	// could erase a lockout that another request has just established. What is left is to spend
-	// the challenge: the claim is the delete, and only the request that deleted it gets a session.
-	claimed, err := s.repo.DeleteLoginChallenge(ctx, ch.TokenHash)
+	// could erase a lockout that another request has just established.
+	return s.completeSecondFactorLogin(ctx, u, ch)
+}
+
+// completeSecondFactorLogin spends the challenge and opens the session in one transaction.
+// Apart, a password reset could commit in between, deleting the sessions and challenges that
+// exist, and the login would then yield a session older than the reset. Together, the reset's
+// delete of the user's challenges waits on the row this transaction has deleted (and, deleting
+// the challenges before the sessions, then finds the new session); or, if the reset got there
+// first, the claim finds nothing and no session opens. The claim is the delete: of two
+// requests with the same challenge only one gets a session.
+//
+// Whether the session is restricted is decided again here from the email identity as it is now,
+// not taken on trust from the challenge: the challenge can only ever narrow that (a directory
+// login carries false and stays false).
+func (s *Service) completeSecondFactorLogin(ctx context.Context, u User, ch LoginChallenge) (LoginResult, error) {
+	unauth := newKind(KindUnauthenticated, CodeUnauthenticated)
+	var sess Session
+	var token string
+	err := s.repo.InTx(ctx, func(tx Repository) error {
+		claimed, err := tx.DeleteLoginChallenge(ctx, ch.TokenHash)
+		if err != nil {
+			return err
+		}
+		if !claimed {
+			return unauth
+		}
+		mustChange := false
+		if ch.MustChangePassword {
+			ident, found, err := tx.FindIdentityByUser(ctx, u.ID, IdentityEmail)
+			if err != nil {
+				return err
+			}
+			mustChange = found && ident.MustChangePassword
+		}
+		if sess, token, err = s.newSession(u, mustChange); err != nil {
+			return err
+		}
+		return tx.CreateSession(ctx, sess)
+	})
 	if err != nil {
 		return LoginResult{}, err
 	}
-	if !claimed {
-		return LoginResult{}, unauth
-	}
-	return s.createSession(ctx, u, ch.MustChangePassword, true)
+	return s.sessionResult(ctx, u, sess, token)
 }
 
 // verifySecondFactorCode checks code as the user's second factor: an authenticator code or an
