@@ -1,0 +1,9 @@
+Subject: Your X-Project login email was changed
+
+Hello{{if .Name}} {{.Name}}{{end}},
+
+Your X-Project login email was changed from {{.OldEmail}} to {{.NewEmail}}.
+
+Use the new login email to sign in from now on. If this was not you, contact an administrator right away.
+
+X-Project

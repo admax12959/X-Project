@@ -38,7 +38,7 @@ func newVersionFixture(t *testing.T) versionFixture {
 	f := newAppFixture(t)
 	f.post(map[string]any{"mainBranch": "develop"}).ExpectStatus(http.StatusCreated)
 	owner := f.env.Client()
-	owner.LoginLocal("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
+	owner.LoginAs("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
 	var lines struct {
 		Items []lineBody `json:"items"`
 	}

@@ -1,0 +1,11 @@
+Subject: You are invited to X-Project
+
+Hello{{if .Name}} {{.Name}}{{end}},
+
+An administrator has invited you to X-Project. Open the link below to set your password:
+
+{{.Link}}
+
+The link expires, and stops working once it has been used. If you do not know who invited you, ignore this email.
+
+X-Project

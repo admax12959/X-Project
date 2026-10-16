@@ -85,8 +85,8 @@ func (s *Service) ForkLine(ctx context.Context, actor Actor, appKey string, in F
 	if err != nil {
 		return Line{}, err
 	}
-	if !isOwner(actor, app) {
-		return Line{}, forbidden()
+	if err := requireAppPermission(actor, app, PermLineFork); err != nil {
+		return Line{}, err
 	}
 	var c Collector
 	name, branch := strings.TrimSpace(in.Name), strings.TrimSpace(in.Branch)

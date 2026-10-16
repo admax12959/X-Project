@@ -4,6 +4,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router';
 import { api } from '../api/client.ts';
 import { useCurrentUser, useSession } from '../session/session.tsx';
 import { LOCALES, setLocale, useT, type Locale, type MessageKey } from '../i18n/index.ts';
+import { Avatar } from '../ui/Avatar.tsx';
 import { Button, Segmented } from '../ui/controls.tsx';
 
 function NavItem({ to, label, end }: { to: string; label: MessageKey; end?: boolean }) {
@@ -48,7 +49,8 @@ export function Shell() {
           {t('app.brand')}
         </NavLink>
         <span className="flex-1" />
-        <span className="text-[13px] text-text-2">
+        <span className="flex items-center gap-2 text-[13px] text-text-2">
+          <Avatar size="md" name={user.displayName} url={user.avatarUrl} />
           <b className="font-semibold text-text">{user.displayName}</b>
           {user.isAdmin && <> · {t('term.administrator')}</>}
         </span>
@@ -73,6 +75,13 @@ export function Shell() {
               <div className="px-5 pb-1 pt-4 text-[13px] font-semibold text-text-3">{t('platforms.navGroup')}</div>
               <NavItem to="/admin/platforms" label="platforms.title" />
               <NavItem to="/admin/users" label="users.title" />
+              <NavItem to="/admin/departments" label="departments.title" />
+              <NavItem to="/admin/ldap" label="ldap.title" />
+              <NavItem to="/admin/mail" label="smtp.title" />
+              <NavItem to="/admin/storage" label="storage.title" />
+              <NavItem to="/admin/security" label="security.title" />
+              <NavItem to="/admin/roles" label="roles.title" />
+              <NavItem to="/admin/audit" label="audit.title" />
             </>
           )}
         </nav>

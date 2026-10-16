@@ -15,10 +15,11 @@ type UserRef struct {
 	Username    string
 	DisplayName string
 	Status      UserStatus
+	AvatarHash  string // "" = no avatar
 }
 
 func refOf(u User) UserRef {
-	return UserRef{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, Status: u.Status}
+	return UserRef{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, Status: u.Status, AvatarHash: u.AvatarHash}
 }
 
 // Application is one maintained application (GLOSSARY: 应用).
@@ -137,7 +138,7 @@ const DefaultMainBranch = "main"
 // supplies the project ID, so an application cannot exist without a passing
 // verification.
 func (s *Service) CreateApplication(ctx context.Context, actor Actor, in CreateApplicationInput) (Application, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermAppCreate); err != nil {
 		return Application{}, err
 	}
 	var c Collector

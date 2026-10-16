@@ -49,6 +49,8 @@ func (s *server) routes() {
 	})
 	s.publicRoute("GET /api/login-methods", s.loginMethods)
 	s.publicRoute("POST /api/session", s.login)
+	s.publicRoute("POST /api/password-recovery", s.requestPasswordRecovery)
+	s.publicRoute("POST /api/password-setup", s.setPassword)
 	s.route("GET /api/session", s.currentSession)
 	s.route("DELETE /api/session", s.logout)
 
@@ -75,8 +77,35 @@ func (s *server) routes() {
 
 	s.route("GET /api/code-platforms", s.listCodePlatforms)
 	s.route("POST /api/code-platforms", s.createCodePlatform)
+	s.route("GET /api/roles", s.listRoles)     // read-only: built-in roles are not editable
+	s.route("GET /api/audit-log", s.listAudit) // read-only: the audit log is append-only
+	s.systemConfigRoutes()
+	s.mailRoutes()
 	s.userRoutes()
 	s.meRoutes()
+	s.secondFactorRoutes()
+	s.avatarRoutes()
+	s.departmentRoutes()
+}
+
+// mustChangeAllowed are the only routes a session opened with an administrator-chosen
+// password may use: see who it is, change the password, log out.
+var mustChangeAllowed = map[string]bool{
+	"GET /api/session":     true,
+	"DELETE /api/session":  true,
+	"PUT /api/me/password": true,
+}
+
+// setupAllowed are the only routes a session of a user who is required to have a second
+// factor and has none may use (#23): see who it is, set the second factor up, log out. The
+// password change stays open for a session that has to make one first.
+var setupAllowed = map[string]bool{
+	"GET /api/session":                        true,
+	"DELETE /api/session":                     true,
+	"PUT /api/me/password":                    true,
+	"GET /api/me/second-factor":               true,
+	"POST /api/me/second-factor/totp":         true,
+	"POST /api/me/second-factor/totp/confirm": true,
 }
 
 func (s *server) route(pattern string, h http.HandlerFunc) { s.mux.HandleFunc(pattern, h) }
@@ -95,6 +124,14 @@ func (s *server) serveAPI(w http.ResponseWriter, r *http.Request) {
 		actor, err := s.svc.Authenticate(r.Context(), sessionToken(r))
 		if err != nil {
 			writeError(w, r, err)
+			return
+		}
+		if actor.MustChangePassword && !mustChangeAllowed[pattern] {
+			writeCode(w, http.StatusForbidden, domain.CodePasswordChangeRequired)
+			return
+		}
+		if actor.SecondFactorSetupRequired && !setupAllowed[pattern] {
+			writeCode(w, http.StatusForbidden, domain.CodeSecondFactorSetupRequired)
 			return
 		}
 		r = r.WithContext(context.WithValue(r.Context(), actorKey{}, actor))

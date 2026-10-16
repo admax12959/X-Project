@@ -1,0 +1,9 @@
+Subject: X-Project 账号已关闭二次验证
+
+你好{{if .Name}}，{{.Name}}{{end}}：
+
+你的 X-Project 账号已关闭二次验证，之后登录只需要密码。
+
+如果不是你本人操作，请立即联系管理员。
+
+X-Project

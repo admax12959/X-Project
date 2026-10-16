@@ -30,7 +30,7 @@ type RepoBinding struct {
 // platform token can see it. Administrators only. It stores nothing; creating an
 // application verifies again on the server.
 func (s *Service) VerifyRepo(ctx context.Context, actor Actor, in RepoInput) (RepoBinding, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermRepoVerify); err != nil {
 		return RepoBinding{}, err
 	}
 	var c Collector

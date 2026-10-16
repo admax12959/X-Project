@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -10,16 +11,21 @@ import (
 
 // adminUserJSON is the administrator view of a user.
 type adminUserJSON struct {
-	ID          string         `json:"id"`
-	Username    string         `json:"username"`
-	DisplayName string         `json:"displayName"`
-	Email       string         `json:"email"`
-	Phone       string         `json:"phone"`
-	Department  string         `json:"department"`
-	Language    string         `json:"language"`
-	Status      string         `json:"status"`
-	IsAdmin     bool           `json:"isAdmin"`
-	Identities  []identityJSON `json:"identities"`
+	ID                  string `json:"id"`
+	Username            string `json:"username"`
+	DisplayName         string `json:"displayName"`
+	Email               string `json:"email"`
+	Phone               string `json:"phone"`
+	DirectoryDepartment string `json:"directoryDepartment"`
+	// DepartmentID is the department in the organization (null = none), not the directory department.
+	DepartmentID *string `json:"departmentId"`
+	Language     string  `json:"language"`
+	Status       string  `json:"status"`
+	IsAdmin      bool    `json:"isAdmin"`
+	// SecondFactorEnabled: the user has a second factor turned on (#23).
+	SecondFactorEnabled bool           `json:"secondFactorEnabled"`
+	Identities          []identityJSON `json:"identities"`
+	AvatarURL           *string        `json:"avatarUrl"`
 }
 
 type identityJSON struct {
@@ -27,18 +33,25 @@ type identityJSON struct {
 	LoginName string `json:"loginName"`
 	BoundAt   string `json:"boundAt"`
 	BoundVia  string `json:"boundVia"`
+	// InvitePending (email identity only): the user was invited and has not set a password yet.
+	InvitePending bool `json:"invitePending,omitempty"`
 }
 
 func toAdminUserJSON(v domain.UserWithIdentities) adminUserJSON {
 	u := v.User
 	out := adminUserJSON{
 		ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName,
-		Email: u.Email, Phone: u.Phone, Department: u.Department, Language: u.Language, Status: string(u.Status), IsAdmin: u.IsAdmin,
+		Email: u.Email, Phone: u.Phone, DirectoryDepartment: u.DirectoryDepartment, Language: u.Language, Status: string(u.Status), IsAdmin: u.IsAdmin, AvatarURL: avatarURL(u.ID, u.AvatarHash), SecondFactorEnabled: v.SecondFactorEnabled,
 		Identities: make([]identityJSON, 0, len(v.Identities)),
+	}
+	if u.DepartmentID != 0 {
+		d := formatID(int64(u.DepartmentID))
+		out.DepartmentID = &d
 	}
 	for _, i := range v.Identities {
 		out.Identities = append(out.Identities, identityJSON{
 			Kind: string(i.Kind), LoginName: i.LoginName, BoundAt: formatTime(i.BoundAt), BoundVia: string(i.BoundVia),
+			InvitePending: i.Kind == domain.IdentityEmail && !i.PasswordSet,
 		})
 	}
 	return out
@@ -48,8 +61,10 @@ func (s *server) userRoutes() {
 	s.route("GET /api/users", s.listUsers)
 	s.route("POST /api/users", s.createUser)
 	s.route("PATCH /api/users/{id}", s.updateUser)
+	s.route("POST /api/users/{id}/invitation", s.sendInvitation)
 	s.route("POST /api/users/{id}/disable", s.statusHandler(s.svc.DisableUser))
 	s.route("POST /api/users/{id}/enable", s.statusHandler(s.svc.EnableUser))
+	s.route("POST /api/users/{id}/second-factor/reset", s.statusHandler(s.svc.ResetSecondFactor)) // #23
 	// Deliberately no DELETE: users can only be disabled.
 }
 
@@ -85,18 +100,24 @@ func (s *server) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	// Pointers distinguish "not sent" (unchanged) from "sent empty" (cleared).
 	var body struct {
-		Username    *string `json:"username"`
-		DisplayName *string `json:"displayName"`
-		Email       *string `json:"email"`
-		Phone       *string `json:"phone"`
-		Department  *string `json:"department"`
+		Username     *string         `json:"username"`
+		DisplayName  *string         `json:"displayName"`
+		Email        *string         `json:"email"`
+		LoginEmail   *string         `json:"loginEmail"`
+		Phone        *string         `json:"phone"`
+		IsAdmin      *bool           `json:"isAdmin"`
+		DepartmentID json.RawMessage `json:"departmentId"` // absent = unchanged, null = none
 	}
 	if !decode(w, r, &body) {
 		return
 	}
+	dept, ok := refString(w, body.DepartmentID)
+	if !ok {
+		return
+	}
 	u, err := s.svc.UpdateUser(r.Context(), actorOf(r), id, domain.UpdateUserInput{
-		Username: body.Username, DisplayName: body.DisplayName, Email: body.Email,
-		Phone: body.Phone, Department: body.Department,
+		Username: body.Username, DisplayName: body.DisplayName, Email: body.Email, LoginEmail: body.LoginEmail,
+		Phone: body.Phone, Department: dept, IsAdmin: body.IsAdmin,
 	})
 	if err != nil {
 		writeError(w, r, err)
@@ -106,7 +127,7 @@ func (s *server) updateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) listUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := s.svc.ListUsers(r.Context(), actorOf(r))
+	users, err := s.svc.ListUsers(r.Context(), actorOf(r), r.URL.Query().Get("departmentId"))
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -120,23 +141,36 @@ func (s *server) listUsers(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) createUser(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Username    string `json:"username"`
-		DisplayName string `json:"displayName"`
-		Email       string `json:"email"`
-		Phone       string `json:"phone"`
-		Department  string `json:"department"`
-		Password    string `json:"password"`
+		Username     string `json:"username"`
+		DisplayName  string `json:"displayName"`
+		LoginEmail   string `json:"loginEmail"`
+		Phone        string `json:"phone"`
+		DepartmentID string `json:"departmentId"`
+		Password     string `json:"password"` // temporary: the user must change it at the first login
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	u, err := s.svc.CreateLocalUser(r.Context(), actorOf(r), domain.CreateLocalUserInput{
-		Username: body.Username, DisplayName: body.DisplayName, Email: body.Email,
-		Phone: body.Phone, Department: body.Department, Password: body.Password,
+	u, err := s.svc.CreateEmailUser(r.Context(), actorOf(r), domain.CreateEmailUserInput{
+		Username: body.Username, DisplayName: body.DisplayName, LoginEmail: body.LoginEmail,
+		Phone: body.Phone, DepartmentID: body.DepartmentID, Password: body.Password,
 	})
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, toAdminUserJSON(u))
+}
+
+// sendInvitation (re)sends the invitation mail of a user who has not set a password yet.
+func (s *server) sendInvitation(w http.ResponseWriter, r *http.Request) {
+	id, ok := userIDParam(w, r)
+	if !ok {
+		return
+	}
+	if err := s.svc.SendInvitation(r.Context(), actorOf(r), id); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
 }

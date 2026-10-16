@@ -27,6 +27,6 @@ func plainUserClient(t *testing.T, env *apitest.Env, username string) *apitest.C
 	t.Helper()
 	createUser(t, env.AdminClient(), map[string]any{"username": username, "displayName": username})
 	c := env.Client()
-	c.LoginLocal(username, "initial-pw-1").ExpectStatus(http.StatusOK)
+	c.LoginAs(username, "initial-pw-1").ExpectStatus(http.StatusOK)
 	return c
 }

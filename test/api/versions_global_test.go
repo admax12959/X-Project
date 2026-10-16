@@ -45,7 +45,7 @@ func newGlobalFixture(t *testing.T) globalFixture {
 		"repo": map[string]any{"platformId": pid, "path": "platform/order-service"},
 	})
 	elarsen := env.Client()
-	elarsen.LoginLocal("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
+	elarsen.LoginAs("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
 	f := globalFixture{env: env, elarsen: elarsen, lines: map[string]string{}}
 	for _, key := range []string{"payments-core", "order-service"} {
 		var lines struct {

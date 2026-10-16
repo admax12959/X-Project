@@ -31,7 +31,7 @@ func newMaintFixture(t *testing.T) maintFixture {
 		ExpectStatus(http.StatusCreated)
 	login := func(username string) *apitest.Client {
 		c := f.env.Client()
-		c.LoginLocal(username, "initial-pw-1").ExpectStatus(http.StatusOK)
+		c.LoginAs(username, "initial-pw-1").ExpectStatus(http.StatusOK)
 		return c
 	}
 	return maintFixture{
@@ -338,7 +338,7 @@ func TestOnlyAnAdministratorWhoTypesTheKeyDeletesAnApplicationAndItsLinesAndHist
 
 	f.admin.Do(http.MethodDelete, f.appPath, confirm).ExpectStatus(http.StatusNoContent)
 	for _, path := range []string{"", "/lines", "/history"} {
-		f.admin.Get(f.appPath + path).ExpectError(http.StatusNotFound, "", "notFound")
+		f.admin.Get(f.appPath+path).ExpectError(http.StatusNotFound, "", "notFound")
 	}
 	var list appListBody
 	f.admin.Get("/api/applications").ExpectStatus(http.StatusOK).JSON(&list)
@@ -400,7 +400,7 @@ func TestEveryoneCanListTheEnabledUsersForTheOwnerAndPePickers(t *testing.T) {
 	var names []string
 	for _, it := range list.Items {
 		names = append(names, it["username"].(string))
-		if len(it) != 3 || it["id"] == "" || it["displayName"] == "" { // no email, phone, department...
+		if len(it) != 4 || it["id"] == "" || it["displayName"] == "" { // id, username, displayName, avatarUrl: no email, phone, department...
 			t.Fatalf("item = %v", it)
 		}
 	}

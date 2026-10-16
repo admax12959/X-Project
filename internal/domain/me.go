@@ -26,13 +26,12 @@ func (s *Service) GetMe(ctx context.Context, actor Actor) (UserWithIdentities, e
 
 // UpdateMeInput is a user's edit of their own settings. A nil field is left unchanged.
 //
-// Display name, email and department are editable only for users without an LDAP
-// identity (the directory owns them otherwise); phone and language are editable by everyone.
+// Display name and email are editable only for users without an LDAP identity (the
+// directory owns them otherwise); phone and language are editable by everyone.
 type UpdateMeInput struct {
 	DisplayName *string
 	Email       *string
 	Phone       *string
-	Department  *string
 	Language    *string
 }
 
@@ -49,7 +48,7 @@ func (s *Service) UpdateMe(ctx context.Context, actor Actor, in UpdateMeInput) (
 		}
 		var c Collector
 		u := applyProfileEdit(&c, cur.User, cur.hasIdentity(IdentityLDAP), profileEdit{
-			DisplayName: in.DisplayName, Email: in.Email, Phone: in.Phone, Department: in.Department,
+			DisplayName: in.DisplayName, Email: in.Email, Phone: in.Phone,
 		})
 		if in.Language != nil {
 			lang := strings.TrimSpace(*in.Language)
@@ -64,7 +63,7 @@ func (s *Service) UpdateMe(ctx context.Context, actor Actor, in UpdateMeInput) (
 		if err := tx.UpdateUser(ctx, u, s.nowUTC()); err != nil {
 			return mapUsernameTaken(err)
 		}
-		result = UserWithIdentities{User: u, Identities: cur.Identities}
+		result = UserWithIdentities{User: u, Identities: cur.Identities, SecondFactorEnabled: cur.SecondFactorEnabled}
 		return nil
 	})
 	return result, err

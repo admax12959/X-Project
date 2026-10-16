@@ -157,8 +157,8 @@ func (s *Service) RegisterVersion(ctx context.Context, actor Actor, appKey, line
 	if err != nil {
 		return Version{}, err
 	}
-	if !isOwner(actor, app) {
-		return Version{}, forbidden()
+	if err := requireAppPermission(actor, app, PermVersionRegister); err != nil {
+		return Version{}, err
 	}
 	p, err := parseVersionInput(in)
 	if err != nil {

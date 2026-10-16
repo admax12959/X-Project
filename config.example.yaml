@@ -5,16 +5,21 @@ web_dir: ""                 # built frontend dir; the Docker image sets /srv/web
 database:
   dsn: "xproject:xproject-pw@tcp(127.0.0.1:3306)/xproject"
   connect_timeout: 90s      # keep retrying while MySQL starts
-secret_key: "change-me"     # required; encrypts stored secrets (code platform tokens). Keep it stable: changing it makes them unreadable
+secret_key: "change-me"     # the master key (or secret_key_file: /run/secrets/xp_secret_key); exactly one is required. Keep it stable: changing it makes stored secrets unreadable
 admin:                      # initial administrator, used only on the very first start
   username: admin
   password: change-me-now
   display_name: Administrator
-  email: ""
+  email: admin@example.com  # the login email: the administrator logs in with it, not with the username
+storage:
+  local_dir: data/storage   # where files (avatars) live until an S3-compatible storage is configured on the Storage page; must be persistent
 session:
   ttl: 12h
   cookie_secure: false      # true when served over HTTPS
-# ldap:                     # optional; without ldap.url the login page offers local login only
+# mail:                     # delivery of the outgoing mail queue; the SMTP server itself is set on the Email page
+#   poll_interval: 5s
+#   retry_backoff: [1m, 5m, 30m, 2h, 6h]   # waits after each failed delivery; one more attempt than entries
+# ldap:                     # imported into the database once, on the first start that has none; afterwards edit it on the LDAP page
 #   url: "ldaps://ldap.corp.example:636"
 #   base_dn: "ou=people,dc=corp,dc=example"
 #   bind_dn: "cn=xproject,ou=services,dc=corp,dc=example"   # service account used to search

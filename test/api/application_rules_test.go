@@ -156,7 +156,7 @@ func TestOnlyAdministratorsCreateApplications(t *testing.T) {
 	// An Owner is not an administrator either.
 	f.admin.Post("/api/applications", body).ExpectStatus(http.StatusCreated)
 	ownerClient := f.env.Client()
-	ownerClient.LoginLocal("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
+	ownerClient.LoginAs("elarsen", "initial-pw-1").ExpectStatus(http.StatusOK)
 	other := newApp(f.pid, []string{f.owner.ID}, map[string]any{"key": "other-app"})
 	ownerClient.Post("/api/applications", other).ExpectError(http.StatusForbidden, "", "forbidden")
 

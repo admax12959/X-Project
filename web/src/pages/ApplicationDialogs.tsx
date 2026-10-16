@@ -100,7 +100,7 @@ export function EditApplicationDialog({ app, onClose, onSaved }: { app: Applicat
   );
 }
 
-const asPicker = (m: Member): PickerUser => ({ id: m.id, username: m.username, displayName: m.displayName, disabled: m.status === 'disabled' });
+const asPicker = (m: Member): PickerUser => ({ id: m.id, username: m.username, displayName: m.displayName, avatarUrl: m.avatarUrl, disabled: m.status === 'disabled' });
 
 /** Owner and PE lists (administrators and Owners). Only enabled users can be added; people already listed stay visible even if disabled since. */
 export function EditMembersDialog({ app, onClose, onSaved }: { app: Application; onClose: () => void; onSaved: (a: Application) => void }) {

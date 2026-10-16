@@ -1,0 +1,9 @@
+Subject: A login method of your X-Project account changed
+
+Hello{{if .Name}} {{.Name}}{{end}},
+
+A login method was added on your X-Project account: {{if eq .Kind "ldap"}}LDAP account{{else}}email login{{end}} {{.LoginName}}.
+
+If this was not you, contact an administrator right away.
+
+X-Project

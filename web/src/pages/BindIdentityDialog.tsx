@@ -9,10 +9,8 @@ import { Button, Field, Input, Segmented } from '../ui/controls.tsx';
 type Labels = {
   kind: MessageKey;
   ldapHint: MessageKey;
-  localHint: MessageKey;
   loginName: MessageKey;
   ldapPassword: MessageKey;
-  localPassword: MessageKey;
   submit: MessageKey;
   submitting: MessageKey;
 };
@@ -20,10 +18,8 @@ type Labels = {
 const selfLabels: Labels = {
   kind: 'users.bind.kind',
   ldapHint: 'settings.bind.ldapHint',
-  localHint: 'settings.bind.localHint',
   loginName: 'settings.bind.loginName',
   ldapPassword: 'settings.bind.ldapPassword',
-  localPassword: 'settings.bind.localPassword',
   submit: 'settings.bind.submit',
   submitting: 'settings.bind.submitting',
 };
@@ -31,10 +27,8 @@ const selfLabels: Labels = {
 const adminLabels: Labels = {
   kind: 'users.bind.kind',
   ldapHint: 'users.bind.ldapHint',
-  localHint: 'users.bind.localHint',
   loginName: 'users.bind.loginName',
   ldapPassword: 'users.bind.password',
-  localPassword: 'users.bind.password',
   submit: 'users.bind.submit',
   submitting: 'users.bind.submitting',
 };
@@ -42,7 +36,8 @@ const adminLabels: Labels = {
 /**
  * `kinds` are the identity kinds the user does not have yet (and that the server offers).
  * Self-binding asks for the LDAP password (you authenticate with the new identity once);
- * an administrator only names the LDAP login name, or sets a local password.
+ * an administrator only names the LDAP login name, or gives a login email and a temporary password.
+ * Only an administrator binds an email identity.
  */
 export function BindIdentityDialog({
   audience,
@@ -61,26 +56,21 @@ export function BindIdentityDialog({
 }) {
   const { t } = useT();
   const labels = audience === 'self' ? selfLabels : adminLabels;
-  const [kind, setKind] = useState<IdentityKind>(kinds[0] ?? 'local');
+  const [kind, setKind] = useState<IdentityKind>(kinds[0] ?? 'ldap');
   const [loginName, setLoginName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const errors: Record<string, string> = error ? errorsByField(error) : {};
 
-  const title =
-    audience === 'admin'
-      ? t('users.bindTitle', { username })
-      : kind === 'ldap'
-        ? t('settings.bind.ldapTitle')
-        : t('settings.bind.localTitle');
+  const title = audience === 'admin' ? t('users.bindTitle', { username }) : t('settings.bind.ldapTitle');
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      onBound(await bind(kind === 'ldap' ? { kind, loginName, ...(audience === 'self' ? { password } : {}) } : { kind, password }));
+      onBound(await bind(kind === 'ldap' ? { kind, loginName, ...(audience === 'self' ? { password } : {}) } : { kind, loginName, password }));
     } catch (err) {
       setError(err);
     } finally {
@@ -107,26 +97,26 @@ export function BindIdentityDialog({
                 <Segmented
                   label={t(labels.kind)}
                   value={kind}
-                  onChange={setKind}
+                  onChange={(k) => {
+                    setKind(k);
+                    setLoginName(''); // an LDAP username is not a login email, and the other way round
+                  }}
                   options={kinds.map((k) => ({ value: k, label: t(`users.identity.${k}`) }))}
                 />
               </Field>
             )}
             <p className="text-[13px] text-text-2">
-              {kind === 'ldap' ? t(labels.ldapHint) : t(labels.localHint, { username })}
+              {kind === 'ldap' ? t(labels.ldapHint) : t('users.bind.emailHint')}
             </p>
-            {kind === 'ldap' && (
-              <Field label={t(labels.loginName)} error={errors.loginName}>
-                <Input name="loginName" autoComplete="off" autoFocus value={loginName} onChange={(e) => setLoginName(e.target.value)} />
-              </Field>
-            )}
-            {(kind === 'local' || needsLdapPassword) && (
-              <Field label={t(kind === 'ldap' ? labels.ldapPassword : labels.localPassword)} error={errors.password}>
+            <Field label={t(kind === 'ldap' ? labels.loginName : 'users.bind.loginEmail')} error={errors.loginName}>
+              <Input name="loginName" type={kind === 'email' ? 'email' : 'text'} autoComplete="off" autoFocus value={loginName} onChange={(e) => setLoginName(e.target.value)} />
+            </Field>
+            {(kind === 'email' || needsLdapPassword) && (
+              <Field label={t(kind === 'ldap' ? labels.ldapPassword : 'users.bind.tempPassword')} error={errors.password}>
                 <Input
                   name="password"
                   type="password"
-                  autoComplete={kind === 'local' ? 'new-password' : 'off'}
-                  autoFocus={kind === 'local'}
+                  autoComplete={kind === 'email' ? 'new-password' : 'off'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />

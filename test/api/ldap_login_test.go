@@ -14,7 +14,7 @@ type ldapUser struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
-	Department  string `json:"department"`
+	Department  string `json:"directoryDepartment"`
 	IsAdmin     bool   `json:"isAdmin"`
 }
 
@@ -86,7 +86,8 @@ func TestLDAPUserWithSameEmailAsLocalUserIsNotMerged(t *testing.T) {
 	if ldap.IsAdmin || ldap.Username != "elarsen" {
 		t.Fatalf("LDAP user = %+v, want a separate non-admin user elarsen", ldap)
 	}
-	admin := userOf(t, env.Client().LoginLocal(apitest.AdminUsername, apitest.AdminPassword))
+	// The administrator's login email is the very address the directory reports for Emma.
+	admin := userOf(t, env.Client().LoginEmail("emma.larsen@corp.example", apitest.AdminPassword))
 	if admin.ID == ldap.ID || admin.DisplayName != "Initial Admin" || !admin.IsAdmin {
 		t.Fatalf("admin = %+v, ldap = %+v: they must be two unrelated users", admin, ldap)
 	}
@@ -103,8 +104,8 @@ func TestFirstLDAPLoginIsRefusedWhenALocalUserOwnsTheUsername(t *testing.T) {
 
 	// Nothing was bound: the same refusal again, and the local admin is untouched.
 	loginLDAP(env.Client(), apitest.AdminUsername, "ldap-pw").ExpectError(http.StatusUnprocessableEntity, "username", "usernameTakenByLocal")
-	admin := userOf(t, env.Client().LoginLocal(apitest.AdminUsername, apitest.AdminPassword))
-	if admin.DisplayName != "Initial Admin" || admin.Email != "" {
+	admin := userOf(t, env.Client().LoginEmail(apitest.AdminEmail, apitest.AdminPassword))
+	if admin.DisplayName != "Initial Admin" || admin.Email != apitest.AdminEmail {
 		t.Fatalf("local admin was modified: %+v", admin)
 	}
 }
@@ -152,8 +153,8 @@ func TestLoginPageCanLearnWhichLoginMethodsExistWithoutASession(t *testing.T) {
 		Items []string `json:"items"`
 	}
 	env.Client().Get("/api/login-methods").ExpectStatus(http.StatusOK).JSON(&body)
-	if len(body.Items) != 2 || body.Items[0] != "local" || body.Items[1] != "ldap" {
-		t.Fatalf("login methods = %v, want [local ldap]", body.Items)
+	if len(body.Items) != 2 || body.Items[0] != "email" || body.Items[1] != "ldap" {
+		t.Fatalf("login methods = %v, want [email ldap]", body.Items)
 	}
 }
 
@@ -201,11 +202,10 @@ func TestRenamingTheLocalUserLetsTheLDAPUserLogInForTheFirstTime(t *testing.T) {
 		t.Fatalf("LDAP user = %+v, local = %+v: want a new, separate user", ldap, local)
 	}
 
-	// The renamed local user keeps working under the new name.
-	if got := userOf(t, env.Client().LoginLocal("elarsen2", "local-pw-1")); got.ID != local.ID || got.DisplayName != "Eric Larsen" {
-		t.Fatalf("renamed local user = %+v, want ID %s", got, local.ID)
+	// The renamed user keeps logging in with the same login email.
+	if got := userOf(t, env.Client().LoginEmail("elarsen@example.com", "local-pw-1")); got.ID != local.ID || got.DisplayName != "Eric Larsen" {
+		t.Fatalf("renamed user = %+v, want ID %s", got, local.ID)
 	}
-	env.Client().LoginLocal("elarsen", "local-pw-1").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
 }
 
 func TestAdminCannotCreateALocalUserWhoseUsernameExistsInLDAP(t *testing.T) {
@@ -248,5 +248,5 @@ func TestLocalLoginStillWorksWhenTheDirectoryIsDown(t *testing.T) {
 	t.Parallel()
 	env := apitest.New(t)
 	env.Directory.SetUnreachable(true)
-	env.Client().LoginLocal(apitest.AdminUsername, apitest.AdminPassword).ExpectStatus(http.StatusOK)
+	env.Client().LoginAs(apitest.AdminUsername, apitest.AdminPassword).ExpectStatus(http.StatusOK)
 }

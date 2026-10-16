@@ -13,22 +13,44 @@ export type User = {
   username: string;
   displayName: string;
   email: string;
-  department: string;
+  /** Department text synced from LDAP; read-only, unrelated to the department tree. */
+  directoryDepartment: string;
   /** Saved interface language; '' = never chosen. */
   language: Language | '';
   isAdmin: boolean;
+  /** URL of the picture (/api/avatars/{id}?v=...); null = initials. */
+  avatarUrl: string | null;
 };
 
 export type Language = 'zh' | 'en';
 
-export type SessionInfo = { user: User };
+/** mustChangePassword: the password was set by an administrator; until it is changed the server refuses everything else (403 passwordChangeRequired). */
+export type SessionInfo = {
+  user: User;
+  mustChangePassword: boolean;
+  /** The user is required to have a second factor and has none: the server refuses everything but the setup (403 secondFactorSetupRequired). */
+  secondFactorSetupRequired: boolean;
+};
 
-export type LoginMethod = 'local' | 'ldap';
+/** The first factor passed but the user has a second factor: no session yet, POST /api/session/second-factor with the code finishes the login. */
+export type SecondFactorRequired = { secondFactorRequired: true; expiresAt: string };
 
-export type LoginInput = { method: LoginMethod; username: string; password: string };
+export type LoginMethod = 'email' | 'ldap';
+
+/** What the login page needs to know: the methods it may offer, and whether "forgot password" can work (it needs mail). */
+export type LoginMethods = { items: LoginMethod[]; passwordRecovery: boolean };
+export type SecondFactorStatus = { enabled: boolean; authenticators: { type: 'totp'; enabledAt: string }[]; recoveryCodesRemaining: number };
+/** The answer of the calls that make recovery codes (turning on, regenerating): the codes are in it this once. */
+export type SecondFactorWithCodes = SecondFactorStatus & { recoveryCodes: string[] };
+
+/** secret: base32 for typing in; otpauthUri: what the QR code holds; qrSvg: the QR code as an SVG document. */
+export type TotpSetup = { secret: string; otpauthUri: string; qrSvg: string };
+
+/** email: the login email (not the username). ldap: the directory login name. */
+export type LoginInput = { method: 'email'; email: string; password: string } | { method: 'ldap'; username: string; password: string };
 
 /** Owner / PE as shown in an application. */
-export type Member = { id: string; username: string; displayName: string; status: 'enabled' | 'disabled' };
+export type Member = { id: string; username: string; displayName: string; status: 'enabled' | 'disabled'; avatarUrl: string | null };
 
 /** A verified repository binding. projectId is assigned by the code platform and is what the binding relies on; path is display only. */
 export type Repo = { platformId: string; kind: PlatformKind; baseUrl: string; path: string; projectId: string };
@@ -88,7 +110,7 @@ export type UpdateApplicationInput = Partial<Pick<CreateApplicationInput, 'name'
 export type UpdateMembersInput = { owners: string[]; pes: string[] };
 
 /** An enabled user as offered by the Owner/PE pickers (GET /api/assignable-users). */
-export type AssignableUser = { id: string; username: string; displayName: string };
+export type AssignableUser = { id: string; username: string; displayName: string; avatarUrl: string | null };
 
 /** A line as referenced from other records (a version's line, a source version's line). The mainline has no name of its own. */
 export type Line = { id: string; isMain: boolean; name: string; branch: string };
@@ -177,40 +199,103 @@ export type AdminUser = {
   displayName: string;
   email: string;
   phone: string;
-  department: string;
+  /** Department text synced from LDAP; read-only, unrelated to the department tree. */
+  directoryDepartment: string;
+  /** The department in the organization (the department tree); null = none. */
+  departmentId: string | null;
   language: Language | '';
   status: 'enabled' | 'disabled';
   isAdmin: boolean;
+  /** The user has a second factor turned on (an administrator can reset it). */
+  secondFactorEnabled: boolean;
+  avatarUrl: string | null;
   identities: LoginIdentity[];
 };
 
-export type IdentityKind = 'local' | 'ldap';
+/** GET/PUT /api/system-config/security (administrators only). Administrators are required to have a second factor whatever this says. */
+export type SecurityPolicy = { forceSecondFactor: boolean; configured: boolean; updatedAt?: string };
+
+export type IdentityKind = 'email' | 'ldap';
 
 /** How an identity got attached to its user. */
 export type BoundVia = 'firstLogin' | 'self' | 'admin' | 'bootstrap';
 
-export type LoginIdentity = { kind: IdentityKind; loginName: string; boundAt: string; boundVia: BoundVia };
+export type LoginIdentity = {
+  kind: IdentityKind;
+  loginName: string;
+  boundAt: string;
+  boundVia: BoundVia;
+  /** Email identity only: invited by mail and no password chosen yet. */
+  invitePending?: boolean;
+};
 
 /**
  * Bind a login identity. ldap: loginName (+ password when binding your own: you
- * authenticate with it once). local: password only; the login name is the username.
+ * authenticate with it once). email: only an administrator binds it: loginName is the
+ * login email and password a temporary one the user must change at the first login.
  */
 export type BindIdentityInput = { kind: IdentityKind; loginName?: string; password?: string };
 
-/** What a user may change about themselves (GET/PATCH /api/me answers with the AdminUser shape). */
-export type UpdateMeInput = Partial<Pick<AdminUser, 'displayName' | 'email' | 'phone' | 'department' | 'language'>>;
+/**
+ * What a user may change about themselves (GET/PATCH /api/me answers with the AdminUser shape).
+ * The contact email is not here: it is the directory's for LDAP users and the login email otherwise.
+ */
+export type UpdateMeInput = Partial<Pick<AdminUser, 'displayName' | 'phone' | 'language'>>;
 
+export type ChangePasswordInput = { currentPassword: string; newPassword: string };
+
+/** password is a temporary one: the user must change it at the first login. */
 export type CreateUserInput = {
   username: string;
   displayName: string;
-  email: string;
+  loginEmail: string;
   phone: string;
-  department: string;
-  password: string;
+  /** The temporary password; used only while mail is not configured. With mail the user is invited and the password is ignored. */
+  password?: string;
+  /** Empty or left out = no department. */
+  departmentId?: string;
 };
 
 /** Fields left out are unchanged. */
-export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displayName' | 'email' | 'phone' | 'department'>>;
+export type UpdateUserInput = Partial<Pick<CreateUserInput, 'username' | 'displayName' | 'loginEmail' | 'phone'>> & {
+  /** Moves the user to a department; null takes the user out of any department. */
+  departmentId?: string | null;
+  /** Grants or revokes the administrator role; 422 lastAdmin when it would leave no enabled administrator. */
+  isAdmin?: boolean;
+};
+
+/** Operator of an audit entry: a user, or the command line in the container (kind "cli", no user). */
+export type AuditActor = { kind: 'user' | 'cli'; id?: string; username?: string; displayName?: string };
+
+/** Object of an audit entry: a user (id = user ID, with the user's name) or an application (id = application key). */
+export type AuditTarget = { type: 'user' | 'application' | 'department' | 'systemConfig'; id: string; username?: string; displayName?: string };
+
+/**
+ * GET /api/audit-log: an action type plus params, rendered in the UI language (src/audit/render.ts).
+ * User references inside params are {userId, username, displayName}.
+ */
+export type AuditEntry = {
+  id: string;
+  at: string;
+  action: string;
+  actor: AuditActor;
+  target: AuditTarget;
+  params: Record<string, unknown>;
+};
+
+export type AuditPage = List<AuditEntry> & { total: number; page: number; pageSize: number };
+
+/** actor: a user ID or "cli". from / to: RFC 3339 instants, both inclusive. */
+export type AuditQuery = {
+  actor?: string;
+  targetType?: 'user' | 'application' | 'department' | 'systemConfig';
+  targetId?: string;
+  action?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+};
 
 export type PlatformKind = 'gitlab' | 'github';
 
@@ -225,5 +310,133 @@ export type CodePlatform = {
 
 export type CodePlatformInput = { kind: PlatformKind | ''; baseUrl: string; token: string };
 
+export type RoleScope = 'global' | 'application';
+
+/** A built-in role (GET /api/roles, administrators only): permission keys like "line.fork"; descriptions live in the i18n dictionaries as perm.<key>. */
+export type Role = { id: 'administrator' | 'owner' | 'pe'; scope: RoleScope; permissions: string[] };
+
+/**
+ * GET/PUT /api/system-config/ldap (administrators only). The service account password is write-only:
+ * the response only says whether one is set. secretsUnreadable: a stored secret cannot be decrypted with
+ * the current master key, enter it again. configured: saved at least once (false = defaults shown).
+ */
+export type LdapConfig = {
+  enabled: boolean;
+  url: string;
+  startTls: boolean;
+  skipVerify: boolean;
+  bindDn: string;
+  bindPasswordSet: boolean;
+  baseDn: string;
+  userFilter: string;
+  loginAttr: string;
+  nameAttr: string;
+  emailAttr: string;
+  departmentAttr: string;
+  disabledFilter: string;
+  timeoutSeconds: number;
+  secretsUnreadable: boolean;
+  configured: boolean;
+  updatedAt?: string;
+};
+
+/** The whole LDAP form as sent by PUT and by "test connection". bindPassword empty/absent keeps the stored one. */
+export type LdapConfigInput = Omit<LdapConfig, 'bindPasswordSet' | 'secretsUnreadable' | 'configured' | 'updatedAt'> & { bindPassword?: string };
+
+export type StorageDriver = 'local' | 's3';
+export type StorageAddressing = 'path' | 'virtualHost';
+
+/**
+ * GET/PUT /api/system-config/storage (administrators only). Both parts of the access key are write-only:
+ * the response only says whether they are stored. secretsUnreadable: a stored secret cannot be decrypted with
+ * the current master key, enter the key again. localDir: where the local driver keeps objects (a deployment
+ * setting). configured: saved at least once (false = defaults shown, objects live on the local disk).
+ */
+export type StorageConfig = {
+  driver: StorageDriver;
+  endpoint: string;
+  region: string;
+  bucket: string;
+  addressing: StorageAddressing;
+  accessKeyIdSet: boolean;
+  secretAccessKeySet: boolean;
+  secretsUnreadable: boolean;
+  localDir: string;
+  configured: boolean;
+  updatedAt?: string;
+};
+
+/** The whole storage form as sent by PUT and by "test connection". Empty/absent key fields keep the stored key. */
+export type StorageConfigInput = Pick<StorageConfig, 'driver' | 'endpoint' | 'region' | 'bucket' | 'addressing'> & {
+  accessKeyId?: string;
+  secretAccessKey?: string;
+};
+
+/** Answer of every "test connection" route: ok, or ok=false with the error code (message "error.<code>"). A failed test is HTTP 200. */
+export type ConnectionTest = { ok: boolean; code?: string };
+
+export type SmtpSecurity = 'tls' | 'starttls' | 'none';
+
+/**
+ * GET/PUT /api/system-config/smtp (administrators only): the mail service and the site's external address
+ * the links in mail are built from. The password is write-only: the response only says whether one is set.
+ * There is deliberately no option to skip certificate verification. configured: mail can be sent (enabled, host, sender).
+ */
+export type SmtpConfig = {
+  enabled: boolean;
+  host: string;
+  port: number;
+  security: SmtpSecurity;
+  /** The administrator's explicit confirmation that mail may travel unencrypted; required for security "none". */
+  allowPlaintext: boolean;
+  username: string;
+  passwordSet: boolean;
+  from: string;
+  /** Optional PEM bundle trusted in addition to the system roots. */
+  caCert: string;
+  siteUrl: string;
+  secretsUnreadable: boolean;
+  configured: boolean;
+  updatedAt?: string;
+};
+
+/** The whole mail form as sent by PUT and by "send test email". password empty/absent keeps the stored one. */
+export type SmtpConfigInput = Omit<SmtpConfig, 'passwordSet' | 'secretsUnreadable' | 'configured' | 'updatedAt'> & { password?: string };
+
+/** Answer of "send test email": ok, or ok=false with the failure code (message "error.<code>") and the server's own words. HTTP 200 either way. */
+export type MailTestResult = { ok: boolean; code?: string; detail?: string; to: string };
+
+export type MailStatus = 'pending' | 'sent' | 'failed';
+
+/** A mail of the outgoing queue (never its content). */
+export type OutboxItem = {
+  id: string;
+  to: string;
+  template: string;
+  subject: string;
+  status: MailStatus;
+  attempts: number;
+  lastErrorCode?: string;
+  lastError?: string;
+  createdAt: string;
+  nextAttemptAt?: string;
+  sentAt?: string;
+  failedAt?: string;
+};
+
+export type Outbox = { items: OutboxItem[]; counts: { pending: number; sent: number; failed: number } };
+
 /** Every collection endpoint returns {items: [...]}. */
 export type List<T> = { items: T[] };
+
+/** A node of the department tree, sent as a flat list (GET /api/departments): parentId is null for a top-level department. */
+export type Department = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  /** Where the department came from; "manual" today, reserved for a directory sync. */
+  source: string;
+  /** Direct members and direct child departments (a department with either cannot be deleted). */
+  memberCount: number;
+  childCount: number;
+};

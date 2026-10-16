@@ -1,0 +1,9 @@
+Subject: Two-factor authentication was reset on your X-Project account
+
+Hello{{if .Name}} {{.Name}}{{end}},
+
+An administrator reset two-factor authentication on your X-Project account. You can log in with your password alone now; set two-factor authentication up again in your personal settings (it may be required).
+
+If you did not expect this, contact an administrator right away.
+
+X-Project

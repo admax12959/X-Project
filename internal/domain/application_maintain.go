@@ -35,9 +35,6 @@ type ApplicationMaintenanceRepository interface {
 	SetMainBranch(ctx context.Context, applicationID int64, branch string) error
 }
 
-// isOwner reports whether the actor is one of the application's Owners.
-func isOwner(actor Actor, a Application) bool { return containsUser(a.Owners, actor.User.ID) }
-
 func containsUser(list []UserRef, id UserID) bool {
 	for _, u := range list {
 		if u.ID == id {
@@ -66,8 +63,8 @@ func (s *Service) UpdateApplication(ctx context.Context, actor Actor, key string
 		if err != nil {
 			return err
 		}
-		if !isOwner(actor, app) {
-			return forbidden()
+		if err := requireAppPermission(actor, app, PermAppEdit); err != nil {
+			return err
 		}
 		name, description, branch := app.Name, app.Description, app.MainBranch
 		var c Collector
@@ -160,8 +157,8 @@ func (s *Service) UpdateMembers(ctx context.Context, actor Actor, key string, in
 		if err != nil {
 			return err
 		}
-		if !actor.User.IsAdmin && !isOwner(actor, app) {
-			return forbidden()
+		if err := requireAppPermission(actor, app, PermAppMembersManage); err != nil {
+			return err
 		}
 		if err := c.Err(); err != nil {
 			return err
@@ -175,14 +172,17 @@ func (s *Service) UpdateMembers(ctx context.Context, actor Actor, key string, in
 			old, new []UserID
 		}{{RoleOwner, oldOwners, owners}, {RolePE, oldPEs, pes}}
 		var events []event
+		var audits []auditEvent
 		for _, l := range lists { // removals first, then additions
 			for _, id := range without(l.old, l.new) {
 				events = append(events, memberRemovedEvent(l.role, id))
+				audits = append(audits, appMemberAudit(AuditAppMemberRemoved, app, l.role, id))
 			}
 		}
 		for _, l := range lists {
 			for _, id := range without(l.new, l.old) {
 				events = append(events, memberAddedEvent(l.role, id))
+				audits = append(audits, appMemberAudit(AuditAppMemberAdded, app, l.role, id))
 			}
 		}
 		for _, l := range lists {
@@ -194,6 +194,11 @@ func (s *Service) UpdateMembers(ctx context.Context, actor Actor, key string, in
 		}
 		for _, ev := range events {
 			if err := s.recordEvent(ctx, tx, app.ID, actor, ev); err != nil {
+				return err
+			}
+		}
+		for _, ev := range audits {
+			if err := s.recordAudit(ctx, tx, AuditActorOf(actor), ev); err != nil {
 				return err
 			}
 		}
@@ -253,9 +258,10 @@ func without(list, other []UserID) []UserID {
 
 // ListAssignableUsers returns the enabled users who can be chosen as Owner or PE,
 // ordered by display name. Any logged-in user may read it (the Owner/PE pickers
-// are used by Owners, who are not administrators); only names are exposed.
-func (s *Service) ListAssignableUsers(ctx context.Context, _ Actor) ([]UserRef, error) {
-	all, err := s.repo.ListUsers(ctx)
+// are used by Owners, who are not administrators); only names are exposed. A non-empty
+// departmentID limits it to the users in that department or below (see ListUsers).
+func (s *Service) ListAssignableUsers(ctx context.Context, _ Actor, departmentID string) ([]UserRef, error) {
+	all, err := s.listUsers(ctx, departmentID)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +284,7 @@ func (s *Service) ListAssignableUsers(ctx context.Context, _ Actor) ([]UserRef, 
 // history (the database cascades; nothing is deleted by hand). Administrators
 // only, and only after typing the application key.
 func (s *Service) DeleteApplication(ctx context.Context, actor Actor, key, confirmKey string) error {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermAppDelete); err != nil {
 		return err
 	}
 	return s.repo.InTx(ctx, func(tx Repository) error {
@@ -308,8 +314,8 @@ func (s *Service) UpdateDeployInfo(ctx context.Context, actor Actor, key string,
 		if err != nil {
 			return err
 		}
-		if !isOwner(actor, app) && !containsUser(app.PEs, actor.User.ID) {
-			return forbidden()
+		if err := requireAppPermission(actor, app, PermAppDeployEdit); err != nil {
+			return err
 		}
 		if deployInfo == nil {
 			return Validation(Invalid("deployInfo", CodeRequired, nil))

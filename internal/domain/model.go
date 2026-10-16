@@ -23,17 +23,27 @@ type User struct {
 	DisplayName string
 	Email       string
 	Phone       string
-	Department  string
-	Language    string // LanguageZh, LanguageEn, or empty when never chosen
-	Status      UserStatus
-	IsAdmin     bool
-	CreatedAt   time.Time
+	// DirectoryDepartment is the department text synced from LDAP (read-only; GLOSSARY: 目录部门).
+	// It has nothing to do with the organization's departments.
+	DirectoryDepartment string
+	// DepartmentID is the department the user belongs to in the organization; 0 = none.
+	DepartmentID DepartmentID
+	Language     string // LanguageZh, LanguageEn, or empty when never chosen
+	Status       UserStatus
+	IsAdmin      bool
+	CreatedAt    time.Time
+	// Avatar (avatar.go): the object key, the content hash that goes into the URL and who set it
+	// (AvatarUpload or AvatarLDAP). All empty = no avatar. Only the avatar code writes these:
+	// UpdateUser and UpdateUserProfile leave them alone.
+	AvatarKey    string
+	AvatarHash   string
+	AvatarSource AvatarSource
 }
 
 type IdentityKind string
 
 const (
-	IdentityLocal IdentityKind = "local"
+	IdentityEmail IdentityKind = "email" // login email + password
 	IdentityLDAP  IdentityKind = "ldap"
 )
 
@@ -53,18 +63,26 @@ type LoginIdentity struct {
 	ID           int64
 	UserID       UserID
 	Kind         IdentityKind
-	LoginName    string
-	PasswordHash string // local only: bcrypt (salted); empty for LDAP
-	BoundAt      time.Time
-	BoundVia     BoundVia
+	LoginName    string // LDAP: the directory login name; email: the login email, lower case
+	PasswordHash string // email only: bcrypt (salted); empty for LDAP and for an invited user who has not chosen a password. Loaded only where a password is checked.
+	// PasswordSet (email only) is whether the identity has a password. Unlike PasswordHash it is
+	// loaded everywhere, including the user lists; false means the user was invited and the link
+	// has not been used yet.
+	PasswordSet bool
+	BoundAt     time.Time
+	BoundVia    BoundVia
+	// MustChangePassword (email only) is set while the password is one an administrator
+	// chose: a session opened with it can do nothing but change the password and log out.
+	MustChangePassword bool
 }
 
 // Session is a logged-in browser session. Only the token's hash is stored.
 type Session struct {
-	TokenHash string
-	UserID    UserID
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	TokenHash          string
+	UserID             UserID
+	CreatedAt          time.Time
+	ExpiresAt          time.Time
+	MustChangePassword bool // opened with an administrator-chosen password
 }
 
 // Repository is the persistence port. Only the domain service uses it;
@@ -72,6 +90,13 @@ type Session struct {
 type Repository interface {
 	IdentityRepository
 	CodePlatformRepository
+	AuditRepository
+	DepartmentRepository
+	SystemConfigRepository
+	AvatarRepository
+	MailOutboxRepository
+	AuthTokenRepository
+	SecondFactorRepository
 
 	// InTx runs fn in one transaction; fn receives a Repository bound to it.
 	InTx(ctx context.Context, fn func(tx Repository) error) error

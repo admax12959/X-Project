@@ -1,0 +1,9 @@
+Subject: X-Project 登录方式有变动
+
+你好{{if .Name}}，{{.Name}}{{end}}：
+
+你的 X-Project 账号移除了一种登录方式：{{if eq .Kind "ldap"}}LDAP 账号{{else}}邮箱登录{{end}} {{.LoginName}}。
+
+如果不是你本人操作，请立即联系管理员。
+
+X-Project

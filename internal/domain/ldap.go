@@ -12,7 +12,7 @@ import (
 type IdentityRepository interface {
 	// FindUserByUsername matches the username as stored (MySQL compares case-insensitively).
 	FindUserByUsername(ctx context.Context, username string) (User, bool, error)
-	// UpdateUserProfile overwrites the directory-owned fields (display name, email, department).
+	// UpdateUserProfile overwrites the directory-owned fields (display name, email, directory department).
 	UpdateUserProfile(ctx context.Context, id UserID, displayName, email, department string, at time.Time) error
 	// FindIdentityByUser returns the user's identity of the given kind, if any.
 	FindIdentityByUser(ctx context.Context, userID UserID, kind IdentityKind) (LoginIdentity, bool, error)
@@ -35,7 +35,14 @@ func ldapUnreachable() error { return newKind(KindUnavailable, CodeLdapUnreachab
 //   - An unknown LDAP identity creates a new user only if the username is free. It is
 //     never merged into an existing user by username or email.
 func (s *Service) loginLDAP(ctx context.Context, in LoginInput) (LoginResult, error) {
-	res := s.directory.Authenticate(ctx, strings.TrimSpace(in.Username), in.Password)
+	dir, err := s.currentDirectory(ctx)
+	if err != nil {
+		return LoginResult{}, err
+	}
+	if dir == nil { // switched off between the method check and now
+		return LoginResult{}, invalidCredentials()
+	}
+	res := dir.Authenticate(ctx, strings.TrimSpace(in.Username), in.Password)
 	switch res.Outcome {
 	case DirectoryOK:
 	case DirectoryUnreachable:
@@ -50,7 +57,7 @@ func (s *Service) loginLDAP(ctx context.Context, in LoginInput) (LoginResult, er
 	}
 
 	var user User
-	err := s.repo.InTx(ctx, func(tx Repository) error {
+	err = s.repo.InTx(ctx, func(tx Repository) error {
 		ident, found, err := tx.FindIdentity(ctx, IdentityLDAP, login)
 		if err != nil {
 			return err
@@ -85,7 +92,7 @@ func (s *Service) loginLDAP(ctx context.Context, in LoginInput) (LoginResult, er
 			name = username
 		}
 		u := User{
-			Username: username, DisplayName: name, Email: entry.Email, Department: entry.Department,
+			Username: username, DisplayName: name, Email: entry.Email, DirectoryDepartment: entry.Department,
 			Status: UserEnabled, CreatedAt: now,
 		}
 		id, err := tx.CreateUser(ctx, u)
@@ -107,7 +114,8 @@ func (s *Service) loginLDAP(ctx context.Context, in LoginInput) (LoginResult, er
 	if err != nil {
 		return LoginResult{}, err
 	}
-	return s.openSession(ctx, user)
+	s.syncDirectoryPhoto(ctx, user, entry.Photo) // best effort: never fails the login
+	return s.openSession(ctx, user, nil)
 }
 
 // syncFromDirectory overwrites the directory-owned fields of u (display name, email,
@@ -121,7 +129,7 @@ func (s *Service) syncFromDirectory(ctx context.Context, tx Repository, u *User,
 	if err := tx.UpdateUserProfile(ctx, u.ID, name, entry.Email, entry.Department, s.nowUTC()); err != nil {
 		return err
 	}
-	u.DisplayName, u.Email, u.Department = name, entry.Email, entry.Department
+	u.DisplayName, u.Email, u.DirectoryDepartment = name, entry.Email, entry.Department
 	return nil
 }
 
@@ -132,10 +140,14 @@ func (s *Service) syncFromDirectory(ctx context.Context, tx Repository, u *User,
 // and the check is never skipped. With no directory configured there is nothing to check.
 // field is the request field to report the error on (normally "username").
 func (s *Service) CheckUsernameFreeInDirectory(ctx context.Context, field, username string) error {
-	if s.directory == nil {
+	dir, err := s.currentDirectory(ctx)
+	if err != nil {
+		return err // fail closed, never skipped
+	}
+	if dir == nil {
 		return nil
 	}
-	switch s.directory.Lookup(ctx, strings.TrimSpace(username)).Outcome {
+	switch dir.Lookup(ctx, strings.TrimSpace(username)).Outcome {
 	case DirectoryNotFound:
 		return nil
 	case DirectoryOK, DirectoryDisabled:

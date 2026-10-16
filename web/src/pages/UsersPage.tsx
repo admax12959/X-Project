@@ -1,13 +1,17 @@
-// Administration > Users: list, create local users, edit, disable / enable. Administrators only.
+// Administration > Users: list, create local users, edit, disable / enable, reset two-factor authentication. Administrators only.
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api, ApiError } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
 import type { AdminUser, LoginMethod } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
+import { DepartmentSelect, useDepartments } from '../org/DepartmentSelect.tsx';
+import { pathLabel } from '../org/tree.ts';
 import { useCurrentUser } from '../session/session.tsx';
+import { Avatar } from '../ui/Avatar.tsx';
 import { Button, Empty } from '../ui/controls.tsx';
 import { BindIdentityDialog } from './BindIdentityDialog.tsx';
+import { ResetSecondFactorDialog } from './ResetSecondFactorDialog.tsx';
 import { UserDialog } from './UserDialog.tsx';
 import { th, td } from '../ui/table.ts';
 
@@ -30,8 +34,12 @@ export function UsersPage() {
   const [actionError, setActionError] = useState<unknown>(null);
   const [actionUser, setActionUser] = useState<AdminUser | null>(null);
   const [bindFor, setBindFor] = useState<AdminUser | null>(null);
+  const [resetFor, setResetFor] = useState<AdminUser | null>(null);
+  const departments = useDepartments();
+  // Show only the users in this department or below ('' = everyone).
+  const [departmentFilter, setDepartmentFilter] = useState('');
   // Login identity kinds the server offers (ldap only when a directory is configured).
-  const [methods, setMethods] = useState<LoginMethod[]>(['local']);
+  const [methods, setMethods] = useState<LoginMethod[]>(['email']);
   const missingKinds = (u: AdminUser): LoginMethod[] => methods.filter((m) => !u.identities.some((i) => i.kind === m));
 
   useEffect(() => {
@@ -41,20 +49,32 @@ export function UsersPage() {
       (r) => live && setMethods(r.items),
       () => undefined,
     );
-    api.users.list().then(
+    api.users.list(departmentFilter).then(
       (r) => live && setLoad({ status: 'ok', items: r.items }),
       (error: unknown) => live && setLoad({ status: 'error', error }),
     );
     return () => {
       live = false;
     };
-  }, [me.isAdmin]);
+  }, [me.isAdmin, departmentFilter]);
 
   if (!me.isAdmin) return <Empty title={t('users.forbidden')} />;
 
   const items = load.status === 'ok' ? load.items : [];
   const replace = (u: AdminUser) => setLoad({ status: 'ok', items: items.map((x) => (x.id === u.id ? u : x)) });
   const append = (u: AdminUser) => setLoad({ status: 'ok', items: [...items, u] });
+
+  const [notice, setNotice] = useState<string | null>(null);
+  const sendInvitation = async (u: AdminUser) => {
+    setActionError(null);
+    setNotice(null);
+    try {
+      await api.users.sendInvitation(u.id);
+      setNotice(t('users.invite.sent', { email: u.identities.find((i) => i.kind === 'email')?.loginName ?? u.email }));
+    } catch (err) {
+      setActionError(err);
+    }
+  };
 
   const changeStatus = async (u: AdminUser) => {
     setActionError(null);
@@ -78,6 +98,24 @@ export function UsersPage() {
           {t('users.create')}
         </Button>
       </div>
+
+      <div className="flex items-center gap-2">
+        <DepartmentSelect
+          aria-label={t('users.filter.department')}
+          className="w-64"
+          departments={departments ?? []}
+          value={departmentFilter}
+          onChange={(id) => (setLoad({ status: 'loading' }), setDepartmentFilter(id))}
+          noneLabel={t('users.filter.allDepartments')}
+        />
+        {departmentFilter && <span className="text-[13px] text-text-3">{t('users.filter.includesBelow')}</span>}
+      </div>
+
+      {notice !== null && (
+        <div role="status" className="rounded border border-line bg-white px-3 py-2 text-[13px] text-text-2">
+          {notice}
+        </div>
+      )}
 
       {actionError !== null && (
         <div role="alert" className="rounded border border-danger/40 bg-danger/5 px-3 py-2 text-[13px] text-danger">
@@ -110,6 +148,7 @@ export function UsersPage() {
               <th className={th}>{t('users.col.displayName')}</th>
               <th className={th}>{t('users.col.email')}</th>
               <th className={th}>{t('users.col.department')}</th>
+              <th className={th}>{t('users.col.directoryDepartment')}</th>
               <th className={th}>{t('users.col.status')}</th>
               <th className={th}>{t('users.col.identities')}</th>
               <th className={th}>{t('users.col.actions')}</th>
@@ -120,13 +159,17 @@ export function UsersPage() {
               <tr key={u.id} className="hover:bg-hover">
                 <td className={`${td} font-mono text-[12.5px]`}>{u.username}</td>
                 <td className={td}>
+                  <Avatar size="sm" name={u.displayName} url={u.avatarUrl} className="mr-2" />
                   {u.displayName}
                   {u.isAdmin && <span className="ml-2 text-[13px] text-text-3">{t('term.administrator')}</span>}
                 </td>
                 <td className={td}>{u.email}</td>
-                <td className={td}>{u.department}</td>
+                <td className={td}>{pathLabel(departments ?? [], u.departmentId)}</td>
+                <td className={td}>{u.directoryDepartment}</td>
                 <td className={`${td} ${u.status === 'enabled' ? 'text-ok' : 'text-text-3'}`}>{t(`users.status.${u.status}`)}</td>
-                <td className={td}>{[...new Set(u.identities.map((i) => i.kind))].map((k) => t(`users.identity.${k}`)).join(' · ')}</td>
+                <td className={td}>{[...new Set(u.identities.map((i) => i.kind))].map((k) => t(`users.identity.${k}`)).join(' · ')}
+                  {u.identities.some((i) => i.invitePending) && <span className="ml-2 text-[13px] text-text-3">{t('users.invite.pending')}</span>}
+                </td>
                 <td className={`${td} whitespace-nowrap`}>
                   <span className="inline-flex gap-2">
                     <Button small onClick={() => setDialog(u)}>
@@ -135,6 +178,16 @@ export function UsersPage() {
                     {missingKinds(u).length > 0 && (
                       <Button small onClick={() => setBindFor(u)}>
                         {t('users.bindIdentity')}
+                      </Button>
+                    )}
+                    {u.status === 'enabled' && u.identities.some((i) => i.invitePending) && (
+                      <Button small onClick={() => sendInvitation(u)}>
+                        {t('users.invite.send')}
+                      </Button>
+                    )}
+                    {u.secondFactorEnabled && (
+                      <Button small onClick={() => setResetFor(u)}>
+                        {t('users.secondFactor.reset')}
                       </Button>
                     )}
                     <Button small onClick={() => changeStatus(u)}>
@@ -150,6 +203,18 @@ export function UsersPage() {
         {load.status === 'error' && <Empty title={errorsByField(load.error)[''] ?? t('users.loadFailed')} />}
         {load.status === 'ok' && items.length === 0 && <Empty title={t('users.empty')} />}
       </div>
+
+      {resetFor !== null && (
+        <ResetSecondFactorDialog
+          user={resetFor}
+          onClose={() => setResetFor(null)}
+          onReset={(u) => {
+            replace(u);
+            setResetFor(null);
+            setNotice(t('users.secondFactor.reset.done', { name: u.displayName }));
+          }}
+        />
+      )}
 
       {bindFor !== null && (
         <BindIdentityDialog

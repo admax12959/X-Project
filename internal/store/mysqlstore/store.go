@@ -106,22 +106,26 @@ func (s *Store) MarkBootstrapped(ctx context.Context, at time.Time) error {
 
 // ---------------------------------------------------------------- users
 
-const userCols = "id, username, display_name, email, phone, department, language, status, is_admin, created_at"
+const userCols = "id, username, display_name, email, phone, department, department_id, language, status, is_admin, created_at, avatar_key, avatar_hash, avatar_source"
 
 func scanUser(row interface{ Scan(...any) error }) (domain.User, error) {
 	var u domain.User
 	var status string
-	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Phone, &u.Department, &u.Language, &status, &u.IsAdmin, &u.CreatedAt)
-	u.Status = domain.UserStatus(status)
+	var dept sql.NullInt64
+	var avatarKey, avatarHash, avatarSource sql.NullString
+	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Phone, &u.DirectoryDepartment, &dept, &u.Language, &status, &u.IsAdmin, &u.CreatedAt,
+		&avatarKey, &avatarHash, &avatarSource)
+	u.Status, u.DepartmentID = domain.UserStatus(status), domain.DepartmentID(dept.Int64)
+	u.AvatarKey, u.AvatarHash, u.AvatarSource = avatarKey.String, avatarHash.String, domain.AvatarSource(avatarSource.String)
 	return u, err
 }
 
 func (s *Store) CreateUser(ctx context.Context, u domain.User) (domain.UserID, error) {
 	res, err := s.q.ExecContext(ctx,
-		"INSERT INTO users (username, display_name, email, phone, department, status, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		u.Username, u.DisplayName, u.Email, u.Phone, u.Department, string(u.Status), u.IsAdmin, u.CreatedAt, u.CreatedAt)
+		"INSERT INTO users (username, display_name, email, phone, department, department_id, status, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		u.Username, u.DisplayName, u.Email, u.Phone, u.DirectoryDepartment, nullableDepartment(u.DepartmentID), string(u.Status), u.IsAdmin, u.CreatedAt, u.CreatedAt)
 	if err != nil {
-		return 0, mapUsernameConflict(err)
+		return 0, mapDepartmentFK(mapUsernameConflict(err))
 	}
 	id, err := res.LastInsertId()
 	return domain.UserID(id), err
@@ -150,19 +154,33 @@ func (s *Store) UpdateUserProfile(ctx context.Context, id domain.UserID, display
 }
 
 func (s *Store) FindIdentityByUser(ctx context.Context, userID domain.UserID, kind domain.IdentityKind) (domain.LoginIdentity, bool, error) {
+	return s.findIdentityByUser(ctx, userID, kind, "")
+}
+
+func (s *Store) LockEmailIdentity(ctx context.Context, userID domain.UserID) (domain.LoginIdentity, bool, error) {
+	var id domain.UserID
+	if err := s.q.QueryRowContext(ctx, "SELECT id FROM users WHERE id = ? FOR UPDATE", userID).Scan(&id); errors.Is(err, sql.ErrNoRows) {
+		return domain.LoginIdentity{}, false, nil
+	} else if err != nil {
+		return domain.LoginIdentity{}, false, err
+	}
+	return s.findIdentityByUser(ctx, userID, domain.IdentityEmail, " FOR UPDATE")
+}
+
+func (s *Store) findIdentityByUser(ctx context.Context, userID domain.UserID, kind domain.IdentityKind, lock string) (domain.LoginIdentity, bool, error) {
 	var i domain.LoginIdentity
 	var k, via string
 	var hash sql.NullString
 	err := s.q.QueryRowContext(ctx,
-		"SELECT id, user_id, kind, login_name, password_hash, bound_at, bound_via FROM login_identities WHERE user_id = ? AND kind = ?",
-		userID, string(kind)).Scan(&i.ID, &i.UserID, &k, &i.LoginName, &hash, &i.BoundAt, &via)
+		"SELECT id, user_id, kind, login_name, password_hash, bound_at, bound_via, must_change_password FROM login_identities WHERE user_id = ? AND kind = ?"+lock,
+		userID, string(kind)).Scan(&i.ID, &i.UserID, &k, &i.LoginName, &hash, &i.BoundAt, &via, &i.MustChangePassword)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, false, nil
 	}
 	if err != nil {
 		return i, false, err
 	}
-	i.Kind, i.BoundVia, i.PasswordHash = domain.IdentityKind(k), domain.BoundVia(via), hash.String
+	i.Kind, i.BoundVia, i.PasswordHash, i.PasswordSet = domain.IdentityKind(k), domain.BoundVia(via), hash.String, hash.Valid
 	return i, true, nil
 }
 
@@ -172,8 +190,8 @@ func (s *Store) CreateIdentity(ctx context.Context, i domain.LoginIdentity) erro
 		hash = sql.NullString{String: i.PasswordHash, Valid: true}
 	}
 	_, err := s.q.ExecContext(ctx,
-		"INSERT INTO login_identities (user_id, kind, login_name, password_hash, bound_at, bound_via) VALUES (?, ?, ?, ?, ?, ?)",
-		i.UserID, string(i.Kind), i.LoginName, hash, i.BoundAt, string(i.BoundVia))
+		"INSERT INTO login_identities (user_id, kind, login_name, password_hash, bound_at, bound_via, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		i.UserID, string(i.Kind), i.LoginName, hash, i.BoundAt, string(i.BoundVia), i.MustChangePassword)
 	return mapUsernameConflict(err)
 }
 
@@ -182,30 +200,30 @@ func (s *Store) FindIdentity(ctx context.Context, kind domain.IdentityKind, logi
 	var k, via string
 	var hash sql.NullString
 	err := s.q.QueryRowContext(ctx,
-		"SELECT id, user_id, kind, login_name, password_hash, bound_at, bound_via FROM login_identities WHERE kind = ? AND login_name = ?",
-		string(kind), loginName).Scan(&i.ID, &i.UserID, &k, &i.LoginName, &hash, &i.BoundAt, &via)
+		"SELECT id, user_id, kind, login_name, password_hash, bound_at, bound_via, must_change_password FROM login_identities WHERE kind = ? AND login_name = ?",
+		string(kind), loginName).Scan(&i.ID, &i.UserID, &k, &i.LoginName, &hash, &i.BoundAt, &via, &i.MustChangePassword)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, false, nil
 	}
 	if err != nil {
 		return i, false, err
 	}
-	i.Kind, i.BoundVia, i.PasswordHash = domain.IdentityKind(k), domain.BoundVia(via), hash.String
+	i.Kind, i.BoundVia, i.PasswordHash, i.PasswordSet = domain.IdentityKind(k), domain.BoundVia(via), hash.String, hash.Valid
 	return i, true, nil
 }
 
 // ---------------------------------------------------------------- sessions
 
 func (s *Store) CreateSession(ctx context.Context, sess domain.Session) error {
-	_, err := s.q.ExecContext(ctx, "INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-		sess.TokenHash, sess.UserID, sess.CreatedAt, sess.ExpiresAt)
+	_, err := s.q.ExecContext(ctx, "INSERT INTO sessions (token_hash, user_id, created_at, expires_at, must_change_password) VALUES (?, ?, ?, ?, ?)",
+		sess.TokenHash, sess.UserID, sess.CreatedAt, sess.ExpiresAt, sess.MustChangePassword)
 	return err
 }
 
 func (s *Store) FindSession(ctx context.Context, tokenHash string) (domain.Session, bool, error) {
 	var sess domain.Session
-	err := s.q.QueryRowContext(ctx, "SELECT token_hash, user_id, created_at, expires_at FROM sessions WHERE token_hash = ?", tokenHash).
-		Scan(&sess.TokenHash, &sess.UserID, &sess.CreatedAt, &sess.ExpiresAt)
+	err := s.q.QueryRowContext(ctx, "SELECT token_hash, user_id, created_at, expires_at, must_change_password FROM sessions WHERE token_hash = ?", tokenHash).
+		Scan(&sess.TokenHash, &sess.UserID, &sess.CreatedAt, &sess.ExpiresAt, &sess.MustChangePassword)
 	if errors.Is(err, sql.ErrNoRows) {
 		return sess, false, nil
 	}
@@ -215,4 +233,22 @@ func (s *Store) FindSession(ctx context.Context, tokenHash string) (domain.Sessi
 func (s *Store) DeleteSession(ctx context.Context, tokenHash string) error {
 	_, err := s.q.ExecContext(ctx, "DELETE FROM sessions WHERE token_hash = ?", tokenHash)
 	return err
+}
+
+// IsTxAborting says which database errors end the transaction they happen in, or leave it
+// unusable (domain.IsTxAborting): a deadlock victim, a lock wait that timed out, a query that
+// was interrupted, a server that is going away, a connection that is gone. Other server errors
+// (a duplicate key, a NOT NULL violation) fail their statement only.
+func (s *Store) IsTxAborting(err error) bool {
+	var me *mysql.MySQLError
+	if errors.As(err, &me) {
+		switch me.Number {
+		case 1205, 1206, 1213, // lock wait timeout, lock table full, deadlock
+			1053, 1317, 1927, 3024, // server shutdown, interrupted, connection killed, max execution time
+			1040, 1158, 1159, 1160, 1161, 2006, 2013: // too many connections, network errors, gone away, lost
+			return true
+		}
+		return false
+	}
+	return errors.Is(err, mysql.ErrInvalidConn)
 }

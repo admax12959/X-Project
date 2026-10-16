@@ -60,7 +60,7 @@ func normalizeBaseURL(raw string) (string, bool) {
 
 // CreateCodePlatform registers a code platform. Administrators only.
 func (s *Service) CreateCodePlatform(ctx context.Context, actor Actor, in CodePlatformInput) (CodePlatform, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermPlatformManage); err != nil {
 		return CodePlatform{}, err
 	}
 	var c Collector
@@ -95,7 +95,7 @@ func (s *Service) CreateCodePlatform(ctx context.Context, actor Actor, in CodePl
 
 // ListCodePlatforms returns every registered code platform, oldest first. Administrators only.
 func (s *Service) ListCodePlatforms(ctx context.Context, actor Actor) ([]CodePlatform, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requirePermission(actor, PermPlatformManage); err != nil {
 		return nil, err
 	}
 	return s.repo.ListCodePlatforms(ctx)

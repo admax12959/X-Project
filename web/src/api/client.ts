@@ -1,11 +1,21 @@
 // Typed API client. Pages call api.<resource>.<action>(); nothing else calls fetch.
 import type {
   AdminUser,
+  AuditPage,
+  ConnectionTest,
+  AuditQuery,
   ApiFieldError,
   Application,
   ApplicationListItem,
   AssignableUser,
+  Department,
   BindIdentityInput,
+  ChangePasswordInput,
+  SecondFactorRequired,
+  SecurityPolicy,
+  SecondFactorStatus,
+  SecondFactorWithCodes,
+  TotpSetup,
   ChangeEvent,
   CodePlatform,
   CodePlatformInput,
@@ -13,15 +23,25 @@ import type {
   CreateUserInput,
   IdentityKind,
   ForkInput,
+  LdapConfig,
+  LdapConfigInput,
+  StorageConfig,
+  StorageConfigInput,
   LineDetail,
+  MailStatus,
+  MailTestResult,
+  Outbox,
+  SmtpConfig,
+  SmtpConfigInput,
   LineStatus,
   LineWithLog,
   LineageNode,
   UpdateLineInput,
   List,
   LoginInput,
-  LoginMethod,
+  LoginMethods,
   Repo,
+  Role,
   RecentActivity,
   RegisterVersionInput,
   RepoInput,
@@ -55,7 +75,13 @@ export function onUnauthenticated(fn: () => void) {
   unauthenticatedHandler = fn;
 }
 
-type Options = { body?: unknown; expect401?: boolean };
+let setupRequiredHandler: () => void = () => {};
+/** Called on a 403 secondFactorSetupRequired: the policy was switched on while the session was open. The session layer then shows the setup page. */
+export function onSetupRequired(fn: () => void) {
+  setupRequiredHandler = fn;
+}
+
+type Options = { body?: unknown; /** A file sent as it is (the avatar), not JSON. */ file?: Blob; expect401?: boolean };
 
 async function request<T>(method: string, path: string, opts: Options = {}): Promise<T> {
   let res: Response;
@@ -63,8 +89,8 @@ async function request<T>(method: string, path: string, opts: Options = {}): Pro
     res = await fetch(path, {
       method,
       credentials: 'same-origin',
-      headers: opts.body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      headers: opts.file ? { 'Content-Type': 'application/octet-stream' } : opts.body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: opts.file ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body)),
     });
   } catch {
     throw new ApiError(0, [{ code: 'network' }]);
@@ -74,17 +100,27 @@ async function request<T>(method: string, path: string, opts: Options = {}): Pro
   if (res.ok) return data as T;
   const errors = (data as { errors?: ApiFieldError[] } | undefined)?.errors ?? [{ code: res.status >= 500 ? 'internal' : 'unknown' }];
   if (res.status === 401 && !opts.expect401) unauthenticatedHandler();
+  if (res.status === 403 && errors.some((e) => e.code === 'secondFactorSetupRequired')) setupRequiredHandler();
   throw new ApiError(res.status, errors);
 }
 
 export const api = {
   session: {
     /** Public: which login methods the login page may offer. */
-    methods: () => request<List<LoginMethod>>('GET', '/api/login-methods', { expect401: true }),
+    methods: () => request<LoginMethods>('GET', '/api/login-methods', { expect401: true }),
+    /** Public. Always 202 whether or not the address belongs to an account; 422 on a malformed address, 429 rateLimited, 503 mailNotConfigured. */
+    requestPasswordRecovery: (email: string) => request<void>('POST', '/api/password-recovery', { body: { email }, expect401: true }),
+    /** Public: the set-password page of invitations and recovery. 422 on token (tokenInvalid / tokenExpired / tokenUsed) or password (rules). Opens no session. */
+    setPassword: (token: string, password: string) => request<void>('POST', '/api/password-setup', { body: { token, password }, expect401: true }),
     /** Current session; 401 (ApiError) when logged out. */
     get: () => request<SessionInfo>('GET', '/api/session', { expect401: true }),
-    /** 401 invalidCredentials, 422 field errors (e.g. usernameTakenByLocal) or 503 ldapUnreachable on failure. */
-    login: (input: LoginInput) => request<SessionInfo>('POST', '/api/session', { body: input, expect401: true }),
+    /** 401 invalidCredentials, 422 field errors (e.g. usernameTakenByLocal) or 503 ldapUnreachable on failure. A session with mustChangePassword can only change the password and log out. */
+    login: (input: LoginInput) => request<SessionInfo | SecondFactorRequired>('POST', '/api/session', { body: input, expect401: true }),
+    /**
+     * Second step of a login (the short-lived token travels in an HttpOnly cookie). 401 unauthenticated: the token is gone or
+     * expired, start over; 422 code totpInvalid; 429 totpLocked {lockedUntil}; 503 secondFactorUnreadable.
+     */
+    submitSecondFactor: (code: string) => request<SessionInfo>('POST', '/api/session/second-factor', { body: { code }, expect401: true }),
     logout: () => request<void>('DELETE', '/api/session', { expect401: true }),
   },
   applications: {
@@ -148,7 +184,8 @@ export const api = {
   },
   /** Any logged-in user: enabled users for the Owner/PE pickers. */
   assignableUsers: {
-    list: () => request<List<AssignableUser>>('GET', '/api/assignable-users'),
+    /** departmentId limits it to the users in that department or below. */
+    list: (departmentId = '') => request<List<AssignableUser>>('GET', `/api/assignable-users${departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : ''}`),
   },
   versions: {
     /**
@@ -178,23 +215,114 @@ export const api = {
     /** 422 field errors on kind / baseUrl / token. */
     create: (input: CodePlatformInput) => request<CodePlatform>('POST', '/api/code-platforms', { body: input }),
   },
+  /** Administrators only (403 otherwise). Read-only: the audit log is append-only. Newest first; 422 invalid on a malformed filter. */
+  audit: {
+    list: (params: AuditQuery = {}) => {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') qs.set(k, String(v));
+      return request<AuditPage>('GET', `/api/audit-log${qs.size ? `?${qs}` : ''}`);
+    },
+  },
+  /** Administrators only (403 otherwise). Secret fields are write-only. Sections follow this shape: get, update (the whole form), test (the unsaved form). */
+  systemConfig: {
+    ldap: {
+      get: () => request<LdapConfig>('GET', '/api/system-config/ldap'),
+      /** 422 field errors per form field. Saved changes are in effect at once. */
+      update: (input: LdapConfigInput) => request<LdapConfig>('PUT', '/api/system-config/ldap', { body: input }),
+      /** Uses the form values, saves nothing. 422 for an invalid form; a failed connection is 200 {ok: false, code}. */
+      test: (input: LdapConfigInput) => request<ConnectionTest>('POST', '/api/system-config/ldap/test', { body: input }),
+    },
+    smtp: {
+      get: () => request<SmtpConfig>('GET', '/api/system-config/smtp'),
+      /** 422 field errors per form field (plaintext needs allowPlaintext, siteUrl is required when enabled). Saved changes are in effect at once. */
+      update: (input: SmtpConfigInput) => request<SmtpConfig>('PUT', '/api/system-config/smtp', { body: input }),
+      /** Sends a test email with the unsaved form values to the signed-in administrator's contact email; saves nothing. A failed delivery is 200 {ok: false, code, detail}. */
+      test: (input: SmtpConfigInput) => request<MailTestResult>('POST', '/api/system-config/smtp/test', { body: input }),
+    },
+    security: {
+      get: () => request<SecurityPolicy>('GET', '/api/system-config/security'),
+      /** Saved changes are in effect at once, for sessions that are already open too. */
+      update: (forceSecondFactor: boolean) => request<SecurityPolicy>('PUT', '/api/system-config/security', { body: { forceSecondFactor } }),
+    },
+    storage: {
+      get: () => request<StorageConfig>('GET', '/api/system-config/storage'),
+      /** 422 field errors per form field (S3 fields only for driver s3). Saved changes are in effect at once. */
+      update: (input: StorageConfigInput) => request<StorageConfig>('PUT', '/api/system-config/storage', { body: input }),
+      /** Writes, reads back and deletes a probe object using the form values (unsaved). A failed test is 200 {ok: false, code}. */
+      test: (input: StorageConfigInput) => request<ConnectionTest>('POST', '/api/system-config/storage/test', { body: input }),
+    },
+  },
+  mail: {
+    /** Any signed-in user: can mail be sent? Features that depend on mail (invitations, password recovery) are only offered when it can. */
+    status: () => request<{ configured: boolean }>('GET', '/api/mail/status'),
+    /** Administrators only. The newest mail of the outgoing queue, newest first, optionally of one status; counts cover the whole queue. */
+    outbox: (status?: MailStatus) => request<Outbox>('GET', `/api/mail-outbox${status ? `?status=${status}` : ''}`),
+  },
+  /** Administrators only (403 otherwise). Read-only: built-in roles cannot be changed. */
+  roles: {
+    list: () => request<List<Role>>('GET', '/api/roles'),
+  },
+  /**
+   * The department tree. Reading is open to every logged-in user (the Owner/PE pickers filter by it);
+   * changes are administrators only. 422: departmentCycle (parentId), departmentNotEmpty (delete).
+   */
+  departments: {
+    list: () => request<List<Department>>('GET', '/api/departments'),
+    create: (input: { name: string; parentId: string | null }) => request<Department>('POST', '/api/departments', { body: input }),
+    /** Fields left out are unchanged; parentId null = top level. */
+    update: (id: string, input: { name?: string; parentId?: string | null }) => request<Department>('PATCH', `/api/departments/${id}`, { body: input }),
+    remove: (id: string) => request<void>('DELETE', `/api/departments/${id}`),
+  },
   /** Administrator only (403 otherwise). There is no delete: users are disabled. */
   users: {
-    list: () => request<List<AdminUser>>('GET', '/api/users'),
+    /** departmentId limits it to the users in that department or below. */
+    list: (departmentId = '') => request<List<AdminUser>>('GET', `/api/users${departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : ''}`),
     create: (input: CreateUserInput) => request<AdminUser>('POST', '/api/users', { body: input }),
     update: (id: string, input: UpdateUserInput) => request<AdminUser>('PATCH', `/api/users/${id}`, { body: input }),
     disable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/disable`),
     enable: (id: string) => request<AdminUser>('POST', `/api/users/${id}/enable`),
-    /** 422 field errors (identityKindBound, identityTaken, ldapLoginNotFound, password rules); 503 ldapUnreachable. */
+    /** Sends the invitation mail again; the earlier link stops working. 422 inviteNotPending, 503 mailNotConfigured. */
+    /** Removes the user's second factor and recovery codes; the user is mailed when mail works. 404 when the user has none. */
+    resetSecondFactor: (id: string) => request<AdminUser>('POST', `/api/users/${id}/second-factor/reset`),
+    sendInvitation: (id: string) => request<void>('POST', `/api/users/${id}/invitation`),
+    /** 422 field errors (identityKindBound, identityTaken, loginEmailTaken, ldapLoginNotFound, password rules); 503 ldapUnreachable. */
     bindIdentity: (id: string, input: BindIdentityInput) => request<AdminUser>('POST', `/api/users/${id}/identities`, { body: input }),
   },
   /** The logged-in user's own settings. */
   me: {
     get: () => request<AdminUser>('GET', '/api/me'),
-    /** 422 ldapManaged on displayName / email / department for LDAP-bound users. */
+    /** 422 ldapManaged on displayName / department for LDAP-bound users. */
     update: (input: UpdateMeInput) => request<AdminUser>('PATCH', '/api/me', { body: input }),
-    /** 422 on password when the authentication fails (never 401), identityKindBound, identityTaken; 503 ldapUnreachable. */
+    /** 422 currentPassword invalidCredentials, newPassword tooShort / passwordUnchanged; 404 for a user without an email identity. */
+    changePassword: (input: ChangePasswordInput) => request<void>('PUT', '/api/me/password', { body: input }),
+    secondFactor: {
+      get: () => request<SecondFactorStatus>('GET', '/api/me/second-factor'),
+      /** New secret after the password was typed again. 422 password required / invalidCredentials, totpAlreadyEnabled; 503 ldapUnreachable. */
+      startTotp: (password: string) => request<TotpSetup>('POST', '/api/me/second-factor/totp', { body: { password } }),
+      /** Turns it on when the code is right. 422 code required / totpInvalid; 404 when no setup was started. */
+      confirmTotp: (code: string) => request<SecondFactorWithCodes>('POST', '/api/me/second-factor/totp/confirm', { body: { code } }),
+      /** Needs a code (authenticator or recovery code). The old codes are void. 422 code required / totpInvalid; 429 totpLocked; 404 without a second factor. */
+      regenerateRecoveryCodes: (code: string) => request<SecondFactorWithCodes>('POST', '/api/me/second-factor/recovery-codes', { body: { code } }),
+      /** Needs a code. Same errors as regenerating, plus 403 secondFactorEnforced for a user who must have one. */
+      disable: (code: string) => request<SecondFactorStatus>('POST', '/api/me/second-factor/disable', { body: { code } }),
+    },
+    /** Only ldap: 422 on password when the authentication fails (never 401), identityKindBound, identityTaken; 503 ldapUnreachable. */
     bindIdentity: (input: BindIdentityInput) => request<AdminUser>('POST', '/api/me/identities', { body: input }),
+    /** The picture as the raw body. 422 avatar avatarTooLarge / avatarUnsupportedType; 429 rateLimited; 503 storageUnavailable. */
+    uploadAvatar: (file: Blob) => request<AdminUser>('PUT', '/api/me/avatar', { file }),
+    /** Removes the uploaded picture (the directory photo, if any, shows again). */
+    removeAvatar: () => request<AdminUser>('DELETE', '/api/me/avatar'),
+    /**
+     * Mails a verification code to the address (202). Bind: a user without an email identity (422 kind identityKindBound otherwise);
+     * change: a user with one (422 email noEmailIdentity, loginEmailUnchanged). 422 email loginEmailTaken / invalid;
+     * 429 rateLimited; 503 mailNotConfigured.
+     */
+    requestEmailCode: (mode: 'bind' | 'change', email: string) =>
+      request<void>('POST', mode === 'bind' ? '/api/me/email-identity/code' : '/api/me/login-email/code', { body: { email } }),
+    /** Adds the email identity. 201. 422 code tokenInvalid / tokenExpired / tokenUsed, password rules, email/loginName loginEmailTaken; 429 rateLimited after many wrong codes. */
+    bindEmailIdentity: (input: { email: string; code: string; password: string }) => request<AdminUser>('POST', '/api/me/email-identity', { body: input }),
+    /** Changes the login email. 422 as above. */
+    changeLoginEmail: (input: { email: string; code: string }) => request<AdminUser>('PUT', '/api/me/login-email', { body: input }),
     /** 422 lastIdentity on the only identity. */
     unbindIdentity: (kind: IdentityKind) => request<AdminUser>('DELETE', `/api/me/identities/${kind}`),
   },

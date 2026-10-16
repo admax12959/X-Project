@@ -3,3 +3,4 @@
 /web/dist/
 *.local
 .DS_Store
+/data/

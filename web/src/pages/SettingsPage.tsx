@@ -1,13 +1,20 @@
-// Personal settings: profile, login identities (bind / unbind), interface language.
+// Personal settings in four tabs (the active one is the ?tab= query value, so a link can open it):
+// profile (details, avatar), login identities (bind / unbind, email login), security (password, second factor),
+// preferences (interface language).
 import { Dialog } from '@base-ui/react/dialog';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router';
 import { api } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
 import type { AdminUser, IdentityKind, LoginMethod } from '../api/types.ts';
-import { LOCALES, setLocale, useT, type Locale } from '../i18n/index.ts';
+import { LOCALES, setLocale, useT, type Locale, type MessageKey } from '../i18n/index.ts';
 import { useSession } from '../session/session.tsx';
+import { Avatar } from '../ui/Avatar.tsx';
 import { Button, Empty, Field, Input, Segmented } from '../ui/controls.tsx';
 import { BindIdentityDialog } from './BindIdentityDialog.tsx';
+import { ChangePasswordForm } from './ChangePassword.tsx';
+import { EmailLoginDialog } from './EmailLoginDialog.tsx';
+import { SecondFactorPanel } from './SecondFactorPanel.tsx';
 import { th, td } from '../ui/table.ts';
 
 type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; me: AdminUser };
@@ -21,11 +28,21 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+const TABS = [
+  { id: 'profile', label: 'settings.tab.profile' },
+  { id: 'identities', label: 'settings.tab.identities' },
+  { id: 'security', label: 'settings.tab.security' },
+  { id: 'preferences', label: 'settings.tab.preferences' },
+] as const satisfies readonly { id: string; label: MessageKey }[];
+type TabId = (typeof TABS)[number]['id'];
+
 export function SettingsPage() {
   const { t } = useT();
+  const [params, setParams] = useSearchParams();
+  const tab: TabId = TABS.find((x) => x.id === params.get('tab'))?.id ?? 'profile';
   const { setUser } = useSession();
   const [load, setLoad] = useState<Load>({ status: 'loading' });
-  const [methods, setMethods] = useState<LoginMethod[]>(['local']);
+  const [methods, setMethods] = useState<LoginMethod[]>(['email']);
 
   useEffect(() => {
     let live = true;
@@ -49,15 +66,46 @@ export function SettingsPage() {
   // Keep the page and the session (top bar name, language) in step with what the server saved.
   const saved = (u: AdminUser) => {
     setLoad({ status: 'ok', me: u });
-    setUser({ id: u.id, username: u.username, displayName: u.displayName, email: u.email, department: u.department, language: u.language, isAdmin: u.isAdmin });
+    setUser({ id: u.id, username: u.username, displayName: u.displayName, email: u.email, directoryDepartment: u.directoryDepartment, language: u.language, isAdmin: u.isAdmin, avatarUrl: u.avatarUrl });
   };
 
   return (
     <>
       <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
-      <ProfileSection me={me} onSaved={saved} />
-      <IdentitiesSection me={me} methods={methods} onChanged={saved} />
-      <LanguageSection onSaved={saved} />
+      <div role="tablist" aria-label={t('settings.tabs')} className="flex gap-1 border-b border-line">
+        {TABS.map((x) => (
+          <button
+            key={x.id}
+            type="button"
+            role="tab"
+            id={`settings-tab-${x.id}`}
+            aria-selected={tab === x.id}
+            aria-controls="settings-panel"
+            onClick={() => setParams(x.id === 'profile' ? {} : { tab: x.id }, { replace: true })}
+            className={`-mb-px border-b-2 px-3 py-2 ${tab === x.id ? 'border-accent font-semibold text-accent' : 'border-transparent text-text hover:text-accent'}`}
+          >
+            {t(x.label)}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id="settings-panel" aria-labelledby={`settings-tab-${tab}`} className="grid gap-4">
+        {tab === 'profile' && (
+          <>
+            <ProfileSection me={me} onSaved={saved} />
+            <AvatarSection me={me} onSaved={saved} />
+          </>
+        )}
+        {tab === 'identities' && <IdentitiesSection me={me} methods={methods} onChanged={saved} />}
+        {tab === 'security' && (
+          <>
+            {me.identities.some((i) => i.kind === 'email') && <PasswordSection />}
+            <Section title={t('settings.security.title')}>
+              <SecondFactorPanel />
+            </Section>
+          </>
+        )}
+        {tab === 'preferences' && <LanguageSection onSaved={saved} />}
+      </div>
     </>
   );
 }
@@ -66,9 +114,9 @@ export function SettingsPage() {
 
 function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser) => void }) {
   const { t } = useT();
-  // The directory owns these three for a user with an LDAP identity (spec: read-only, LDAP wins).
+  // The directory owns the display name and email for a user with an LDAP identity (spec: read-only, LDAP wins).
   const ldapBound = me.identities.some((i) => i.kind === 'ldap');
-  const [form, setForm] = useState({ displayName: me.displayName, email: me.email, department: me.department, phone: me.phone });
+  const [form, setForm] = useState({ displayName: me.displayName, phone: me.phone });
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -80,8 +128,8 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
 
   // When the identities change (e.g. LDAP was just bound) the server may have replaced the values.
   useEffect(() => {
-    setForm({ displayName: me.displayName, email: me.email, department: me.department, phone: me.phone });
-  }, [me.displayName, me.email, me.department, me.phone]);
+    setForm({ displayName: me.displayName, phone: me.phone });
+  }, [me.displayName, me.phone]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -91,7 +139,7 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
     try {
       // Send only what changed, so untouched LDAP-managed fields are never submitted.
       const changes: Partial<typeof form> = {};
-      for (const k of ['displayName', 'email', 'department', 'phone'] as const) {
+      for (const k of ['displayName', 'phone'] as const) {
         if (form[k] !== me[k]) changes[k] = form[k];
       }
       onSaved(await api.me.update(changes));
@@ -117,13 +165,15 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
         <Field label={t('users.field.displayName')} error={errors.displayName}>
           <Input name="displayName" disabled={ldapBound} value={form.displayName} onChange={set('displayName')} />
         </Field>
-        <Field label={t('users.field.email')} error={errors.email}>
-          <Input name="email" type="email" disabled={ldapBound} value={form.email} onChange={set('email')} />
+        <Field label={t('users.field.email')}>
+          <Input name="email" type="email" disabled readOnly value={me.email} />
+          <p className="mt-1 text-[12px] text-text-3">{ldapBound ? t('settings.profile.ldapManaged') : t('settings.profile.contactEmail')}</p>
         </Field>
-        <Field label={t('users.field.department')} error={errors.department}>
-          <Input name="department" disabled={ldapBound} value={form.department} onChange={set('department')} />
-        </Field>
-        {ldapBound && <p className="-mt-1.5 text-[12px] text-text-3">{t('settings.profile.ldapManaged')}</p>}
+        {me.directoryDepartment !== '' && (
+          <Field label={t('users.field.directoryDepartment')}>
+            <Input name="directoryDepartment" disabled readOnly value={me.directoryDepartment} />
+          </Field>
+        )}
         <Field label={t('users.field.phone')} error={errors.phone}>
           <Input name="phone" type="tel" value={form.phone} onChange={set('phone')} />
         </Field>
@@ -142,14 +192,98 @@ function ProfileSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser
   );
 }
 
+// ---------------------------------------------------------------- avatar
+
+// The server accepts 2 MB; checking here only saves a pointless upload. Everything else about
+// the file (type, pixels, orientation) is the server's decision and comes back as an error code.
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+function AvatarSection({ me, onSaved }: { me: AdminUser; onSaved: (u: AdminUser) => void }) {
+  const { t } = useT();
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [tooBig, setTooBig] = useState(false);
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
+  const run = async (action: () => Promise<AdminUser>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(await action());
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const choose = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // the same file can be chosen again
+    if (!file) return;
+    setError(null);
+    setTooBig(file.size > AVATAR_MAX_BYTES);
+    if (file.size > AVATAR_MAX_BYTES) return;
+    setPreview(URL.createObjectURL(file)); // shown while uploading
+    await run(() => api.me.uploadAvatar(file));
+    setPreview(null);
+  };
+
+  const message = tooBig ? t('error.avatarTooLarge') : error ? (errorsByField(error).avatar ?? errorsByField(error)[''] ?? '') : '';
+  return (
+    <Section title={t('settings.avatar.title')}>
+      <div className="flex items-center gap-5">
+        <Avatar size="xl" name={me.displayName} url={preview ?? me.avatarUrl} />
+        <div className="grid gap-2">
+          <div className="flex items-center gap-2">
+            <label className={`inline-flex h-8 cursor-pointer items-center rounded border border-line bg-white px-3.5 font-semibold hover:bg-subtle has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent ${busy ? 'pointer-events-none opacity-60' : ''}`}>
+              {busy ? t('settings.avatar.uploading') : me.avatarUrl ? t('settings.avatar.change') : t('settings.avatar.upload')}
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={busy} onChange={choose} />
+            </label>
+            {me.avatarUrl && (
+              <Button disabled={busy} onClick={() => run(() => api.me.removeAvatar())}>
+                {t('settings.avatar.remove')}
+              </Button>
+            )}
+          </div>
+          <p className="text-[12px] text-text-3">{t('settings.avatar.hint')}</p>
+          {message && (
+            <p role="alert" className="text-[13px] text-danger">
+              {message}
+            </p>
+          )}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
 // ---------------------------------------------------------------- login identities
+
+const hasEmailIdentity = (me: AdminUser) => me.identities.some((i) => i.kind === 'email');
 
 function IdentitiesSection({ me, methods, onChanged }: { me: AdminUser; methods: LoginMethod[]; onChanged: (u: AdminUser) => void }) {
   const { t, locale } = useT();
   const [binding, setBinding] = useState<IdentityKind | null>(null);
   const [unbinding, setUnbinding] = useState<IdentityKind | null>(null);
+  const [emailDialog, setEmailDialog] = useState<'bind' | 'change' | null>(null);
+  // Adding an email login and changing the login email send a code by mail; without mail they are unavailable.
+  const [mailOn, setMailOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.mail.status().then(
+      (r) => live && setMailOn(r.configured),
+      () => live && setMailOn(false),
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  const emailMode = hasEmailIdentity(me) ? 'change' : 'bind';
   const have = new Set(me.identities.map((i) => i.kind));
-  const missing = methods.filter((m) => !have.has(m));
+  // The directory is bound with its password; an email identity has its own flow below (the address is verified by mail).
+  const missing = methods.filter((m) => m === 'ldap' && !have.has(m));
   const onlyOne = me.identities.length <= 1;
 
 
@@ -184,14 +318,27 @@ function IdentitiesSection({ me, methods, onChanged }: { me: AdminUser; methods:
         </table>
       </div>
       {onlyOne && <p className="mt-2 text-[13px] text-text-2">{t('settings.unbind.lastReason')}</p>}
-      {missing.length > 0 && (
-        <div className="mt-3 flex gap-2">
-          {missing.map((k) => (
-            <Button key={k} onClick={() => setBinding(k)}>
-              {t(k === 'ldap' ? 'settings.bind.ldap' : 'settings.bind.local')}
-            </Button>
-          ))}
-        </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {missing.map((k) => (
+          <Button key={k} onClick={() => setBinding(k)}>
+            {t('settings.bind.ldap')}
+          </Button>
+        ))}
+        <Button disabled={mailOn !== true} onClick={() => setEmailDialog(emailMode)}>
+          {emailMode === 'bind' ? t('settings.emailLogin.add') : t('settings.emailLogin.change')}
+        </Button>
+      </div>
+      {mailOn === false && <p className="mt-2 text-[13px] text-text-2">{t('settings.emailLogin.unavailable')}</p>}
+      {emailDialog !== null && (
+        <EmailLoginDialog
+          mode={emailDialog}
+          ldapBound={have.has('ldap')}
+          onClose={() => setEmailDialog(null)}
+          onDone={(u) => {
+            setEmailDialog(null);
+            onChanged(u);
+          }}
+        />
       )}
 
       {binding !== null && (
@@ -263,6 +410,24 @@ function UnbindDialog({ kind, onClose, onUnbound }: { kind: IdentityKind; onClos
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+// ---------------------------------------------------------------- password
+
+function PasswordSection() {
+  const { t } = useT();
+  const [done, setDone] = useState(false);
+  return (
+    <Section title={t('password.title')}>
+      <p className="mb-3 text-[13px] text-text-2">{t('password.hint')}</p>
+      <ChangePasswordForm onDone={() => setDone(true)} />
+      {done && (
+        <p role="status" className="mt-2 text-[13px] text-ok">
+          {t('password.changed')}
+        </p>
+      )}
+    </Section>
   );
 }
 

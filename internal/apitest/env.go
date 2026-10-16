@@ -8,17 +8,25 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/admax12959/X-Project/internal/app"
+	"github.com/admax12959/X-Project/internal/domain"
 	"github.com/admax12959/X-Project/internal/fakes"
 )
 
 // Initial administrator configured for every test environment.
 const (
 	AdminUsername = "admin"
+	AdminEmail    = "admin@example.com"
 	AdminPassword = "initial-admin-pw"
 )
+
+// Email is the login email tests give a user: <username>@example.com.
+func Email(username string) string { return username + "@example.com" }
 
 // Env is one isolated backend: its own database, its own server, its own fakes.
 type Env struct {
@@ -26,10 +34,36 @@ type Env struct {
 	DSN    string
 	Config app.Config
 	// Fakes for the adapters. Configure them before the calls that need them.
-	Directory     *fakes.Directory
+	Directory *fakes.Directory
+	// Directories is the factory the application builds its directory with from the saved LDAP
+	// configuration; it always returns Directory and records the configurations it was given.
+	Directories   *fakes.DirectoryFactory
 	CodePlatforms *fakes.CodePlatform
+	// Mailer is the fake SMTP side: the application builds its sender from the saved mail
+	// configuration through it, and it records the messages that would have been delivered.
+	Mailer *fakes.Mailer
+	// Objects is the in-memory object store the application uses whatever the saved storage
+	// configuration says; ObjectStores is the factory that hands it out and records the
+	// configurations it was asked to build a store for.
+	Objects      *fakes.ObjectStore
+	ObjectStores *fakes.ObjectStoreFactory
+	// Clock is the application's clock: the real one until a test freezes or advances it.
+	Clock *fakes.Clock
 
 	server *httptest.Server
+	app    *app.App
+
+	adminMu      sync.Mutex
+	adminCookies []*http.Cookie
+	adminSecret  string
+}
+
+// EnqueueMail puts a mail into the outgoing mail queue, as a feature of the application does
+// when it needs to send one (domain.Service.EnqueueMail). TEST ONLY FIXTURE: the features that
+// send mail (invitations, password recovery, ...) are tested through their own API; this
+// exists for the tests of the queue itself and of the templates.
+func (e *Env) EnqueueMail(req domain.MailRequest) error {
+	return e.app.Service.EnqueueMail(context.Background(), req)
 }
 
 // New starts a backend on a fresh database through the production startup path.
@@ -40,12 +74,22 @@ func New(t testing.TB, mutate ...func(*app.Config)) *Env {
 	cfg.Database.DSN = freshDatabase(t)
 	cfg.SecretKey = "test-secret-key"
 	cfg.Admin.Username = AdminUsername
+	cfg.Admin.Email = AdminEmail
 	cfg.Admin.Password = AdminPassword
 	cfg.Admin.DisplayName = "Initial Admin"
+	cfg.Storage.LocalDir = filepath.Join(t.TempDir(), "storage")
+	defaultLDAP(&cfg)
+	// Mail is delivered by a background worker: look at the queue often and retry quickly, so
+	// tests wait milliseconds, not minutes. Four delivery attempts in all.
+	cfg.Mail.PollInterval = 25 * time.Millisecond
+	cfg.Mail.RetryBackoff = []time.Duration{25 * time.Millisecond, 25 * time.Millisecond, 25 * time.Millisecond}
 	for _, m := range mutate {
 		m(&cfg)
 	}
-	e := &Env{t: t, DSN: cfg.Database.DSN, Config: cfg, Directory: fakes.NewDirectory(), CodePlatforms: fakes.NewCodePlatform()}
+	dir := fakes.NewDirectory()
+	objects := fakes.NewObjectStore()
+	e := &Env{t: t, DSN: cfg.Database.DSN, Config: cfg, Directory: dir, Directories: fakes.NewDirectoryFactory(dir), CodePlatforms: fakes.NewCodePlatform(),
+		Mailer: fakes.NewMailer(), Objects: objects, ObjectStores: fakes.NewObjectStoreFactory(objects), Clock: fakes.NewClock()}
 	e.start()
 	return e
 }
@@ -58,27 +102,45 @@ func StartError(t testing.TB, mutate func(*app.Config)) error {
 	cfg.Database.DSN = freshDatabase(t)
 	cfg.SecretKey = "test-secret-key"
 	cfg.Admin.Username = AdminUsername
+	cfg.Admin.Email = AdminEmail
 	cfg.Admin.Password = AdminPassword
+	defaultLDAP(&cfg)
 	mutate(&cfg)
-	a, err := app.Start(context.Background(), cfg, app.Deps{Directory: fakes.NewDirectory(), CodePlatforms: fakes.NewCodePlatform()})
+	a, err := app.Start(context.Background(), cfg, app.Deps{Directories: fakes.NewDirectoryFactory(fakes.NewDirectory()), CodePlatforms: fakes.NewCodePlatform(), ObjectStores: fakes.NewObjectStoreFactory(fakes.NewObjectStore())})
 	if err == nil {
 		a.Close()
 	}
 	return err
 }
 
+// defaultLDAP puts an LDAP block in the configuration file, as the pre-#19 test environments
+// had a directory: the first start imports it, so LDAP login is on. Tests that want LDAP off
+// (or other file values) clear or change it in their mutate function.
+func defaultLDAP(cfg *app.Config) {
+	cfg.LDAP.URL = "ldap://directory.test:389"
+	cfg.LDAP.BaseDN = "dc=corp,dc=example"
+}
+
 func (e *Env) start() {
 	e.t.Helper()
-	a, err := app.Start(context.Background(), e.Config, app.Deps{Directory: e.Directory, CodePlatforms: e.CodePlatforms})
+	a, err := app.Start(context.Background(), e.Config, app.Deps{Directories: e.Directories, CodePlatforms: e.CodePlatforms, MailSenders: e.Mailer, ObjectStores: e.ObjectStores, Now: e.Clock.Now})
 	if err != nil {
 		e.t.Fatalf("app.Start: %v", err)
 	}
+	e.app = a
 	e.server = httptest.NewServer(a.Handler)
 	e.t.Cleanup(func() {
 		e.server.Close()
 		a.Close()
 	})
 }
+
+// SettleBackground waits until the mail preparation that password recovery requests started in
+// the background has finished, so a test can assert that something was NOT queued.
+func (e *Env) SettleBackground() { e.app.Service.WaitBackground() }
+
+// URL is the address of the test server, for requests a Client cannot make (a custom Host header).
+func (e *Env) URL() string { return e.server.URL }
 
 // Restart simulates a process restart on the same database. mutate adjusts the
 // configuration for the new process (for example a different admin password).
@@ -91,17 +153,28 @@ func (e *Env) Restart(mutate ...func(*app.Config)) {
 	e.start()
 }
 
+// CurrentObjectStore asks the application for the object store it would use now, built from
+// the saved storage configuration (what the avatar code does).
+func (e *Env) CurrentObjectStore(ctx context.Context) (domain.ObjectStore, error) {
+	return e.app.Service.ObjectStore(ctx)
+}
+
+// SweepAvatarOrphans runs the avatar cleanup once, deleting every unreferenced avatar object
+// regardless of age (the periodic job only takes old ones). TEST ONLY FIXTURE.
+func (e *Env) SweepAvatarOrphans(ctx context.Context) (int, error) {
+	return e.app.Service.SweepAvatarOrphans(ctx, 0)
+}
+
 // Client returns a new browser-like client with its own cookie jar.
 func (e *Env) Client() *Client {
 	jar, _ := cookiejar.New(nil)
 	return &Client{t: e.t, env: e, http: &http.Client{Jar: jar}}
 }
 
-// AdminClient returns a client already logged in as the initial administrator.
+// AdminClient returns a client already logged in as the initial administrator, who has the
+// second factor turned on (see admin.go). All of them share one session.
 func (e *Env) AdminClient() *Client {
-	c := e.Client()
-	c.LoginLocal(AdminUsername, AdminPassword).ExpectStatus(http.StatusOK)
-	return c
+	return e.Client().WithCookies(e.enrollAdmin())
 }
 
 // Client talks to the Env's server over HTTP, keeping cookies like a browser.
@@ -123,20 +196,34 @@ type Response struct {
 // Do sends a request. body, if non-nil, is encoded as JSON.
 func (c *Client) Do(method, path string, body any) *Response {
 	c.t.Helper()
+	if body == nil {
+		return c.send(method, path, nil, "")
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	return c.send(method, path, b, "application/json")
+}
+
+// Raw sends a request whose body is sent as is (an uploaded file), with the given Content-Type.
+func (c *Client) Raw(method, path string, body []byte, contentType string) *Response {
+	c.t.Helper()
+	return c.send(method, path, body, contentType)
+}
+
+func (c *Client) send(method, path string, body []byte, contentType string) *Response {
+	c.t.Helper()
 	var r io.Reader
 	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			c.t.Fatal(err)
-		}
-		r = bytes.NewReader(b)
+		r = bytes.NewReader(body)
 	}
 	req, err := http.NewRequest(method, c.env.server.URL+path, r)
 	if err != nil {
 		c.t.Fatal(err)
 	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	res, err := c.http.Do(req)
 	if err != nil {
@@ -160,10 +247,26 @@ func (c *Client) Delete(path string) *Response {
 	return c.Do(http.MethodDelete, path, nil)
 }
 
-// LoginLocal logs in with a local identity.
-func (c *Client) LoginLocal(username, password string) *Response {
+// LoginEmail logs in with an email identity.
+func (c *Client) LoginEmail(email, password string) *Response {
 	c.t.Helper()
-	return c.Post("/api/session", map[string]string{"method": "local", "username": username, "password": password})
+	return c.Post("/api/session", map[string]string{"method": "email", "email": email, "password": password})
+}
+
+// LoginAs logs in with the email identity of a user created the usual way in tests (login
+// email <username>@example.com).
+func (c *Client) LoginAs(username, password string) *Response {
+	c.t.Helper()
+	return c.LoginEmail(Email(username), password)
+}
+
+// Env returns the environment the client talks to.
+func (c *Client) Env() *Env { return c.env }
+
+// Put sends a PUT with a JSON body.
+func (c *Client) Put(path string, body any) *Response {
+	c.t.Helper()
+	return c.Do(http.MethodPut, path, body)
 }
 
 // Cookies returns the cookies the client would send to the server.

@@ -1,26 +1,41 @@
-// Create-local-user and edit-user dialog for the administrator's user page.
+// Create-user and edit-user dialog for the administrator's user page.
 import { Dialog } from '@base-ui/react/dialog';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
 import type { AdminUser, UpdateUserInput } from '../api/types.ts';
 import { useT } from '../i18n/index.ts';
+import { DepartmentSelect, useDepartments } from '../org/DepartmentSelect.tsx';
+import { pathLabel } from '../org/tree.ts';
 import { Button, Field, Input } from '../ui/controls.tsx';
 
-/** `user` set = edit that user; `null` = create a local user. */
+/** `user` set = edit that user; `null` = create a user with an email identity. */
 export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null; onClose: () => void; onSaved: (u: AdminUser) => void }) {
   const { t } = useT();
   const editing = user !== null;
   // For an LDAP-bound user the directory owns these fields and the username is fixed (ADR-0004).
   const ldapBound = !!user?.identities.some((i) => i.kind === 'ldap');
+  // The login email lives on the email identity; a directory-only user has none to edit.
+  const loginEmail = user?.identities.find((i) => i.kind === 'email')?.loginName;
   const [form, setForm] = useState({
     username: user?.username ?? '',
     displayName: user?.displayName ?? '',
-    email: user?.email ?? '',
+    loginEmail: loginEmail ?? '',
     phone: user?.phone ?? '',
-    department: user?.department ?? '',
     password: '',
   });
+  const [isAdmin, setIsAdmin] = useState(user?.isAdmin ?? false);
+  // Whether mail can be sent: then a new user is invited by mail instead of getting a temporary password. null = not known yet.
+  const [mailOn, setMailOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (editing) return;
+    api.mail.status().then(
+      (r) => setMailOn(r.configured),
+      () => setMailOn(false),
+    );
+  }, [editing]);
+  const departments = useDepartments();
+  const [departmentId, setDepartmentId] = useState(user?.departmentId ?? '');
   // Keep the raw error and render at render time so messages follow a language switch.
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -36,12 +51,16 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
       if (user) {
         // Send only what changed, so untouched LDAP-managed fields are never submitted.
         const changes: UpdateUserInput = {};
-        for (const k of ['username', 'displayName', 'email', 'phone', 'department'] as const) {
+        for (const k of ['username', 'displayName', 'phone'] as const) {
           if (form[k] !== user[k]) changes[k] = form[k];
         }
+        if (loginEmail !== undefined && form.loginEmail !== loginEmail) changes.loginEmail = form.loginEmail;
+        if (departmentId !== (user.departmentId ?? '')) changes.departmentId = departmentId || null;
+        if (isAdmin !== user.isAdmin) changes.isAdmin = isAdmin;
         saved = await api.users.update(user.id, changes);
       } else {
-        saved = await api.users.create(form);
+        const { password, ...rest } = form;
+        saved = await api.users.create({ ...rest, ...(mailOn ? {} : { password }), ...(departmentId ? { departmentId } : {}) });
       }
       onSaved(saved);
     } catch (err) {
@@ -73,30 +92,54 @@ export function UserDialog({ user, onClose, onSaved }: { user: AdminUser | null;
               <Input name="displayName" disabled={ldapBound} value={form.displayName} onChange={set('displayName')} />
               {ldapBound && <Hint>{t('users.hint.ldapManaged')}</Hint>}
             </Field>
-            <Field label={t('users.field.email')} error={errors.email}>
-              <Input name="email" type="email" disabled={ldapBound} value={form.email} onChange={set('email')} />
-              <Hint>{ldapBound ? t('users.hint.ldapManaged') : t('users.hint.optional')}</Hint>
-            </Field>
-            <Field label={t('users.field.department')} error={errors.department}>
-              <Input name="department" disabled={ldapBound} value={form.department} onChange={set('department')} />
-              <Hint>{ldapBound ? t('users.hint.ldapManaged') : t('users.hint.optional')}</Hint>
-            </Field>
+            {(!editing || loginEmail !== undefined) && (
+              <Field label={t('users.field.loginEmail')} error={errors.loginEmail}>
+                <Input name="loginEmail" type="email" autoComplete="off" value={form.loginEmail} onChange={set('loginEmail')} />
+                <Hint>{t('users.hint.loginEmail')}</Hint>
+              </Field>
+            )}
+            {editing && (
+              <Field label={t('users.field.email')} error={errors.email}>
+                <Input name="email" type="email" disabled value={user.email} readOnly />
+                <Hint>{ldapBound ? t('users.hint.ldapManaged') : t('users.hint.contactEmail')}</Hint>
+              </Field>
+            )}
+            {user && user.directoryDepartment !== '' && (
+              <Field label={t('users.field.directoryDepartment')}>
+                <Input name="directoryDepartment" disabled readOnly value={user.directoryDepartment} />
+                <Hint>{t('users.hint.directoryDepartment')}</Hint>
+              </Field>
+            )}
             <Field label={t('users.field.phone')} error={errors.phone}>
               <Input name="phone" type="tel" value={form.phone} onChange={set('phone')} />
               <Hint>{t('users.hint.optional')}</Hint>
             </Field>
-            {!editing && (
+            <Field label={t('users.field.department')} error={errors.departmentId}>
+              <DepartmentSelect name="departmentId" departments={departments ?? []} value={departmentId} onChange={setDepartmentId} noneLabel={t('users.department.none')} />
+              <Hint>{departmentId && departments ? pathLabel(departments, departmentId) : t('users.hint.department')}</Hint>
+            </Field>
+            {editing && (
+              <Field label={t('term.administrator')} error={errors.isAdmin}>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" name="isAdmin" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
+                  {t('users.field.isAdmin')}
+                </label>
+                <Hint>{t('users.hint.isAdmin')}</Hint>
+              </Field>
+            )}
+            {!editing && mailOn === true && <Hint>{t('users.hint.invite')}</Hint>}
+            {!editing && mailOn === false && (
               <Field label={t('users.field.password')} error={errors.password}>
                 <Input name="password" type="password" autoComplete="new-password" value={form.password} onChange={set('password')} />
-                <Hint>{t('users.hint.password')}</Hint>
+                <Hint>{t('users.hint.tempPassword')}</Hint>
               </Field>
             )}
             <div className="mt-2 flex justify-end gap-2">
               <Button type="button" onClick={onClose}>
                 {t('users.cancel')}
               </Button>
-              <Button kind="primary" type="submit" disabled={busy}>
-                {busy ? t('users.saving') : t('users.save')}
+              <Button kind="primary" type="submit" disabled={busy || (!editing && mailOn === null)}>
+                {busy ? t('users.saving') : !editing && mailOn ? t('users.invite.submit') : t('users.save')}
               </Button>
             </div>
           </form>

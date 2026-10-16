@@ -99,6 +99,9 @@ func startContainer() (dsn string, stop func(), err error) {
 	}
 }
 
+// FreshDatabase is freshDatabase for tests outside the harness that need their own empty database.
+func FreshDatabase(t testing.TB) string { return freshDatabase(t) }
+
 // freshDatabase creates an empty database for one test and drops it afterwards.
 // It returns a DSN that selects it.
 func freshDatabase(t testing.TB) string {

@@ -9,8 +9,17 @@ import { ApplicationOverview } from './pages/ApplicationOverview.tsx';
 import { ApplicationPage } from './pages/ApplicationPage.tsx';
 import { ApplicationsPage } from './pages/ApplicationsPage.tsx';
 import { ApplicationVersions } from './pages/ApplicationVersions.tsx';
+import { AuditLogPage } from './pages/AuditLogPage.tsx';
+import { DepartmentsPage } from './pages/DepartmentsPage.tsx';
+import { LdapConfigPage } from './pages/LdapConfigPage.tsx';
+import { MailConfigPage } from './pages/MailConfigPage.tsx';
+import { SecurityPolicyPage } from './pages/SecurityPolicyPage.tsx';
+import { StorageConfigPage } from './pages/StorageConfigPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { PlatformsPage } from './pages/PlatformsPage.tsx';
+import { RolesPage } from './pages/RolesPage.tsx';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage.tsx';
+import { SetPasswordPage } from './pages/SetPasswordPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 import { UsersPage } from './pages/UsersPage.tsx';
 import { VersionsPage } from './pages/VersionsPage.tsx';
@@ -29,11 +38,13 @@ function NotFound() {
   );
 }
 
-// Routes: /login is public; everything else is inside RequireSession + Shell.
+// Routes: /login, /forgot-password and /set-password/:token are public; everything else is inside RequireSession + Shell.
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/set-password/:token" element={<SetPasswordPage />} />
       <Route
         element={
           <RequireSession>
@@ -52,6 +63,13 @@ function App() {
         <Route path="settings"element={<SettingsPage />} />
         <Route path="admin/platforms" element={<PlatformsPage />} />
         <Route path="admin/users" element={<UsersPage />} />
+        <Route path="admin/departments" element={<DepartmentsPage />} />
+        <Route path="admin/ldap" element={<LdapConfigPage />} />
+        <Route path="admin/mail" element={<MailConfigPage />} />
+        <Route path="admin/storage" element={<StorageConfigPage />} />
+        <Route path="admin/security" element={<SecurityPolicyPage />} />
+        <Route path="admin/roles" element={<RolesPage />} />
+        <Route path="admin/audit" element={<AuditLogPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

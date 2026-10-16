@@ -1,0 +1,9 @@
+Subject: The recovery codes of your X-Project account were replaced
+
+Hello{{if .Name}} {{.Name}}{{end}},
+
+The recovery codes of your X-Project account were replaced. The old codes no longer work.
+
+If this was not you, contact an administrator right away.
+
+X-Project

@@ -16,28 +16,37 @@ type userJSON struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
-	Department  string `json:"department"`
-	Language    string `json:"language"` // "zh", "en", or "" when never chosen
-	IsAdmin     bool   `json:"isAdmin"`
+	// DirectoryDepartment is the department text synced from LDAP (read-only).
+	DirectoryDepartment string  `json:"directoryDepartment"`
+	Language            string  `json:"language"` // "zh", "en", or "" when never chosen
+	IsAdmin             bool    `json:"isAdmin"`
+	AvatarURL           *string `json:"avatarUrl"` // null = no avatar
 }
 
 func toUserJSON(u domain.User) userJSON {
-	return userJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, Department: u.Department, Language: u.Language, IsAdmin: u.IsAdmin}
+	return userJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, DirectoryDepartment: u.DirectoryDepartment, Language: u.Language, IsAdmin: u.IsAdmin, AvatarURL: avatarURL(u.ID, u.AvatarHash)}
 }
 
 type sessionJSON struct {
 	User userJSON `json:"user"`
+	// MustChangePassword: the password was chosen by an administrator. Until the user
+	// changes it (PUT /api/me/password) every other endpoint answers 403 passwordChangeRequired.
+	MustChangePassword bool `json:"mustChangePassword"`
+	// SecondFactorSetupRequired: the user is required to have a second factor and has none (#23).
+	// Until they set one up every other endpoint answers 403 secondFactorSetupRequired.
+	SecondFactorSetupRequired bool `json:"secondFactorSetupRequired"`
 }
 
 // memberRefJSON is a user inside another record (Owner/PE lists, event and status-change actors).
 type memberRefJSON struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
+	ID          string  `json:"id"`
+	Username    string  `json:"username"`
+	DisplayName string  `json:"displayName"`
+	AvatarURL   *string `json:"avatarUrl"`
 }
 
 func toMemberRefJSON(u domain.UserRef) memberRefJSON {
-	return memberRefJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName}
+	return memberRefJSON{ID: strconv.FormatInt(int64(u.ID), 10), Username: u.Username, DisplayName: u.DisplayName, AvatarURL: avatarURL(u.ID, u.AvatarHash)}
 }
 
 // formatDate is a calendar date on the wire (YYYY-MM-DD); formatTime is an instant (RFC 3339, UTC).
@@ -54,27 +63,77 @@ type listJSON[T any] struct {
 func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Method   string `json:"method"`
-		Username string `json:"username"`
+		Username string `json:"username"` // method "ldap"
+		Email    string `json:"email"`    // method "email"
 		Password string `json:"password"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	res, err := s.svc.Login(r.Context(), domain.LoginInput{Method: body.Method, Username: body.Username, Password: body.Password})
+	res, err := s.svc.Login(r.Context(), domain.LoginInput{Method: body.Method, Username: body.Username, Email: body.Email, Password: body.Password})
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	s.setSessionCookie(w, res.Token, res.ExpiresAt)
-	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(res.User)})
+	s.loginResponse(w, res)
 }
 
 func (s *server) loginMethods(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, listJSON[string]{Items: s.svc.LoginMethods()})
+	methods, err := s.svc.LoginMethods(r.Context())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	recovery, err := s.svc.PasswordRecoveryAvailable(r.Context())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, loginMethodsJSON{Items: methods, PasswordRecovery: recovery})
+}
+
+// loginMethodsJSON is the login page's view of the system: the methods it may offer and
+// whether "forgot password" can work (it needs mail).
+type loginMethodsJSON struct {
+	Items            []string `json:"items"`
+	PasswordRecovery bool     `json:"passwordRecovery"`
+}
+
+// requestPasswordRecovery answers 202 whatever the address is (see Service.RequestPasswordRecovery).
+func (s *server) requestPasswordRecovery(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.svc.RequestPasswordRecovery(r.Context(), body.Email, domain.ClientIP(r.RemoteAddr)); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// setPassword is the set-password page of invitations and recovery: the token from the mail
+// and the new password. It opens no session; the user logs in afterwards.
+func (s *server) setPassword(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Token    string `json:"token"`
+		Password string `json:"password"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.svc.SetPasswordWithToken(r.Context(), body.Token, body.Password); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) currentSession(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(actorOf(r).User)})
+	a := actorOf(r)
+	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(a.User), MustChangePassword: a.MustChangePassword, SecondFactorSetupRequired: a.SecondFactorSetupRequired})
 }
 
 func (s *server) logout(w http.ResponseWriter, r *http.Request) {
