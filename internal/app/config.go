@@ -170,6 +170,14 @@ func Load() (Config, error) {
 	if c.Mail.PollInterval <= 0 {
 		return c, fmt.Errorf("mail.poll_interval must be positive")
 	}
+	for _, d := range c.Mail.RetryBackoff {
+		if d < 0 {
+			return c, fmt.Errorf("XP_MAIL_RETRY_BACKOFF (mail.retry_backoff): %s is negative; waits cannot be negative", d)
+		}
+	}
+	if c.SecretKeyVersion < 1 {
+		return c, fmt.Errorf("secret_key_version (XP_SECRET_KEY_VERSION) must be at least 1, got %d", c.SecretKeyVersion)
+	}
 	if _, err := c.MasterKey(); err != nil {
 		return c, err
 	}
