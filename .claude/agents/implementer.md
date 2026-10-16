@@ -12,7 +12,9 @@ each kind of change goes, so read it before exploring.
 - Read the ticket (`gh issue view N`) and nothing else of the spec unless
   the brief points at a section.
 - Never `cat` whole files: `rg -n`, then read the range you need.
+- Test first (`tdd` skill): write the red test, then the fix.
 - Run `make check >/tmp/check-N.log 2>&1; echo $?`; read `tail -40` of the
   log only on failure.
-- Commit WIP at every green step. Do not push.
+- Commit WIP at every green step; when the brief lists several fixes,
+  commit after each one, never after the last. Do not push.
 - At ~250k context or ~120 turns: commit WIP, report where you stopped.

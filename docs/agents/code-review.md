@@ -11,6 +11,14 @@ The review commands are user-invoked only (`disable-model-invocation`): an agent
 | `/codex:review --base main --scope branch --background` | Always. Standard review of the branch diff. |
 | `/codex:adversarial-review --base main --scope branch --background <focus>` | The change touches identity, auth, permissions, data migration, or a public interface. Name the risk in `<focus>`, e.g. `email identity login boundary`. |
 
+## When the user tells you to run it
+
+The user may say to run the review yourself. Then:
+
+- `cd` into the worktree of the branch under review first; the review targets the checked-out branch of the current directory.
+- Run `node ~/.claude/plugins/cache/openai-codex/codex/<version>/scripts/codex-companion.mjs adversarial-review --base main --scope branch <focus>` with `run_in_background`. Plain `codex review --base main` takes no prompt, so use the companion for focus text.
+- Fix findings in a worktree of their own, merge, rerun the review on the merged branch.
+
 Follow progress with `/codex:status`, fetch the finished review with `/codex:result`, stop a stuck job with `/codex:cancel`.
 
 Uncommitted work: swap `--scope branch` for `--scope working-tree`.
@@ -26,6 +34,14 @@ Treat each finding as one of:
 - **Deferred**: real but not this PR; open an issue (see `issue-tracker.md`) and link it.
 
 Re-run the review after fixes that touch the flagged code.
+
+## Stop rule
+
+Each round of an adversarial review finds a narrower race than the last. Only a finding that lets someone authenticate, or keep access after a credential change, blocks the merge. Everything else is Deferred to a follow-up issue so the loop ends.
+
+## Before merging
+
+Marking a PR ready triggers cubic and the Codex GitHub review. Read them (`gh api repos/<owner>/<repo>/pulls/<n>/comments`), fix what is security-relevant, defer the rest to the follow-up issue, and list the disposition in the PR description.
 
 ## Done
 

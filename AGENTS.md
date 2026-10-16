@@ -14,7 +14,9 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ### Code review
 
-Every change gets a Codex review before its PR opens: `/codex:review`, plus `/codex:adversarial-review` for identity, auth, permissions, migrations, and public interfaces. These are user-typed commands, so when implementation is done, hand the user the exact command and wait for the findings. Flags, finding disposition, and the done criterion: `docs/agents/code-review.md`.
+Every change gets a Codex review before its PR opens: `/codex:review`, plus `/codex:adversarial-review` for identity, auth, permissions, migrations, and public interfaces. These are user-typed commands: when implementation is done, hand the user the exact command and wait for the findings, unless the user tells you to run the review yourself (how: `docs/agents/code-review.md`). Flags, finding disposition, stop rule, and the done criterion are there too. Before merging a PR, read the review comments cubic and Codex post on it.
+
+Coding rules that need judgement (for the reviewer): `CODING_STANDARDS.md`. Mechanical rules are enforced by `make check` (`scripts/check-repo.sh`); enable the hook once per clone with `git config core.hooksPath .githooks`.
 
 ## Model routing
 - Plan, refactor, cross-layer debugging: Opus 5.5
@@ -44,9 +46,10 @@ Keep context small; output length barely matters.
 Tool output
 - Never `cat` whole files. Find the spot with `rg -n`, then read only
   that range (`Read` with offset/limit, or `sed -n A,Bp`). One file per call.
-- Pipe noisy commands through a filter: `make check 2>&1 | tail -40`,
-  `go test ./... 2>&1 | grep -E 'FAIL|panic|---' | head -40`. On failure,
-  hand the full log to the log-reader subagent instead of reading it here.
+- Send noisy commands to a log and read the exit code, not a pipe's:
+  `make check >/tmp/c.log 2>&1; echo $?`, then `tail -40 /tmp/c.log` only on
+  failure (a trailing `| tail` would report tail's status). Hand a long
+  failing log to the log-reader subagent instead of reading it here.
 - Cap listings: `git log --oneline -15`, `git diff --stat` before
   `git diff`, `gh ... --json <fields>` instead of full bodies.
 - Never grep or read session transcripts (`~/.claude/projects/**.jsonl`).

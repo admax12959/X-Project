@@ -1,6 +1,6 @@
 # How to build, run and test
 
-Toolchain: Go 1.26, Node 24 + pnpm 12, Docker (with `docker-compose` or `docker compose`).
+Toolchain: Go 1.26, Node 24 + pnpm 12, Docker (with `docker-compose` or `docker compose`; some machines have only `docker-compose`, and `docker compose` then exits 125). A fresh stack serves on `XP_PORT` (default 8080); the initial administrator is `admin@example.com` / `change-me-now`.
 
 ## Layout
 
