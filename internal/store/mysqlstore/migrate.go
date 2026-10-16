@@ -25,7 +25,9 @@ func Migrate(ctx context.Context, db *sql.DB) error { return migrate(ctx, db, ""
 
 // MigrateBefore applies the migrations that sort before the file named stopAt, for tests that
 // need the schema as it was before that file.
-func MigrateBefore(ctx context.Context, db *sql.DB, stopAt string) error { return migrate(ctx, db, stopAt) }
+func MigrateBefore(ctx context.Context, db *sql.DB, stopAt string) error {
+	return migrate(ctx, db, stopAt)
+}
 
 func migrate(ctx context.Context, db *sql.DB, stopAt string) error {
 	conn, err := db.Conn(ctx)
