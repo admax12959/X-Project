@@ -77,28 +77,40 @@ func TestCredentialChangeCallSites(t *testing.T) {
 			},
 		},
 		{
-			name: "CLI password and second factor reset: the factor is reset inside the locks",
+			name: "CLI password and second factor reset: the factor goes first, none: the sessions stay until the password",
 			run: func(s *domain.Service) error {
 				_, err := s.ResetUserByCLI(context.Background(), domain.CLIResetInput{User: "alice", Password: true, SecondFactor: true})
 				return err
 			},
 			want: []string{
 				"FindUserByUsername", "LockUserWithIdentities", "LockEmailIdentity",
-				"ListAuthenticators", "DeleteAuthenticatorsAndRecoveryCodes", "PutSecondFactorLockout",
+				"ListAuthenticators", "LockEmailIdentity", "DeleteAuthenticatorsAndRecoveryCodes", "PutSecondFactorLockout",
 				"AppendAudit:" + string(domain.AuditSecondFactorReset), "GetConfigSection",
 				"SetTemporaryPassword", "UseUserAuthTokens", "DeleteUserLoginChallenges", "DeleteUserSessions",
 				"AppendAudit:" + string(domain.AuditPasswordReset), "GetConfigSection",
 			},
 		},
 		{
-			name: "CLI second factor reset alone changes no credential",
+			name: "CLI second factor reset alone: none",
 			run: func(s *domain.Service) error {
 				_, err := s.ResetUserByCLI(context.Background(), domain.CLIResetInput{User: "alice", SecondFactor: true})
 				return err
 			},
 			want: []string{
 				"FindUserByUsername", "LockUserWithIdentities",
-				"ListAuthenticators", "DeleteAuthenticatorsAndRecoveryCodes", "PutSecondFactorLockout",
+				"ListAuthenticators", "LockEmailIdentity", "DeleteAuthenticatorsAndRecoveryCodes", "PutSecondFactorLockout",
+				"AppendAudit:" + string(domain.AuditSecondFactorReset), "GetConfigSection",
+			},
+		},
+		{
+			name: "administrator second factor reset: none (the sessions stay), audited, noticed",
+			run: func(s *domain.Service) error {
+				_, err := s.ResetSecondFactor(context.Background(), domain.Actor{User: domain.User{ID: 1, IsAdmin: true}}, 7)
+				return err
+			},
+			want: []string{
+				"LockUserWithIdentities", "ListAuthenticators", "LockEmailIdentity",
+				"DeleteAuthenticatorsAndRecoveryCodes", "PutSecondFactorLockout",
 				"AppendAudit:" + string(domain.AuditSecondFactorReset), "GetConfigSection",
 			},
 		},
