@@ -147,17 +147,20 @@ func (s *Service) RegenerateRecoveryCodes(ctx context.Context, actor Actor, code
 	}
 	var codes []string
 	err := s.repo.InTx(ctx, func(tx Repository) error {
-		if err := requireEnabledSecondFactor(ctx, tx, u.ID); err != nil {
-			return err
-		}
-		var err error
-		if codes, err = s.replaceRecoveryCodes(ctx, tx, u.ID); err != nil {
-			return err
-		}
-		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), recoveryCodesRegeneratedAudit(u.ID)); err != nil {
-			return err
-		}
-		return s.notifySecurity(ctx, tx, u.ID, u.Email, MailTemplateRecoveryCodesRegenerated, nil)
+		return s.changeCredential(ctx, tx, credentialChange{
+			User:   u.ID,
+			Revoke: RevokeNone,
+			Apply: func(lockedCredential) error {
+				if err := requireEnabledSecondFactor(ctx, tx, u.ID); err != nil {
+					return err
+				}
+				var err error
+				codes, err = s.replaceRecoveryCodes(ctx, tx, u.ID)
+				return err
+			},
+			Audit:   &credentialAudit{By: AuditActorOf(actor), Event: recoveryCodesRegeneratedAudit(u.ID)},
+			Notices: []securityNotice{{To: u.Email, Template: MailTemplateRecoveryCodesRegenerated}},
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -185,18 +188,20 @@ func (s *Service) DisableSecondFactor(ctx context.Context, actor Actor, code str
 		return err
 	}
 	return s.repo.InTx(ctx, func(tx Repository) error {
-		if err := requireEnabledSecondFactor(ctx, tx, u.ID); err != nil {
-			return err
-		}
-		if err := tx.DeleteAuthenticatorsAndRecoveryCodes(ctx, u.ID); err != nil {
-			return err
-		}
-		if err := tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{}); err != nil {
-			return err
-		}
-		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), secondFactorDisabledAudit(u.ID)); err != nil {
-			return err
-		}
-		return s.notifySecurity(ctx, tx, u.ID, u.Email, MailTemplateSecondFactorDisabled, nil)
+		return s.changeCredential(ctx, tx, credentialChange{
+			User:   u.ID,
+			Revoke: RevokeNone,
+			Apply: func(lockedCredential) error {
+				if err := requireEnabledSecondFactor(ctx, tx, u.ID); err != nil {
+					return err
+				}
+				if err := tx.DeleteAuthenticatorsAndRecoveryCodes(ctx, u.ID); err != nil {
+					return err
+				}
+				return tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{})
+			},
+			Audit:   &credentialAudit{By: AuditActorOf(actor), Event: secondFactorDisabledAudit(u.ID)},
+			Notices: []securityNotice{{To: u.Email, Template: MailTemplateSecondFactorDisabled}},
+		})
 	})
 }
