@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/admax12959/X-Project/internal/apitest"
 	"github.com/admax12959/X-Project/internal/app"
@@ -143,8 +144,11 @@ func TestRestartDoesNotRecreateTheInitialAdministrator(t *testing.T) {
 
 	c := env.Client()
 	c.LoginAs(apitest.AdminUsername, "a-different-password").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+	// The administrator has a second factor (always, #23): the password opens the second step.
+	c.LoginAs(apitest.AdminUsername, apitest.AdminPassword).ExpectStatus(http.StatusOK)
+	env.Clock.Advance(2 * time.Minute) // the code of the enrolment's step is spent
 	var again sessionBody
-	c.LoginAs(apitest.AdminUsername, apitest.AdminPassword).ExpectStatus(http.StatusOK).JSON(&again)
+	c.Post("/api/session/second-factor", map[string]string{"code": apitest.TOTPCode(env.AdminTOTPSecret(), env.Clock.Now())}).ExpectStatus(http.StatusOK).JSON(&again)
 	if again.User.ID != first.User.ID {
 		t.Fatalf("admin id changed: %s → %s", first.User.ID, again.User.ID)
 	}
