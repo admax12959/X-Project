@@ -50,7 +50,7 @@ func (s *server) loginResponse(w http.ResponseWriter, res domain.LoginResult) {
 		return
 	}
 	s.setSessionCookie(w, res.Token, res.ExpiresAt)
-	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(res.User), MustChangePassword: res.MustChangePassword})
+	writeJSON(w, http.StatusOK, sessionJSON{User: toUserJSON(res.User), MustChangePassword: res.MustChangePassword, SecondFactorSetupRequired: res.SecondFactorSetupRequired})
 }
 
 func (s *server) submitSecondFactor(w http.ResponseWriter, r *http.Request) {

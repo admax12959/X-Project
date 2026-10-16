@@ -16,6 +16,48 @@ func (s *server) systemConfigRoutes() {
 	s.route("GET /api/system-config/storage", s.getStorageConfig)
 	s.route("PUT /api/system-config/storage", s.putStorageConfig)
 	s.route("POST /api/system-config/storage/test", s.testStorageConfig)
+	s.route("GET /api/system-config/security", s.getSecurityPolicy)
+	s.route("PUT /api/system-config/security", s.putSecurityPolicy)
+}
+
+// securityPolicyJSON is both the request of PUT and the answer of GET and PUT (#23). Administrators
+// are required to have a second factor whatever this says; the page shows that as a fact.
+type securityPolicyJSON struct {
+	ForceSecondFactor bool   `json:"forceSecondFactor"`
+	Configured        bool   `json:"configured"`
+	UpdatedAt         string `json:"updatedAt,omitempty"`
+}
+
+func toSecurityPolicyJSON(v domain.SecurityPolicyView) securityPolicyJSON {
+	out := securityPolicyJSON{ForceSecondFactor: v.ForceSecondFactor, Configured: v.Configured}
+	if v.Configured {
+		out.UpdatedAt = formatTime(v.UpdatedAt)
+	}
+	return out
+}
+
+func (s *server) getSecurityPolicy(w http.ResponseWriter, r *http.Request) {
+	v, err := s.svc.GetSecurityPolicy(r.Context(), actorOf(r))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toSecurityPolicyJSON(v))
+}
+
+func (s *server) putSecurityPolicy(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ForceSecondFactor bool `json:"forceSecondFactor"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	v, err := s.svc.UpdateSecurityPolicy(r.Context(), actorOf(r), domain.SecurityPolicy{ForceSecondFactor: body.ForceSecondFactor})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toSecurityPolicyJSON(v))
 }
 
 // ldapConfigBody is the request of PUT and POST .../test: the whole form. bindPassword empty

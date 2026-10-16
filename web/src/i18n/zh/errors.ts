@@ -71,6 +71,7 @@ export default {
   'error.totpInvalid': '验证码错误或已被使用，请等下一个验证码再试。',
   'error.totpLocked': '验证码错误次数过多，二次验证已被暂时锁定，请稍后再试。',
   'error.totpAlreadyEnabled': '二次验证已经启用。',
-  'error.secondFactorEnforced': '你所在的组织要求启用二次验证，无法关闭。',
+  'error.secondFactorEnforced': '你的账号必须启用二次验证（管理员账号，或管理员已要求全体用户启用），无法关闭。',
+  'error.secondFactorSetupRequired': '你的账号必须先启用二次验证，之后才能使用其他功能。',
   'error.secondFactorUnreadable': '无法读取已保存的验证器密钥（主密钥已变更），需要管理员重置。',
 };

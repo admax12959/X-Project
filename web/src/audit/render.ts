@@ -56,6 +56,8 @@ const renderers: Record<string, Renderer> = {
   }),
   secondFactorDisabled: (e) => ({ user: targetUser(e) }),
   recoveryCodesRegenerated: (e) => ({ user: targetUser(e) }),
+  secondFactorReset: (e) => ({ user: targetUser(e) }),
+  passwordReset: (e) => ({ user: targetUser(e) }),
   secondFactorEnabled: (e) => ({ user: targetUser(e), type: translate('audit.secondFactor.totp') }),
   configChanged: (e) => ({
     section: hasKey(`audit.section.${str(e.params.section)}`) ? translate(`audit.section.${str(e.params.section)}` as MessageKey) : str(e.params.section),
