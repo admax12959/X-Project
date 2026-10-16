@@ -358,7 +358,7 @@ func (s *Service) ChangeOwnLoginEmail(ctx context.Context, actor Actor, email, c
 
 // notifySecurity queues a security notice about a login identity change to an address of the
 // user, when mail works and the address is deliverable. A notice that cannot be sent never
-// stops the change it is about.
+// stops the change it is about, unless the transaction itself is lost (IsTxAborting).
 func (s *Service) notifySecurity(ctx context.Context, tx Repository, userID UserID, to string, tpl MailTemplate, data map[string]string) error {
 	_, usable, err := s.readUsableSMTP(ctx, tx)
 	if err != nil {
@@ -370,7 +370,11 @@ func (s *Service) notifySecurity(ctx context.Context, tx Repository, userID User
 	}
 	if _, err := s.enqueueMail(ctx, tx, MailRequest{Template: tpl, To: to, Recipient: userID, Data: data}); err != nil {
 		// Best effort, as documented: a statement that fails inside the transaction does not abort
-		// it, so the change it is about still commits.
+		// it, so the change it is about still commits. An error that ends the transaction is not
+		// swallowed: the change it is about is gone with it and must not be reported as done.
+		if IsTxAborting(tx, err) {
+			return err
+		}
 		slog.Warn("mail: a security notice could not be queued", "user", userID, "template", tpl, "err", err)
 	}
 	return nil

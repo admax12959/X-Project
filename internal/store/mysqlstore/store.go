@@ -234,3 +234,21 @@ func (s *Store) DeleteSession(ctx context.Context, tokenHash string) error {
 	_, err := s.q.ExecContext(ctx, "DELETE FROM sessions WHERE token_hash = ?", tokenHash)
 	return err
 }
+
+// IsTxAborting says which database errors end the transaction they happen in, or leave it
+// unusable (domain.IsTxAborting): a deadlock victim, a lock wait that timed out, a query that
+// was interrupted, a server that is going away, a connection that is gone. Other server errors
+// (a duplicate key, a NOT NULL violation) fail their statement only.
+func (s *Store) IsTxAborting(err error) bool {
+	var me *mysql.MySQLError
+	if errors.As(err, &me) {
+		switch me.Number {
+		case 1205, 1206, 1213, // lock wait timeout, lock table full, deadlock
+			1053, 1317, 1927, 3024, // server shutdown, interrupted, connection killed, max execution time
+			1040, 1158, 1159, 1160, 1161, 2006, 2013: // too many connections, network errors, gone away, lost
+			return true
+		}
+		return false
+	}
+	return errors.Is(err, mysql.ErrInvalidConn)
+}
