@@ -10,4 +10,10 @@ export default {
   'login.method.email': 'Email and password',
   'login.forgot': 'Forgot password?',
   'login.forgot.unavailable': 'Password recovery needs email, which is not set up on this system. Ask an administrator to reset your access.',
+  'login.secondFactor.title': 'Two-step verification',
+  'login.secondFactor.hint': 'Open your authenticator app and enter the 6-digit code for X-Project.',
+  'login.secondFactor.code': 'Verification code',
+  'login.secondFactor.submit': 'Verify',
+  'login.secondFactor.submitting': 'Verifying…',
+  'login.secondFactor.back': 'Back to sign in',
 };

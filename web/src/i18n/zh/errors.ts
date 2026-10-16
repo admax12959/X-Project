@@ -68,4 +68,8 @@ export default {
   'error.storageUnavailable': '对象存储不可用，请管理员检查“存储”页的配置。',
   'error.avatarTooLarge': '图片超过 2 MB 或像素过多，请换一张小一些的。',
   'error.avatarUnsupportedType': '头像只支持 JPEG、PNG 和 WebP 图片。',
+  'error.totpInvalid': '验证码错误或已被使用，请等下一个验证码再试。',
+  'error.totpLocked': '验证码错误次数过多，二次验证已被暂时锁定，请稍后再试。',
+  'error.totpAlreadyEnabled': '二次验证已经启用。',
+  'error.secondFactorUnreadable': '无法读取已保存的验证器密钥（主密钥已变更），需要管理员重置。',
 };

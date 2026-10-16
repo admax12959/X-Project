@@ -11,6 +11,9 @@ import type {
   Department,
   BindIdentityInput,
   ChangePasswordInput,
+  SecondFactorRequired,
+  SecondFactorStatus,
+  TotpSetup,
   ChangeEvent,
   CodePlatform,
   CodePlatformInput,
@@ -103,7 +106,12 @@ export const api = {
     /** Current session; 401 (ApiError) when logged out. */
     get: () => request<SessionInfo>('GET', '/api/session', { expect401: true }),
     /** 401 invalidCredentials, 422 field errors (e.g. usernameTakenByLocal) or 503 ldapUnreachable on failure. A session with mustChangePassword can only change the password and log out. */
-    login: (input: LoginInput) => request<SessionInfo>('POST', '/api/session', { body: input, expect401: true }),
+    login: (input: LoginInput) => request<SessionInfo | SecondFactorRequired>('POST', '/api/session', { body: input, expect401: true }),
+    /**
+     * Second step of a login (the short-lived token travels in an HttpOnly cookie). 401 unauthenticated: the token is gone or
+     * expired, start over; 422 code totpInvalid; 429 totpLocked {lockedUntil}; 503 secondFactorUnreadable.
+     */
+    submitSecondFactor: (code: string) => request<SessionInfo>('POST', '/api/session/second-factor', { body: { code }, expect401: true }),
     logout: () => request<void>('DELETE', '/api/session', { expect401: true }),
   },
   applications: {
@@ -271,6 +279,13 @@ export const api = {
     update: (input: UpdateMeInput) => request<AdminUser>('PATCH', '/api/me', { body: input }),
     /** 422 currentPassword invalidCredentials, newPassword tooShort / passwordUnchanged; 404 for a user without an email identity. */
     changePassword: (input: ChangePasswordInput) => request<void>('PUT', '/api/me/password', { body: input }),
+    secondFactor: {
+      get: () => request<SecondFactorStatus>('GET', '/api/me/second-factor'),
+      /** New secret after the password was typed again. 422 password required / invalidCredentials, totpAlreadyEnabled; 503 ldapUnreachable. */
+      startTotp: (password: string) => request<TotpSetup>('POST', '/api/me/second-factor/totp', { body: { password } }),
+      /** Turns it on when the code is right. 422 code required / totpInvalid; 404 when no setup was started. */
+      confirmTotp: (code: string) => request<SecondFactorStatus>('POST', '/api/me/second-factor/totp/confirm', { body: { code } }),
+    },
     /** Only ldap: 422 on password when the authentication fails (never 401), identityKindBound, identityTaken; 503 ldapUnreachable. */
     bindIdentity: (input: BindIdentityInput) => request<AdminUser>('POST', '/api/me/identities', { body: input }),
     /** The picture as the raw body. 422 avatar avatarTooLarge / avatarUnsupportedType; 429 rateLimited; 503 storageUnavailable. */

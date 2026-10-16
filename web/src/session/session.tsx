@@ -18,7 +18,9 @@ type State = { status: 'loading' } | { status: 'anonymous' } | { status: 'error'
 
 type SessionApi = {
   state: State;
-  login: (input: LoginInput) => Promise<void>;
+  /** 'secondFactor': the password was right but a code is still needed (finish with submitSecondFactor). */
+  login: (input: LoginInput) => Promise<'done' | 'secondFactor'>;
+  submitSecondFactor: (code: string) => Promise<void>;
   logout: () => Promise<void>;
   reload: () => void;
   /** Replace the cached session user after the user's own settings changed. */
@@ -48,6 +50,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (input: LoginInput) => {
     const s = await api.session.login(input);
+    if ('secondFactorRequired' in s) return 'secondFactor' as const;
+    applySavedLanguage(s.user);
+    setState({ status: 'authenticated', user: s.user, mustChangePassword: s.mustChangePassword });
+    return 'done' as const;
+  }, []);
+
+  const submitSecondFactor = useCallback(async (code: string) => {
+    const s = await api.session.submitSecondFactor(code);
     applySavedLanguage(s.user);
     setState({ status: 'authenticated', user: s.user, mustChangePassword: s.mustChangePassword });
   }, []);
@@ -62,7 +72,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setState({ status: 'anonymous' });
   }, []);
 
-  return <Ctx.Provider value={{ state, login, logout, reload, setUser }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ state, login, submitSecondFactor, logout, reload, setUser }}>{children}</Ctx.Provider>;
 }
 
 export function useSession(): SessionApi {

@@ -46,8 +46,7 @@ type Env struct {
 	// configurations it was asked to build a store for.
 	Objects      *fakes.ObjectStore
 	ObjectStores *fakes.ObjectStoreFactory
-	// Clock is the application's clock: real time, plus whatever the test added with
-	// env.Clock.Advance(d) (token expiry, rate-limit windows, session expiry). It survives Restart.
+	// Clock is the application's clock: the real one until a test freezes or advances it.
 	Clock *fakes.Clock
 
 	server *httptest.Server

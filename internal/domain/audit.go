@@ -66,6 +66,9 @@ const (
 	// (#19). Target: the section (type systemConfig, id "ldap", ...). Params: section,
 	// changes = the NAMES of the changed fields (a secret is listed by name, never its value).
 	AuditConfigChanged AuditAction = "configChanged"
+	// AuditSecondFactorEnabled: a user turned on a second-factor method for their own login
+	// (#22). Target: the user. Params: type = "totp". Never the secret.
+	AuditSecondFactorEnabled AuditAction = "secondFactorEnabled"
 )
 
 // AuditTargetType says what kind of object an entry is about.
@@ -130,6 +133,10 @@ func appMemberAudit(action AuditAction, app Application, role MemberRole, user U
 
 func adminFlagChangedAudit(id UserID, from, to bool) auditEvent {
 	return auditEvent{AuditAdminFlagChanged, AuditTargetUser, userTargetID(id), map[string]any{"from": from, "to": to}}
+}
+
+func secondFactorEnabledAudit(id UserID, t AuthenticatorType) auditEvent {
+	return auditEvent{AuditSecondFactorEnabled, AuditTargetUser, userTargetID(id), map[string]any{"type": string(t)}}
 }
 
 func departmentTargetID(id DepartmentID) string { return strconv.FormatInt(int64(id), 10) }

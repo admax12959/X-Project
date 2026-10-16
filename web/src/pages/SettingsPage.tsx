@@ -10,7 +10,11 @@ import { Avatar } from '../ui/Avatar.tsx';
 import { Button, Empty, Field, Input, Segmented } from '../ui/controls.tsx';
 import { BindIdentityDialog } from './BindIdentityDialog.tsx';
 import { ChangePasswordForm } from './ChangePassword.tsx';
+<<<<<<< HEAD
 import { EmailLoginDialog } from './EmailLoginDialog.tsx';
+=======
+import { SecondFactorPanel } from './SecondFactorPanel.tsx';
+>>>>>>> integration/spec-18
 import { th, td } from '../ui/table.ts';
 
 type Load = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ok'; me: AdminUser };
@@ -62,6 +66,9 @@ export function SettingsPage() {
       <AvatarSection me={me} onSaved={saved} />
       <IdentitiesSection me={me} methods={methods} onChanged={saved} />
       {me.identities.some((i) => i.kind === 'email') && <PasswordSection />}
+      <Section title={t('settings.security.title')}>
+        <SecondFactorPanel />
+      </Section>
       <LanguageSection onSaved={saved} />
     </>
   );
