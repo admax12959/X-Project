@@ -88,6 +88,21 @@ func (s *Service) readSMTP(ctx context.Context, repo Repository) (settings SMTPS
 // configured: mail is switched on and has a server and a sender to use.
 func (m SMTPSettings) configured() bool { return m.Enabled && m.Host != "" && m.From != "" }
 
+// readUsableSMTP is readSMTP plus the answer to "can mail be sent with it": it is configured and,
+// when a password is stored, that password can be decrypted with the current master key. An
+// unreadable password makes SendDueMail leave everything queued, so no feature may count on mail.
+func (s *Service) readUsableSMTP(ctx context.Context, repo Repository) (SMTPSettings, bool, error) {
+	settings, _, _, err := s.readSMTP(ctx, repo)
+	if err != nil || !settings.configured() {
+		return settings, false, err
+	}
+	secrets, err := s.loadSecrets(ctx, repo, SectionSMTP)
+	if err != nil {
+		return settings, false, err
+	}
+	return settings, !secrets.unreadable[smtpSecretPassword], nil
+}
+
 // GetSMTPConfig returns the mail configuration for the Email page. Administrators only.
 func (s *Service) GetSMTPConfig(ctx context.Context, actor Actor) (SMTPConfigView, error) {
 	if err := requirePermission(actor, PermConfigManage); err != nil {
@@ -107,7 +122,7 @@ func (s *Service) smtpView(ctx context.Context, repo Repository) (SMTPConfigView
 	}
 	return SMTPConfigView{
 		SMTPSettings: settings, PasswordSet: secrets.set[smtpSecretPassword], SecretsUnreadable: secrets.anyUnreadable(),
-		Configured: settings.configured(), UpdatedAt: at, Saved: saved,
+		Configured: settings.configured() && !secrets.unreadable[smtpSecretPassword], UpdatedAt: at, Saved: saved,
 	}, nil
 }
 
@@ -115,8 +130,8 @@ func (s *Service) smtpView(ctx context.Context, repo Repository) (SMTPConfigView
 // whether they are available (invitations by mail, password recovery, ...). Any signed-in
 // user may ask.
 func (s *Service) MailConfigured(ctx context.Context) (bool, error) {
-	settings, _, _, err := s.readSMTP(ctx, s.repo)
-	return settings.configured(), err
+	_, ok, err := s.readUsableSMTP(ctx, s.repo)
+	return ok, err
 }
 
 var hostnamePattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$`)

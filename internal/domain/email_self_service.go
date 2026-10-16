@@ -359,12 +359,12 @@ func (s *Service) ChangeOwnLoginEmail(ctx context.Context, actor Actor, email, c
 // user, when mail works and the address is deliverable. A notice that cannot be sent never
 // stops the change it is about.
 func (s *Service) notifySecurity(ctx context.Context, tx Repository, userID UserID, to string, tpl MailTemplate, data map[string]string) error {
-	settings, _, _, err := s.readSMTP(ctx, tx)
+	_, usable, err := s.readUsableSMTP(ctx, tx)
 	if err != nil {
 		return err
 	}
 	to = strings.TrimSpace(to)
-	if a, perr := mail.ParseAddress(to); !settings.configured() || perr != nil || a.Address != to || strings.ContainsAny(to, "\r\n") {
+	if a, perr := mail.ParseAddress(to); !usable || perr != nil || a.Address != to || strings.ContainsAny(to, "\r\n") {
 		return nil
 	}
 	_, err = s.enqueueMail(ctx, tx, MailRequest{Template: tpl, To: to, Recipient: userID, Data: data})

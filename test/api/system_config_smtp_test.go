@@ -257,9 +257,12 @@ func TestAMasterKeyThatChangedLeavesTheSMTPPasswordUnreadableUntilItIsEnteredAga
 	if !v.SecretsUnreadable || !v.PasswordSet {
 		t.Fatalf("config = %+v, want the password reported as set but unreadable", v)
 	}
+	if v.Configured {
+		t.Fatalf("config = %+v, want mail reported unavailable while the stored password cannot be read", v)
+	}
 	admin.Put(smtpConfigPath, smtpForm(map[string]any{"password": ""})).ExpectError(http.StatusUnprocessableEntity, "password", "required")
 	admin.Put(smtpConfigPath, smtpForm(map[string]any{"password": "smtp-secret-1"})).ExpectStatus(http.StatusOK)
-	if v, _ := getSMTPConfig(t, admin); v.SecretsUnreadable {
-		t.Fatalf("config = %+v, want the secret readable again", v)
+	if v, _ := getSMTPConfig(t, admin); v.SecretsUnreadable || !v.Configured {
+		t.Fatalf("config = %+v, want the secret readable again and mail available", v)
 	}
 }

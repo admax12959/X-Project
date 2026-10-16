@@ -105,11 +105,11 @@ func (s *Service) EnqueueMail(ctx context.Context, req MailRequest) error {
 // not configured, when the template cannot be rendered with the data given and when the
 // address is not a plain address, so a mail that is queued can be delivered.
 func (s *Service) enqueueMail(ctx context.Context, tx Repository, req MailRequest) (int64, error) {
-	settings, _, _, err := s.readSMTP(ctx, tx)
+	settings, usable, err := s.readUsableSMTP(ctx, tx)
 	if err != nil {
 		return 0, err
 	}
-	if !settings.configured() {
+	if !usable {
 		return 0, newKind(KindUnavailable, CodeMailNotConfigured)
 	}
 	if !knownMailTemplate(req.Template) {
