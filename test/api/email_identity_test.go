@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/admax12959/X-Project/internal/apitest"
@@ -69,7 +70,7 @@ func TestInitialAdministratorLogsInWithTheConfiguredEmailAndIsNotAskedToChangeTh
 
 func TestFirstStartNeedsAValidAdministratorEmail(t *testing.T) {
 	t.Parallel()
-	for name, email := range map[string]string{"missing": "", "malformed": "admin-at-example"} {
+	for name, email := range map[string]string{"missing": "", "malformed": "admin-at-example", "not deliverable": "a..b@example.com", "too long": strings.Repeat("a", 244) + "@example.com"} {
 		email := email
 		if err := apitest.StartError(t, func(c *app.Config) { c.Admin.Email = email }); err == nil {
 			t.Fatalf("first start with a %s administrator email started", name)
@@ -229,6 +230,14 @@ func TestLoginEmailEditRules(t *testing.T) {
 	emma := userOf(t, loginLDAP(env.Client(), "elarsen", "ldap-pw"))
 
 	patchUser(admin, jane.ID, map[string]any{"loginEmail": "not-an-email"}).ExpectError(http.StatusUnprocessableEntity, "loginEmail", "invalid")
+	// Addresses net/mail cannot read, a display name, and more than the 255 characters the column holds.
+	for _, bad := range []string{"a,b@example.com", "a..b@example.com", "Bob <bob2@example.com>"} {
+		patchUser(admin, jane.ID, map[string]any{"loginEmail": bad}).ExpectError(http.StatusUnprocessableEntity, "loginEmail", "invalid")
+	}
+	long := strings.Repeat("a", 244) + "@example.com" // 256 characters
+	patchUser(admin, jane.ID, map[string]any{"loginEmail": long}).ExpectError(http.StatusUnprocessableEntity, "loginEmail", "tooLong")
+	patchUser(admin, jane.ID, map[string]any{"loginEmail": long[1:]}).ExpectStatus(http.StatusOK) // 255
+	patchUser(admin, jane.ID, map[string]any{"loginEmail": "jdoe@example.com"}).ExpectStatus(http.StatusOK)
 	patchUser(admin, jane.ID, map[string]any{"loginEmail": " "}).ExpectError(http.StatusUnprocessableEntity, "loginEmail", "required")
 	patchUser(admin, jane.ID, map[string]any{"loginEmail": "bob@example.com"}).ExpectError(http.StatusUnprocessableEntity, "loginEmail", "loginEmailTaken")
 	patchUser(admin, jane.ID, map[string]any{"loginEmail": "BOB@EXAMPLE.COM"}).ExpectError(http.StatusUnprocessableEntity, "loginEmail", "loginEmailTaken")

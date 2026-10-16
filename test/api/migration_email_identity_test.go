@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/admax12959/X-Project/internal/apitest"
@@ -61,7 +62,11 @@ func TestTheEmailIdentityMigrationSurvivesAContactEmailThatEqualsAnotherUsersPla
 		{"a", "b@x-project.invalid"}, // equals b's placeholder
 		{"b", ""},
 		{"c", "shared@corp.example"}, {"d", "SHARED@corp.example"}, // two holders: both get placeholders
-		{"e", "Eve@corp.example"}, // unique: its (lower-cased) address
+		{"e", "Eve@corp.example"},                         // unique: its (lower-cased) address
+		{"f", "  frank@corp.example "},                    // copied trimmed
+		{"g", strings.Repeat("g", 244) + "@corp.example"}, // 256 characters: does not fit login_name
+		{"h", strings.Repeat("h", 242) + "@corp.example"}, // 255: fits
+		{"i", "i,i@corp.example"},                         // not an address
 	})
 
 	// The ALTERs of a first, failed attempt are already in place: the file must still run.
@@ -79,7 +84,9 @@ func TestTheEmailIdentityMigrationSurvivesAContactEmailThatEqualsAnotherUsersPla
 	want := map[string]string{
 		"a": "a@x-project.invalid", "b": "b@x-project.invalid",
 		"c": "c@x-project.invalid", "d": "d@x-project.invalid",
-		"e": "eve@corp.example",
+		"e": "eve@corp.example", "f": "frank@corp.example",
+		"g": "g@x-project.invalid", "h": strings.Repeat("h", 242) + "@corp.example",
+		"i": "i@x-project.invalid",
 	}
 	got := loginNames(t, db)
 	for u, l := range want {

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -109,7 +110,7 @@ func (s *Service) Bootstrap(ctx context.Context, admin InitialAdmin) error {
 		if !usernamePattern.MatchString(admin.Username) {
 			return errors.New("first start: initial administrator username must match " + usernamePattern.String())
 		}
-		if !emailPattern.MatchString(admin.Email) || len(admin.Email) > maxEmailLength {
+		if !emailPattern.MatchString(admin.Email) || !isPlainMailAddress(admin.Email) || utf8.RuneCountInString(admin.Email) > maxLoginEmailLength {
 			return errors.New("first start: initial administrator email is not a valid email address")
 		}
 		hash, err := hashPassword(admin.Password)

@@ -27,12 +27,19 @@ UPDATE login_identities li
    SET li.kind = 'email', li.login_name = CONCAT(u.username, '@x-project.invalid')
  WHERE li.kind = 'local';
 
+-- The contact email is copied trimmed (an LDAP sync stores it as the directory had it, and the
+-- login trims what it is given), and only when it fits the 255 characters of login_name and
+-- looks like an address; every other user keeps the placeholder.
 UPDATE login_identities li
   JOIN users u ON u.id = li.user_id
-  JOIN (SELECT LOWER(u2.email) AS addr
+  JOIN (SELECT LOWER(TRIM(u2.email)) AS addr
           FROM login_identities l2 JOIN users u2 ON u2.id = l2.user_id
-         WHERE l2.kind = 'email' AND u2.email <> '' AND LOWER(u2.email) NOT LIKE '%@x-project.invalid'
-         GROUP BY LOWER(u2.email)
-        HAVING COUNT(*) = 1) uniq ON uniq.addr = LOWER(u.email)
+         WHERE l2.kind = 'email'
+           AND TRIM(u2.email) <> ''
+           AND CHAR_LENGTH(TRIM(u2.email)) <= 255
+           AND LOWER(TRIM(u2.email)) NOT LIKE '%@x-project.invalid'
+           AND TRIM(u2.email) REGEXP '^[^@[:space:],]+@[^@[:space:],]+[.][^@[:space:],]+$'
+         GROUP BY LOWER(TRIM(u2.email))
+        HAVING COUNT(*) = 1) uniq ON uniq.addr = LOWER(TRIM(u.email))
    SET li.login_name = uniq.addr
  WHERE li.kind = 'email';

@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"net/mail"
 	"regexp"
 	"strings"
 	"time"
@@ -490,7 +491,9 @@ const (
 	maxUsernameLength = 32
 	maxNameLength     = 200 // display name and department name
 	maxEmailLength    = 320
-	maxPhoneLength    = 64
+	// maxLoginEmailLength is the width of login_identities.login_name and auth_tokens.login_email.
+	maxLoginEmailLength = 255
+	maxPhoneLength      = 64
 )
 
 var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
@@ -521,11 +524,18 @@ func normalizeLoginEmail(email string) string {
 func checkLoginEmail(c *Collector, field, email string) {
 	if email == "" {
 		c.Add(field, CodeRequired, nil)
-	} else if !emailPattern.MatchString(email) {
+	} else if !emailPattern.MatchString(email) || !isPlainMailAddress(email) {
 		c.Add(field, CodeInvalid, nil)
 	} else {
-		checkLength(c, field, email, maxEmailLength)
+		checkLength(c, field, email, maxLoginEmailLength)
 	}
+}
+
+// isPlainMailAddress is true when net/mail reads email as one bare address (no display name, no
+// list): the form the mailer can deliver to, so a login email is never one that mail cannot reach.
+func isPlainMailAddress(email string) bool {
+	a, err := mail.ParseAddress(email)
+	return err == nil && a.Name == "" && a.Address == email
 }
 
 // checkUsername validates the username format (spec #2: ^[a-z][a-z0-9._-]{1,31}$).
