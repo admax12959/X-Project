@@ -34,7 +34,6 @@ export default {
   'settings.bind.ldapPassword': 'LDAP password',
   'settings.bind.submit': 'Bind',
   'settings.bind.submitting': 'Binding…',
-<<<<<<< HEAD
   'settings.emailLogin.add': 'Add email login',
   'settings.emailLogin.change': 'Change login email',
   'settings.emailLogin.unavailable': 'Email is not configured, so an email login cannot be added or changed. Ask an administrator to set up the mail service.',
@@ -54,7 +53,6 @@ export default {
   'settings.emailLogin.confirmAdd': 'Add login',
   'settings.emailLogin.confirmChange': 'Change login email',
   'settings.emailLogin.confirming': 'Confirming…',
-=======
   'settings.security.title': 'Two-step verification',
   'settings.security.totp.title': 'Authenticator app',
   'settings.security.totp.hint': 'After you turn this on, signing in also needs a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password and similar), whether you sign in with LDAP or with email.',
@@ -71,7 +69,6 @@ export default {
   'settings.security.totp.code': 'Verification code',
   'settings.security.totp.confirm': 'Confirm and turn on',
   'settings.security.totp.cancel': 'Cancel',
->>>>>>> integration/spec-18
   'settings.language.title': 'Language',
   'settings.language.hint': 'Saved on your user, so it applies on every device you sign in from.',
 };

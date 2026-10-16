@@ -34,7 +34,6 @@ export default {
   'settings.bind.ldapPassword': 'LDAP 密码',
   'settings.bind.submit': '绑定',
   'settings.bind.submitting': '绑定中…',
-<<<<<<< HEAD
   'settings.emailLogin.add': '添加邮箱登录',
   'settings.emailLogin.change': '修改登录邮箱',
   'settings.emailLogin.unavailable': '邮件服务未配置，暂时不能添加邮箱登录或修改登录邮箱。请联系管理员配置邮件服务。',
@@ -54,7 +53,6 @@ export default {
   'settings.emailLogin.confirmAdd': '添加登录方式',
   'settings.emailLogin.confirmChange': '修改登录邮箱',
   'settings.emailLogin.confirming': '确认中…',
-=======
   'settings.security.title': '二次验证',
   'settings.security.totp.title': '验证器',
   'settings.security.totp.hint': '启用后，无论用 LDAP 还是邮箱登录，输入密码之后还需要输入验证器应用（Google Authenticator、Microsoft Authenticator、1Password 等）显示的 6 位验证码。',
@@ -71,7 +69,6 @@ export default {
   'settings.security.totp.code': '验证码',
   'settings.security.totp.confirm': '确认并启用',
   'settings.security.totp.cancel': '取消',
->>>>>>> integration/spec-18
   'settings.language.title': '语言',
   'settings.language.hint': '保存在你的用户上，在其他设备登录时同样生效。',
 };
