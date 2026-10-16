@@ -46,11 +46,12 @@ type SMTPSettings struct {
 	SiteURL string `json:"siteUrl"`
 }
 
-// SMTPConfigInput is a save or test request. Password is write-only: empty keeps the stored
-// password, anything else replaces it.
+// SMTPConfigInput is a save or test request, decoded from the request body as it is (the
+// settings flatten into it). Password is write-only: empty keeps the stored password,
+// anything else replaces it.
 type SMTPConfigInput struct {
 	SMTPSettings
-	Password string
+	Password string `json:"password"`
 }
 
 // SMTPConfigView is what an administrator gets to see. The password is never part of it, only

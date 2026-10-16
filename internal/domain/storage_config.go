@@ -45,12 +45,13 @@ type StorageSettings struct {
 	Addressing string            `json:"addressing"`
 }
 
-// StorageConfigInput is a save or test request. The access key is write-only: empty keeps
-// the stored value, anything else replaces it.
+// StorageConfigInput is a save or test request, decoded from the request body as it is (the
+// settings flatten into it). The access key is write-only: empty keeps the stored value,
+// anything else replaces it.
 type StorageConfigInput struct {
 	StorageSettings
-	AccessKeyID     string
-	SecretAccessKey string
+	AccessKeyID     string `json:"accessKeyId"`
+	SecretAccessKey string `json:"secretAccessKey"`
 }
 
 // StorageConfigView is what an administrator gets to see. The key is never part of it, only

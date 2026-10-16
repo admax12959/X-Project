@@ -47,11 +47,12 @@ type LDAPSettings struct {
 	TimeoutSeconds int    `json:"timeoutSeconds"`
 }
 
-// LDAPConfigInput is a save or test request. BindPassword is write-only: empty keeps the
-// stored password, anything else replaces it.
+// LDAPConfigInput is a save or test request, decoded from the request body as it is (the
+// settings flatten into it). BindPassword is write-only: empty keeps the stored password,
+// anything else replaces it.
 type LDAPConfigInput struct {
 	LDAPSettings
-	BindPassword string
+	BindPassword string `json:"bindPassword"`
 }
 
 // LDAPConfigView is what an administrator gets to see. The password is never part of it,
