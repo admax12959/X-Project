@@ -11,4 +11,7 @@ export default {
   'security.saved': 'Saved.',
   'security.save': 'Save',
   'security.saving': 'Saving…',
+  'secondFactor.forced.title': 'Turn on two-step verification first',
+  'secondFactor.forced.body': 'Your account must have two-step verification (administrator accounts always do, and an administrator can require it of everyone). Nothing else is available until you have set it up.',
+  'secondFactor.forced.continue': 'Continue',
 };

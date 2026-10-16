@@ -11,4 +11,7 @@ export default {
   'security.saved': '已保存。',
   'security.save': '保存',
   'security.saving': '保存中…',
+  'secondFactor.forced.title': '请先启用二次验证',
+  'secondFactor.forced.body': '你的账号必须启用二次验证（管理员账号，或管理员已要求全体用户启用）。完成之前不能使用其他功能。',
+  'secondFactor.forced.continue': '继续使用',
 };

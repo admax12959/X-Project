@@ -1,4 +1,4 @@
-// Administration > Users: list, create local users, edit, disable / enable. Administrators only.
+// Administration > Users: list, create local users, edit, disable / enable, reset two-step verification. Administrators only.
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api, ApiError } from '../api/client.ts';
@@ -11,6 +11,7 @@ import { useCurrentUser } from '../session/session.tsx';
 import { Avatar } from '../ui/Avatar.tsx';
 import { Button, Empty } from '../ui/controls.tsx';
 import { BindIdentityDialog } from './BindIdentityDialog.tsx';
+import { ResetSecondFactorDialog } from './ResetSecondFactorDialog.tsx';
 import { UserDialog } from './UserDialog.tsx';
 import { th, td } from '../ui/table.ts';
 
@@ -33,6 +34,7 @@ export function UsersPage() {
   const [actionError, setActionError] = useState<unknown>(null);
   const [actionUser, setActionUser] = useState<AdminUser | null>(null);
   const [bindFor, setBindFor] = useState<AdminUser | null>(null);
+  const [resetFor, setResetFor] = useState<AdminUser | null>(null);
   const departments = useDepartments();
   // Show only the users in this department or below ('' = everyone).
   const [departmentFilter, setDepartmentFilter] = useState('');
@@ -183,6 +185,11 @@ export function UsersPage() {
                         {t('users.invite.send')}
                       </Button>
                     )}
+                    {u.secondFactorEnabled && (
+                      <Button small onClick={() => setResetFor(u)}>
+                        {t('users.secondFactor.reset')}
+                      </Button>
+                    )}
                     <Button small onClick={() => changeStatus(u)}>
                       {u.status === 'enabled' ? t('users.disable') : t('users.enable')}
                     </Button>
@@ -196,6 +203,18 @@ export function UsersPage() {
         {load.status === 'error' && <Empty title={errorsByField(load.error)[''] ?? t('users.loadFailed')} />}
         {load.status === 'ok' && items.length === 0 && <Empty title={t('users.empty')} />}
       </div>
+
+      {resetFor !== null && (
+        <ResetSecondFactorDialog
+          user={resetFor}
+          onClose={() => setResetFor(null)}
+          onReset={(u) => {
+            replace(u);
+            setResetFor(null);
+            setNotice(t('users.secondFactor.reset.done', { name: u.displayName }));
+          }}
+        />
+      )}
 
       {bindFor !== null && (
         <BindIdentityDialog
