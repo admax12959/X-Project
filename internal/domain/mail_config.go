@@ -106,16 +106,13 @@ func (m SMTPSettings) configured() bool { return m.Enabled && m.Host != "" && m.
 // readUsableSMTP is readSMTP plus the answer to "can mail be sent with it": it is configured and,
 // when a password is stored, that password can be decrypted with the current master key. An
 // unreadable password makes SendDueMail leave everything queued, so no feature may count on mail.
+// repo should be a transaction, so that the settings and the password are read from one state.
 func (s *Service) readUsableSMTP(ctx context.Context, repo Repository) (SMTPSettings, bool, error) {
-	settings, _, _, err := s.readSMTP(ctx, repo)
-	if err != nil || !settings.configured() {
-		return settings, false, err
+	st, err := readSection(ctx, s, repo, smtpSection)
+	if err != nil || !st.settings.configured() {
+		return st.settings, false, err
 	}
-	secrets, err := s.loadSecrets(ctx, repo, SectionSMTP)
-	if err != nil {
-		return settings, false, err
-	}
-	return settings, !secrets.unreadable[smtpSecretPassword], nil
+	return st.settings, !st.secrets.unreadable[smtpSecretPassword], nil
 }
 
 // GetSMTPConfig returns the mail configuration for the Email page. Administrators only.
@@ -138,7 +135,11 @@ func smtpViewOf(st sectionState[SMTPSettings]) SMTPConfigView {
 // whether they are available (invitations by mail, password recovery, ...). Any signed-in
 // user may ask.
 func (s *Service) MailConfigured(ctx context.Context) (bool, error) {
-	_, ok, err := s.readUsableSMTP(ctx, s.repo)
+	var ok bool
+	err := s.repo.InTx(ctx, func(tx Repository) (err error) {
+		_, ok, err = s.readUsableSMTP(ctx, tx)
+		return err
+	})
 	return ok, err
 }
 

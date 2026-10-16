@@ -193,14 +193,11 @@ func (s *Service) SendDueMail(ctx context.Context) error {
 	if s.mailSenders == nil {
 		return nil
 	}
-	settings, _, _, err := s.readSMTP(ctx, s.repo)
-	if err != nil || !settings.configured() {
+	st, err := readSectionConsistent(ctx, s, s.repo, smtpSection)
+	if err != nil || !st.settings.configured() {
 		return err
 	}
-	secrets, err := s.loadSecrets(ctx, s.repo, SectionSMTP)
-	if err != nil {
-		return err
-	}
+	settings, secrets := st.settings, st.secrets
 	if settings.Username != "" && secrets.plain[smtpSecretPassword] == "" {
 		slog.Error("mail: the stored SMTP password cannot be decrypted with the current master key; enter it again on the Email page")
 		return nil

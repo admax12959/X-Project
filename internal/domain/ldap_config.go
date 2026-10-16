@@ -254,14 +254,11 @@ func (s *Service) currentDirectory(ctx context.Context) (Directory, error) {
 	if s.directories == nil {
 		return nil, nil
 	}
-	settings, _, _, err := s.readLDAP(ctx, s.repo)
-	if err != nil || !settings.Enabled || settings.URL == "" {
+	st, err := readSectionConsistent(ctx, s, s.repo, ldapSection)
+	if err != nil || !st.settings.Enabled || st.settings.URL == "" {
 		return nil, err
 	}
-	secrets, err := s.loadSecrets(ctx, s.repo, SectionLDAP)
-	if err != nil {
-		return nil, err
-	}
+	settings, secrets := st.settings, st.secrets
 	if secrets.unreadable[ldapSecretBindPassword] {
 		slog.Error("ldap: the stored service account password cannot be decrypted with the current master key; enter it again on the LDAP page")
 		return nil, ldapUnreachable()

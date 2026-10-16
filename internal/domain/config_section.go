@@ -73,12 +73,23 @@ func readSection[S, In any](ctx context.Context, s *Service, repo Repository, se
 	return sectionState[S]{settings: settings, saved: saved, at: at, secrets: secrets}, nil
 }
 
+// readSectionConsistent is readSection in a transaction of its own (or the caller's, when repo
+// is one): the settings and the secrets come from one state, so a save that lands between the
+// two reads cannot pair the old endpoint with the new credentials.
+func readSectionConsistent[S, In any](ctx context.Context, s *Service, repo Repository, sec configSection[S, In]) (st sectionState[S], err error) {
+	err = repo.InTx(ctx, func(tx Repository) error {
+		st, err = readSection(ctx, s, tx, sec)
+		return err
+	})
+	return st, err
+}
+
 // getSection is the read behind the "Get" calls. Administrators only.
 func getSection[S, In any](ctx context.Context, s *Service, actor Actor, sec configSection[S, In]) (sectionState[S], error) {
 	if err := requirePermission(actor, PermConfigManage); err != nil {
 		return sectionState[S]{}, err
 	}
-	return readSection(ctx, s, s.repo, sec)
+	return readSectionConsistent(ctx, s, s.repo, sec)
 }
 
 // updateSection saves a section and records which fields changed (names only, never values)

@@ -231,8 +231,12 @@ func smtpInput(password string, mutate func(*SMTPSettings)) SMTPConfigInput {
 }
 
 func storageInput(keyID, secret string) StorageConfigInput {
+	return storageInputAt("https://s3.corp.example", keyID, secret)
+}
+
+func storageInputAt(endpoint, keyID, secret string) StorageConfigInput {
 	return StorageConfigInput{AccessKeyID: keyID, SecretAccessKey: secret, StorageSettings: StorageSettings{
-		Driver: StorageS3, Endpoint: "https://s3.corp.example", Bucket: "xp-objects",
+		Driver: StorageS3, Endpoint: endpoint, Bucket: "xp-objects",
 	}}
 }
 
@@ -277,5 +281,111 @@ func TestATypedSecretEqualToTheStoredOneIsNotAChange(t *testing.T) {
 					repo.secretPuts, tc.puts, len(repo.audits), audits)
 			}
 		})
+	}
+}
+
+// snapshotRepo plays the isolation of a MySQL transaction (REPEATABLE READ) over a configRepo:
+// reads inside InTx see the state as of its start, reads outside see the live state. onRead is
+// a concurrent save to the live state, run once right after the first settings read.
+type snapshotRepo struct {
+	*configRepo
+	onRead func()
+	fired  *bool
+	inTx   bool
+}
+
+func (r *snapshotRepo) InTx(_ context.Context, fn func(Repository) error) error {
+	if r.inTx {
+		return fn(r)
+	}
+	snap := newConfigRepo()
+	for k, v := range r.sections {
+		snap.sections[k] = v
+	}
+	for section, fields := range r.secrets {
+		snap.secrets[section] = map[string]StoredSecret{}
+		for k, v := range fields {
+			snap.secrets[section][k] = v
+		}
+	}
+	return fn(&snapshotRepo{configRepo: snap, onRead: r.onRead, fired: r.fired, inTx: true})
+}
+
+func (r *snapshotRepo) GetConfigSection(ctx context.Context, section string) ([]byte, time.Time, bool, error) {
+	data, at, ok, err := r.configRepo.GetConfigSection(ctx, section)
+	if r.onRead != nil && !*r.fired {
+		*r.fired = true
+		r.onRead()
+	}
+	return data, at, ok, err
+}
+
+type captureStores struct{ cfg ObjectStoreConfig }
+
+func (c *captureStores) Build(cfg ObjectStoreConfig) (ObjectStore, error) {
+	c.cfg = cfg
+	return nil, nil
+}
+
+type captureDirectories struct{ cfg LDAPConfig }
+
+func (c *captureDirectories) Build(cfg LDAPConfig) (Directory, error) {
+	c.cfg = cfg
+	return nil, nil
+}
+
+// The settings and the secrets of a section are read in one transaction: a save that lands
+// between the two reads must not pair the old endpoint with the new credentials (#40 item 4).
+func TestTheObjectStoreIsBuiltFromOneStateOfTheSettingsAndTheKey(t *testing.T) {
+	ctx := context.Background()
+	live := newConfigRepo()
+	writer := newConfigService(live)
+	if _, err := writer.UpdateStorageConfig(ctx, configAdmin(), storageInputAt("https://old.corp.example", "old-key", "old-secret")); err != nil {
+		t.Fatal(err)
+	}
+	repo := &snapshotRepo{configRepo: live, fired: new(bool)}
+	repo.onRead = func() {
+		if _, err := writer.UpdateStorageConfig(ctx, configAdmin(), storageInputAt("https://new.corp.example", "new-key", "new-secret")); err != nil {
+			t.Error(err)
+		}
+	}
+	stores := &captureStores{}
+	svc := NewService(repo, Options{SecretKey: "a-master-key-for-tests", ObjectStoreFactory: stores})
+	if _, err := svc.ObjectStore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !*repo.fired {
+		t.Fatal("the concurrent save never ran")
+	}
+	got := [3]string{stores.cfg.Endpoint, stores.cfg.AccessKeyID, stores.cfg.SecretAccessKey}
+	if got != [3]string{"https://old.corp.example", "old-key", "old-secret"} && got != [3]string{"https://new.corp.example", "new-key", "new-secret"} {
+		t.Fatalf("object store built from %v: the endpoint and the key come from different saves", got)
+	}
+}
+
+func TestTheDirectoryIsBuiltFromOneStateOfTheSettingsAndThePassword(t *testing.T) {
+	ctx := context.Background()
+	live := newConfigRepo()
+	writer := newConfigService(live)
+	if _, err := writer.UpdateLDAPConfig(ctx, configAdmin(), ldapInput("old-pw", func(l *LDAPSettings) { l.URL = "ldaps://old.corp.example" })); err != nil {
+		t.Fatal(err)
+	}
+	repo := &snapshotRepo{configRepo: live, fired: new(bool)}
+	repo.onRead = func() {
+		if _, err := writer.UpdateLDAPConfig(ctx, configAdmin(), ldapInput("new-pw", func(l *LDAPSettings) { l.URL = "ldaps://new.corp.example" })); err != nil {
+			t.Error(err)
+		}
+	}
+	dirs := &captureDirectories{}
+	svc := NewService(repo, Options{SecretKey: "a-master-key-for-tests", DirectoryFactory: dirs})
+	if _, err := svc.currentDirectory(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !*repo.fired {
+		t.Fatal("the concurrent save never ran")
+	}
+	got := [2]string{dirs.cfg.URL, dirs.cfg.BindPassword}
+	if got != [2]string{"ldaps://old.corp.example", "old-pw"} && got != [2]string{"ldaps://new.corp.example", "new-pw"} {
+		t.Fatalf("directory built from %v: the URL and the password come from different saves", got)
 	}
 }

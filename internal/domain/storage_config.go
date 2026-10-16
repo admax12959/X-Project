@@ -280,16 +280,13 @@ func (s *Service) ObjectStore(ctx context.Context) (ObjectStore, error) {
 	if s.objectStores == nil {
 		return nil, storageUnavailable()
 	}
-	settings, _, _, err := s.readStorage(ctx, s.repo)
+	st, err := readSectionConsistent(ctx, s, s.repo, storageSection)
 	if err != nil {
 		return nil, err
 	}
+	settings, secrets := st.settings, st.secrets
 	v := validatedStorage{settings: settings}
 	if settings.Driver == StorageS3 {
-		secrets, err := s.loadSecrets(ctx, s.repo, SectionStorage)
-		if err != nil {
-			return nil, err
-		}
 		if secrets.anyUnreadable() {
 			slog.Error("storage: the stored access key cannot be decrypted with the current master key; enter it again on the Storage page")
 			return nil, storageUnavailable()
