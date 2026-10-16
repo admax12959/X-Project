@@ -496,3 +496,25 @@ func TestAnAdministratorChangingTheLoginEmailOfALocalUserSendsOneNotice(t *testi
 		t.Errorf("mails to the new address = %d, want none", n)
 	}
 }
+
+// A recovery link is for the email identity it was mailed for: removing that identity, and adding
+// another (maybe with the same address, maybe not), must not leave it working.
+func TestARecoveryLinkDoesNotSurviveRemovingAndReplacingTheEmailIdentity(t *testing.T) {
+	t.Parallel()
+	env, _, emma := emmaWithMail(t)
+	requestBindCode(emma, emmaEmail).ExpectStatus(http.StatusAccepted)
+	bindEmail(emma, emmaEmail, codeFromMail(t, env, emmaEmail, 1), "emma-email-pw-1").ExpectStatus(http.StatusCreated)
+
+	requestRecovery(env.Client(), emmaEmail).ExpectStatus(http.StatusAccepted)
+	token := tokenFromMail(t, env, emmaEmail, 2)
+
+	unbindOwn(emma, "email").ExpectStatus(http.StatusOK)
+	const other = "emma.other@example.com"
+	requestBindCode(emma, other).ExpectStatus(http.StatusAccepted)
+	bindEmail(emma, other, codeFromMail(t, env, other, 1), "emma-email-pw-2").ExpectStatus(http.StatusCreated)
+
+	anon := env.Client()
+	setPassword(anon, token, "attackers-pw-123").ExpectError(http.StatusUnprocessableEntity, "token", "tokenUsed")
+	env.Client().LoginEmail(other, "emma-email-pw-2").ExpectStatus(http.StatusOK)
+	env.Client().LoginEmail(other, "attackers-pw-123").ExpectError(http.StatusUnauthorized, "", "invalidCredentials")
+}
