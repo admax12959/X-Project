@@ -47,11 +47,12 @@ type LDAPSettings struct {
 	TimeoutSeconds int    `json:"timeoutSeconds"`
 }
 
-// LDAPConfigInput is a save or test request. BindPassword is write-only: empty keeps the
-// stored password, anything else replaces it.
+// LDAPConfigInput is a save or test request, decoded from the request body as it is (the
+// settings flatten into it). BindPassword is write-only: empty keeps the stored password,
+// anything else replaces it.
 type LDAPConfigInput struct {
 	LDAPSettings
-	BindPassword string
+	BindPassword string `json:"bindPassword"`
 }
 
 // LDAPConfigView is what an administrator gets to see. The password is never part of it,
@@ -89,35 +90,41 @@ func (l *LDAPSettings) fillDefaults() {
 	}
 }
 
+// ldapSection declares the LDAP section for the shared skeleton (config_section.go).
+var ldapSection = configSection[LDAPSettings, LDAPConfigInput]{
+	name: SectionLDAP, defaults: ldapDefaults, fill: (*LDAPSettings).fillDefaults,
+	secrets: []sectionSecret[LDAPSettings]{{
+		name:       ldapSecretBindPassword,
+		unusedWhen: func(l LDAPSettings) bool { return l.BindDN == "" }, // anonymous search: no password to keep
+	}},
+	typed: func(in LDAPConfigInput) map[string]string {
+		return map[string]string{ldapSecretBindPassword: in.BindPassword}
+	},
+	validate: func(in LDAPConfigInput, stored configSecrets) (LDAPSettings, map[string]string, error) {
+		l, password, err := validateLDAP(in, stored)
+		return l, map[string]string{ldapSecretBindPassword: password}, err
+	},
+}
+
 // readLDAP returns the stored settings (defaults when never saved).
 func (s *Service) readLDAP(ctx context.Context, repo Repository) (settings LDAPSettings, saved bool, at time.Time, err error) {
-	settings = ldapDefaults()
-	saved, at, err = loadSection(ctx, repo, SectionLDAP, &settings)
-	settings.fillDefaults()
-	return settings, saved, at, err
+	return readSettings(ctx, repo, ldapSection)
 }
 
 // GetLDAPConfig returns the LDAP configuration for the LDAP page. Administrators only.
 func (s *Service) GetLDAPConfig(ctx context.Context, actor Actor) (LDAPConfigView, error) {
-	if err := requirePermission(actor, PermConfigManage); err != nil {
+	st, err := getSection(ctx, s, actor, ldapSection)
+	if err != nil {
 		return LDAPConfigView{}, err
 	}
-	return s.ldapView(ctx, s.repo)
+	return ldapViewOf(st), nil
 }
 
-func (s *Service) ldapView(ctx context.Context, repo Repository) (LDAPConfigView, error) {
-	settings, saved, at, err := s.readLDAP(ctx, repo)
-	if err != nil {
-		return LDAPConfigView{}, err
-	}
-	secrets, err := s.loadSecrets(ctx, repo, SectionLDAP)
-	if err != nil {
-		return LDAPConfigView{}, err
-	}
+func ldapViewOf(st sectionState[LDAPSettings]) LDAPConfigView {
 	return LDAPConfigView{
-		LDAPSettings: settings, BindPasswordSet: secrets.set[ldapSecretBindPassword],
-		SecretsUnreadable: secrets.anyUnreadable(), Configured: saved, UpdatedAt: at,
-	}, nil
+		LDAPSettings: st.settings, BindPasswordSet: st.secrets.set[ldapSecretBindPassword],
+		SecretsUnreadable: st.secrets.anyUnreadable(), Configured: st.saved, UpdatedAt: st.at,
+	}
 }
 
 // validateLDAP checks a request against the stored state (the stored password counts when
@@ -180,79 +187,14 @@ func validateLDAP(in LDAPConfigInput, secrets configSecrets) (LDAPSettings, stri
 	return l, password, nil
 }
 
-// changedLDAPFields names the fields that differ, in form order. Values are never listed.
-func changedLDAPFields(a, b LDAPSettings) []string {
-	var out []string
-	add := func(name string, differs bool) {
-		if differs {
-			out = append(out, name)
-		}
-	}
-	add("enabled", a.Enabled != b.Enabled)
-	add("url", a.URL != b.URL)
-	add("startTls", a.StartTLS != b.StartTLS)
-	add("skipVerify", a.SkipVerify != b.SkipVerify)
-	add("bindDn", a.BindDN != b.BindDN)
-	add("baseDn", a.BaseDN != b.BaseDN)
-	add("userFilter", a.UserFilter != b.UserFilter)
-	add("loginAttr", a.LoginAttr != b.LoginAttr)
-	add("nameAttr", a.NameAttr != b.NameAttr)
-	add("emailAttr", a.EmailAttr != b.EmailAttr)
-	add("departmentAttr", a.DepartmentAttr != b.DepartmentAttr)
-	add("disabledFilter", a.DisabledFilter != b.DisabledFilter)
-	add("timeoutSeconds", a.TimeoutSeconds != b.TimeoutSeconds)
-	return out
-}
-
 // UpdateLDAPConfig saves the LDAP configuration and records which fields changed (names
 // only) in the audit log. Administrators only. The new configuration is in effect at once.
 func (s *Service) UpdateLDAPConfig(ctx context.Context, actor Actor, in LDAPConfigInput) (LDAPConfigView, error) {
-	if err := requirePermission(actor, PermConfigManage); err != nil {
+	st, err := updateSection(ctx, s, actor, ldapSection, in)
+	if err != nil {
 		return LDAPConfigView{}, err
 	}
-	var view LDAPConfigView
-	err := s.repo.InTx(ctx, func(tx Repository) error {
-		old, _, _, err := s.readLDAP(ctx, tx)
-		if err != nil {
-			return err
-		}
-		secrets, err := s.loadSecrets(ctx, tx, SectionLDAP)
-		if err != nil {
-			return err
-		}
-		next, _, err := validateLDAP(in, secrets)
-		if err != nil {
-			return err
-		}
-		changes := changedLDAPFields(old, next)
-		data, err := jsonBytes(next)
-		if err != nil {
-			return err
-		}
-		if err := tx.PutConfigSection(ctx, SectionLDAP, data, s.nowUTC()); err != nil {
-			return err
-		}
-		switch {
-		case in.BindPassword != "": // validateLDAP guarantees a bind DN here
-			if err := s.saveSecret(ctx, tx, SectionLDAP, ldapSecretBindPassword, in.BindPassword); err != nil {
-				return err
-			}
-			changes = append(changes, ldapSecretBindPassword)
-		case next.BindDN == "" && secrets.set[ldapSecretBindPassword]: // anonymous search: no password to keep
-			if err := tx.DeleteConfigSecret(ctx, SectionLDAP, ldapSecretBindPassword); err != nil {
-				return err
-			}
-			changes = append(changes, ldapSecretBindPassword)
-		}
-		if len(changes) > 0 {
-			if err := s.recordAudit(ctx, tx, AuditActorOf(actor), configChangedAudit(SectionLDAP, changes)); err != nil {
-				return err
-			}
-		}
-		view, err = s.ldapView(ctx, tx)
-		return err
-	})
-	return view, err
+	return ldapViewOf(st), nil
 }
 
 // TestLDAPConfig checks that the directory described by the (unsaved) form can be reached,
@@ -312,14 +254,11 @@ func (s *Service) currentDirectory(ctx context.Context) (Directory, error) {
 	if s.directories == nil {
 		return nil, nil
 	}
-	settings, _, _, err := s.readLDAP(ctx, s.repo)
-	if err != nil || !settings.Enabled || settings.URL == "" {
+	st, err := readSectionConsistent(ctx, s, s.repo, ldapSection)
+	if err != nil || !st.settings.Enabled || st.settings.URL == "" {
 		return nil, err
 	}
-	secrets, err := s.loadSecrets(ctx, s.repo, SectionLDAP)
-	if err != nil {
-		return nil, err
-	}
+	settings, secrets := st.settings, st.secrets
 	if secrets.unreadable[ldapSecretBindPassword] {
 		slog.Error("ldap: the stored service account password cannot be decrypted with the current master key; enter it again on the LDAP page")
 		return nil, ldapUnreachable()

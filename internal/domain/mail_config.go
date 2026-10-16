@@ -46,11 +46,12 @@ type SMTPSettings struct {
 	SiteURL string `json:"siteUrl"`
 }
 
-// SMTPConfigInput is a save or test request. Password is write-only: empty keeps the stored
-// password, anything else replaces it.
+// SMTPConfigInput is a save or test request, decoded from the request body as it is (the
+// settings flatten into it). Password is write-only: empty keeps the stored password,
+// anything else replaces it.
 type SMTPConfigInput struct {
 	SMTPSettings
-	Password string
+	Password string `json:"password"`
 }
 
 // SMTPConfigView is what an administrator gets to see. The password is never part of it, only
@@ -79,10 +80,24 @@ func defaultSMTPPort(security string) int {
 	return 587
 }
 
+// smtpSection declares the mail section for the shared skeleton (config_section.go).
+var smtpSection = configSection[SMTPSettings, SMTPConfigInput]{
+	name: SectionSMTP, defaults: smtpDefaults,
+	secrets: []sectionSecret[SMTPSettings]{{
+		name:       smtpSecretPassword,
+		unusedWhen: func(m SMTPSettings) bool { return m.Username == "" }, // no account: no password to keep
+	}},
+	typed: func(in SMTPConfigInput) map[string]string {
+		return map[string]string{smtpSecretPassword: in.Password}
+	},
+	validate: func(in SMTPConfigInput, stored configSecrets) (SMTPSettings, map[string]string, error) {
+		m, password, err := validateSMTP(in, stored, false)
+		return m, map[string]string{smtpSecretPassword: password}, err
+	},
+}
+
 func (s *Service) readSMTP(ctx context.Context, repo Repository) (settings SMTPSettings, saved bool, at time.Time, err error) {
-	settings = smtpDefaults()
-	saved, at, err = loadSection(ctx, repo, SectionSMTP, &settings)
-	return settings, saved, at, err
+	return readSettings(ctx, repo, smtpSection)
 }
 
 // configured: mail is switched on and has a server and a sender to use.
@@ -91,46 +106,40 @@ func (m SMTPSettings) configured() bool { return m.Enabled && m.Host != "" && m.
 // readUsableSMTP is readSMTP plus the answer to "can mail be sent with it": it is configured and,
 // when a password is stored, that password can be decrypted with the current master key. An
 // unreadable password makes SendDueMail leave everything queued, so no feature may count on mail.
+// repo should be a transaction, so that the settings and the password are read from one state.
 func (s *Service) readUsableSMTP(ctx context.Context, repo Repository) (SMTPSettings, bool, error) {
-	settings, _, _, err := s.readSMTP(ctx, repo)
-	if err != nil || !settings.configured() {
-		return settings, false, err
+	st, err := readSection(ctx, s, repo, smtpSection)
+	if err != nil || !st.settings.configured() {
+		return st.settings, false, err
 	}
-	secrets, err := s.loadSecrets(ctx, repo, SectionSMTP)
-	if err != nil {
-		return settings, false, err
-	}
-	return settings, !secrets.unreadable[smtpSecretPassword], nil
+	return st.settings, !st.secrets.unreadable[smtpSecretPassword], nil
 }
 
 // GetSMTPConfig returns the mail configuration for the Email page. Administrators only.
 func (s *Service) GetSMTPConfig(ctx context.Context, actor Actor) (SMTPConfigView, error) {
-	if err := requirePermission(actor, PermConfigManage); err != nil {
+	st, err := getSection(ctx, s, actor, smtpSection)
+	if err != nil {
 		return SMTPConfigView{}, err
 	}
-	return s.smtpView(ctx, s.repo)
+	return smtpViewOf(st), nil
 }
 
-func (s *Service) smtpView(ctx context.Context, repo Repository) (SMTPConfigView, error) {
-	settings, saved, at, err := s.readSMTP(ctx, repo)
-	if err != nil {
-		return SMTPConfigView{}, err
-	}
-	secrets, err := s.loadSecrets(ctx, repo, SectionSMTP)
-	if err != nil {
-		return SMTPConfigView{}, err
-	}
+func smtpViewOf(st sectionState[SMTPSettings]) SMTPConfigView {
 	return SMTPConfigView{
-		SMTPSettings: settings, PasswordSet: secrets.set[smtpSecretPassword], SecretsUnreadable: secrets.anyUnreadable(),
-		Configured: settings.configured() && !secrets.unreadable[smtpSecretPassword], UpdatedAt: at, Saved: saved,
-	}, nil
+		SMTPSettings: st.settings, PasswordSet: st.secrets.set[smtpSecretPassword], SecretsUnreadable: st.secrets.anyUnreadable(),
+		Configured: st.settings.configured() && !st.secrets.unreadable[smtpSecretPassword], UpdatedAt: st.at, Saved: st.saved,
+	}
 }
 
 // MailConfigured reports whether mail can be sent: the question other features ask to decide
 // whether they are available (invitations by mail, password recovery, ...). Any signed-in
 // user may ask.
 func (s *Service) MailConfigured(ctx context.Context) (bool, error) {
-	_, ok, err := s.readUsableSMTP(ctx, s.repo)
+	var ok bool
+	err := s.repo.InTx(ctx, func(tx Repository) (err error) {
+		_, ok, err = s.readUsableSMTP(ctx, tx)
+		return err
+	})
 	return ok, err
 }
 
@@ -251,75 +260,14 @@ func normalizeSiteURL(raw string) (string, bool) {
 	return strings.TrimRight(u.String(), "/"), true
 }
 
-// changedSMTPFields names the fields that differ, in form order. Values are never listed.
-func changedSMTPFields(a, b SMTPSettings) []string {
-	var out []string
-	add := func(name string, differs bool) {
-		if differs {
-			out = append(out, name)
-		}
-	}
-	add("enabled", a.Enabled != b.Enabled)
-	add("host", a.Host != b.Host)
-	add("port", a.Port != b.Port)
-	add("security", a.Security != b.Security)
-	add("allowPlaintext", a.AllowPlaintext != b.AllowPlaintext)
-	add("username", a.Username != b.Username)
-	add("from", a.From != b.From)
-	add("caCert", a.CACert != b.CACert)
-	add("siteUrl", a.SiteURL != b.SiteURL)
-	return out
-}
-
 // UpdateSMTPConfig saves the mail configuration and records which fields changed (names only)
 // in the audit log. Administrators only. The new configuration is in effect at once.
 func (s *Service) UpdateSMTPConfig(ctx context.Context, actor Actor, in SMTPConfigInput) (SMTPConfigView, error) {
-	if err := requirePermission(actor, PermConfigManage); err != nil {
+	st, err := updateSection(ctx, s, actor, smtpSection, in)
+	if err != nil {
 		return SMTPConfigView{}, err
 	}
-	var view SMTPConfigView
-	err := s.repo.InTx(ctx, func(tx Repository) error {
-		old, _, _, err := s.readSMTP(ctx, tx)
-		if err != nil {
-			return err
-		}
-		secrets, err := s.loadSecrets(ctx, tx, SectionSMTP)
-		if err != nil {
-			return err
-		}
-		next, _, err := validateSMTP(in, secrets, false)
-		if err != nil {
-			return err
-		}
-		changes := changedSMTPFields(old, next)
-		data, err := jsonBytes(next)
-		if err != nil {
-			return err
-		}
-		if err := tx.PutConfigSection(ctx, SectionSMTP, data, s.nowUTC()); err != nil {
-			return err
-		}
-		switch {
-		case in.Password != "": // validateSMTP guarantees an account here
-			if err := s.saveSecret(ctx, tx, SectionSMTP, smtpSecretPassword, in.Password); err != nil {
-				return err
-			}
-			changes = append(changes, smtpSecretPassword)
-		case next.Username == "" && secrets.set[smtpSecretPassword]: // no account: no password to keep
-			if err := tx.DeleteConfigSecret(ctx, SectionSMTP, smtpSecretPassword); err != nil {
-				return err
-			}
-			changes = append(changes, smtpSecretPassword)
-		}
-		if len(changes) > 0 {
-			if err := s.recordAudit(ctx, tx, AuditActorOf(actor), configChangedAudit(SectionSMTP, changes)); err != nil {
-				return err
-			}
-		}
-		view, err = s.smtpView(ctx, tx)
-		return err
-	})
-	return view, err
+	return smtpViewOf(st), nil
 }
 
 // MailTestResult is the answer of "send test email". A failed delivery is an expected outcome,
