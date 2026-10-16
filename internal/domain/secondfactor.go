@@ -321,7 +321,7 @@ func (s *Service) ConfirmTOTP(ctx context.Context, actor Actor, sessionToken, co
 
 // issueLoginChallenge is what a passed first factor produces for a user who has a second
 // factor: a token for SubmitSecondFactor, and no session.
-func (s *Service) issueLoginChallenge(ctx context.Context, u User, mustChange bool) (LoginResult, error) {
+func (s *Service) issueLoginChallenge(ctx context.Context, r Repository, u User, mustChange bool) (LoginResult, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return LoginResult{}, err
@@ -329,10 +329,10 @@ func (s *Service) issueLoginChallenge(ctx context.Context, u User, mustChange bo
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	now := s.nowUTC()
 	ch := LoginChallenge{TokenHash: hashToken(token), UserID: u.ID, MustChangePassword: mustChange, CreatedAt: now, ExpiresAt: now.Add(loginChallengeTTL)}
-	if err := s.repo.DeleteExpiredLoginChallenges(ctx, now); err != nil {
+	if err := r.DeleteExpiredLoginChallenges(ctx, now); err != nil {
 		return LoginResult{}, err
 	}
-	if err := s.repo.CreateLoginChallenge(ctx, ch); err != nil {
+	if err := r.CreateLoginChallenge(ctx, ch); err != nil {
 		return LoginResult{}, err
 	}
 	return LoginResult{SecondFactorToken: token, SecondFactorExpiresAt: ch.ExpiresAt, User: u, MustChangePassword: mustChange}, nil

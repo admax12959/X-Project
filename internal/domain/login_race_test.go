@@ -29,6 +29,10 @@ func (r *loginRepo) ListAuthenticators(context.Context, UserID) ([]Authenticator
 	r.listCalls++
 	return r.authenticators[i], nil
 }
+func (r *loginRepo) InTx(_ context.Context, fn func(Repository) error) error { return fn(r) }
+func (r *loginRepo) LockEmailIdentity(context.Context, UserID) (LoginIdentity, bool, error) {
+	return LoginIdentity{UserID: 7, PasswordHash: "h", MustChangePassword: true}, true, nil
+}
 func (r *loginRepo) CreateSession(_ context.Context, s Session) error {
 	r.sessions[s.TokenHash] = s
 	return nil
@@ -53,7 +57,7 @@ func TestALoginThatRacesTheEnablingOfTheSecondFactorGetsAChallengeNotASession(t 
 	// was inserted: ConfirmTOTP has enabled one in between.
 	repo := newLoginRepo(nil, totpOn)
 	svc := NewService(repo, Options{})
-	res, err := svc.openSession(context.Background(), User{ID: 7}, true)
+	res, err := svc.openSession(context.Background(), User{ID: 7}, &LoginIdentity{PasswordHash: "h"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +75,7 @@ func TestALoginThatRacesTheEnablingOfTheSecondFactorGetsAChallengeNotASession(t 
 func TestALoginWithoutARaceKeepsItsSession(t *testing.T) {
 	repo := newLoginRepo(nil)
 	svc := NewService(repo, Options{})
-	res, err := svc.openSession(context.Background(), User{ID: 7}, false)
+	res, err := svc.openSession(context.Background(), User{ID: 7}, nil)
 	if err != nil || res.Token == "" || len(repo.sessions) != 1 || len(repo.challenges) != 0 {
 		t.Fatalf("result = %+v, %v; sessions %d, challenges %d", res, err, len(repo.sessions), len(repo.challenges))
 	}
@@ -82,7 +86,7 @@ func TestALoginWithoutARaceKeepsItsSession(t *testing.T) {
 func TestASessionThatPassedTheSecondFactorSkipsTheRecheck(t *testing.T) {
 	repo := newLoginRepo(totpOn)
 	svc := NewService(repo, Options{})
-	res, err := svc.createSession(context.Background(), User{ID: 7}, false, true)
+	res, err := svc.createSession(context.Background(), repo, User{ID: 7}, false, true)
 	if err != nil || res.Token == "" || len(repo.sessions) != 1 {
 		t.Fatalf("result = %+v, %v; sessions %d", res, err, len(repo.sessions))
 	}

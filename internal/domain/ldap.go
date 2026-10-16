@@ -115,7 +115,7 @@ func (s *Service) loginLDAP(ctx context.Context, in LoginInput) (LoginResult, er
 		return LoginResult{}, err
 	}
 	s.syncDirectoryPhoto(ctx, user, entry.Photo) // best effort: never fails the login
-	return s.openSession(ctx, user, false)
+	return s.openSession(ctx, user, nil)
 }
 
 // syncFromDirectory overwrites the directory-owned fields of u (display name, email,

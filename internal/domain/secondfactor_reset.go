@@ -146,6 +146,11 @@ func (s *Service) ResetUserByCLI(ctx context.Context, in CLIResetInput) (CLIRese
 			if _, ok := cur.identity(IdentityEmail); !ok {
 				return ErrCLINoPassword
 			}
+			// Serialised with every other change of the password, before anything else is
+			// touched: identity, then challenges, then sessions.
+			if _, _, err := tx.LockEmailIdentity(ctx, cur.User.ID); err != nil {
+				return err
+			}
 		}
 		if in.SecondFactor {
 			on, err := hasEnabledTOTP(ctx, tx, cur.User.ID)

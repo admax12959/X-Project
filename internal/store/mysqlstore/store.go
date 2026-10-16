@@ -154,11 +154,25 @@ func (s *Store) UpdateUserProfile(ctx context.Context, id domain.UserID, display
 }
 
 func (s *Store) FindIdentityByUser(ctx context.Context, userID domain.UserID, kind domain.IdentityKind) (domain.LoginIdentity, bool, error) {
+	return s.findIdentityByUser(ctx, userID, kind, "")
+}
+
+func (s *Store) LockEmailIdentity(ctx context.Context, userID domain.UserID) (domain.LoginIdentity, bool, error) {
+	var id domain.UserID
+	if err := s.q.QueryRowContext(ctx, "SELECT id FROM users WHERE id = ? FOR UPDATE", userID).Scan(&id); errors.Is(err, sql.ErrNoRows) {
+		return domain.LoginIdentity{}, false, nil
+	} else if err != nil {
+		return domain.LoginIdentity{}, false, err
+	}
+	return s.findIdentityByUser(ctx, userID, domain.IdentityEmail, " FOR UPDATE")
+}
+
+func (s *Store) findIdentityByUser(ctx context.Context, userID domain.UserID, kind domain.IdentityKind, lock string) (domain.LoginIdentity, bool, error) {
 	var i domain.LoginIdentity
 	var k, via string
 	var hash sql.NullString
 	err := s.q.QueryRowContext(ctx,
-		"SELECT id, user_id, kind, login_name, password_hash, bound_at, bound_via, must_change_password FROM login_identities WHERE user_id = ? AND kind = ?",
+		"SELECT id, user_id, kind, login_name, password_hash, bound_at, bound_via, must_change_password FROM login_identities WHERE user_id = ? AND kind = ?"+lock,
 		userID, string(kind)).Scan(&i.ID, &i.UserID, &k, &i.LoginName, &hash, &i.BoundAt, &via, &i.MustChangePassword)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, false, nil
