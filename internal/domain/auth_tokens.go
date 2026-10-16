@@ -62,6 +62,10 @@ type AuthTokenRepository interface {
 	// DeleteUserSessions ends every session of the user.
 	DeleteUserSessions(ctx context.Context, userID UserID) error
 
+	// LockRateKeys serialises requests that share a rate-limit key: inside InTx it locks the keys
+	// until the transaction ends, so count-then-record cannot interleave. It must come before the
+	// transaction's first plain read, and PruneRateEvents counts as one.
+	LockRateKeys(ctx context.Context, keys ...string) error
 	// CountRateEvents counts the events of a bucket that happened after since.
 	CountRateEvents(ctx context.Context, bucket string, since time.Time) (int, error)
 	AddRateEvent(ctx context.Context, bucket string, at time.Time) error
@@ -134,6 +138,9 @@ func (s *Service) RequestPasswordRecovery(ctx context.Context, email, clientIP s
 		{"recovery:email:" + hashToken(email), recoveryLimitPerEmail},
 	}
 	err = s.repo.InTx(ctx, func(tx Repository) error {
+		if err := tx.LockRateKeys(ctx, buckets[0].key, buckets[1].key); err != nil {
+			return err
+		}
 		if err := tx.PruneRateEvents(ctx, now.Add(-recoveryWindow)); err != nil {
 			return err
 		}

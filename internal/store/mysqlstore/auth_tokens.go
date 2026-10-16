@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"hash/fnv"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/admax12959/X-Project/internal/domain"
@@ -59,7 +62,66 @@ func (s *Store) AddRateEvent(ctx context.Context, bucket string, at time.Time) e
 	return err
 }
 
+// rateLockSlots is the number of rows in rate_locks (migration 20261015180000).
+const rateLockSlots = 64
+
+// LockRateKeys takes the row locks of the keys' slots, in slot order whatever the order of the
+// keys, so that two requests locking overlapping keys cannot deadlock. The locks last until the
+// transaction ends. Call it before the first plain read of the transaction: under REPEATABLE
+// READ the read view is made by that read, and it has to be made after the lock is won.
+func (s *Store) LockRateKeys(ctx context.Context, keys ...string) error {
+	seen := map[int]bool{}
+	var slots []int
+	for _, k := range keys {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(k))
+		slot := int(h.Sum32() % rateLockSlots)
+		if !seen[slot] {
+			seen[slot] = true
+			slots = append(slots, slot)
+		}
+	}
+	sort.Ints(slots)
+	for _, slot := range slots {
+		var got int
+		if err := s.q.QueryRowContext(ctx, "SELECT slot FROM rate_locks WHERE slot = ? FOR UPDATE", slot).Scan(&got); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// PruneRateEvents deletes the old events without a range lock: it reads their ids (a plain
+// read, no locks) and deletes them by primary key in ascending order. A DELETE ... WHERE
+// occurred_at <= ? would lock the whole table and its gaps, and two requests doing that while
+// the table is nearly empty deadlock on their own inserts.
 func (s *Store) PruneRateEvents(ctx context.Context, before time.Time) error {
-	_, err := s.q.ExecContext(ctx, "DELETE FROM rate_events WHERE occurred_at <= ?", before)
-	return err
+	rows, err := s.q.QueryContext(ctx, "SELECT id FROM rate_events WHERE occurred_at <= ? ORDER BY id", before)
+	if err != nil {
+		return err
+	}
+	var ids []any
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	const chunk = 500
+	for len(ids) > 0 {
+		n := min(chunk, len(ids))
+		marks := strings.TrimSuffix(strings.Repeat("?,", n), ",")
+		if _, err := s.q.ExecContext(ctx, "DELETE FROM rate_events WHERE id IN ("+marks+")", ids[:n]...); err != nil {
+			return err
+		}
+		ids = ids[n:]
+	}
+	return nil
 }

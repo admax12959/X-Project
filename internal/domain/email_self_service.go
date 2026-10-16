@@ -74,6 +74,9 @@ func (s *Service) limitEmailCodes(ctx context.Context, userID UserID, clientIP s
 		{"emailcode:ip:" + clientIP, emailCodeLimitPerIP},
 	}
 	return s.repo.InTx(ctx, func(tx Repository) error {
+		if err := tx.LockRateKeys(ctx, buckets[0].key, buckets[1].key); err != nil {
+			return err
+		}
 		if err := tx.PruneRateEvents(ctx, now.Add(-emailCodeWindow)); err != nil {
 			return err
 		}
