@@ -142,61 +142,56 @@ func (s *Service) ResetUserByCLI(ctx context.Context, in CLIResetInput) (CLIRese
 			return ErrCLIUserNotFound
 		}
 		res = CLIResetResult{User: cur.User.Username}
-		if in.Password {
-			if _, ok := cur.identity(IdentityEmail); !ok {
-				return ErrCLINoPassword
-			}
-			// Serialised with every other change of the password, before anything else is
-			// touched: identity, then challenges, then sessions.
-			if _, locked, err := tx.LockEmailIdentity(ctx, cur.User.ID); err != nil {
-				return err
-			} else if !locked {
-				// Unbound since it was read: there is no password to set.
-				return ErrCLINoPassword
-			}
+		if !in.Password { // only the second factor was asked for: no credential changes
+			reset, err := s.resetSecondFactorByCLI(ctx, tx, cur.User)
+			res.SecondFactorReset = reset
+			return err
 		}
-		if in.SecondFactor {
-			on, err := hasEnabledTOTP(ctx, tx, cur.User.ID)
-			if err != nil {
-				return err
-			}
-			if on {
-				if err := s.resetSecondFactor(ctx, tx, AuditActorCLI, cur.User); err != nil {
+		if _, ok := cur.identity(IdentityEmail); !ok {
+			return ErrCLINoPassword
+		}
+		return s.changeCredential(ctx, tx, credentialChange{
+			User:        cur.User.ID,
+			Revoke:      RevokeAll,
+			SpendTokens: passwordTokenPurposes,
+			Apply: func(l lockedCredential) error {
+				if !l.HasEmail {
+					// Unbound since it was read: there is no password to set.
+					return ErrCLINoPassword
+				}
+				if in.SecondFactor {
+					reset, err := s.resetSecondFactorByCLI(ctx, tx, cur.User)
+					if err != nil {
+						return err
+					}
+					res.SecondFactorReset = reset
+				}
+				if err := tx.SetTemporaryPassword(ctx, cur.User.ID, hash); err != nil {
 					return err
 				}
-				res.SecondFactorReset = true
-			}
-		}
-		if in.Password {
-			if err := tx.SetTemporaryPassword(ctx, cur.User.ID, hash); err != nil {
-				return err
-			}
-			if err := tx.UseUserAuthTokens(ctx, cur.User.ID, passwordTokenPurposes, s.nowUTC()); err != nil {
-				return err
-			}
-			// Challenges first: a login completing its second step holds the row of its
-			// challenge, so the delete waits for its session, and the delete of the sessions
-			// that follows then sees it (completeSecondFactorLogin).
-			if err := tx.DeleteUserLoginChallenges(ctx, cur.User.ID); err != nil {
-				return err
-			}
-			if err := tx.DeleteUserSessions(ctx, cur.User.ID); err != nil {
-				return err
-			}
-			if err := s.recordAudit(ctx, tx, AuditActorCLI, passwordResetAudit(cur.User.ID)); err != nil {
-				return err
-			}
-			if err := s.notifySecurity(ctx, tx, cur.User.ID, cur.User.Email, MailTemplatePasswordChangedByOperator, nil); err != nil {
-				return err
-			}
-			res.Password = temp
-		}
-		return nil
+				res.Password = temp
+				return nil
+			},
+			Audit:  &credentialAudit{By: AuditActorCLI, Event: passwordResetAudit(cur.User.ID)},
+			Notice: &securityNotice{To: cur.User.Email, Template: MailTemplatePasswordChangedByOperator},
+		})
 	})
 	if err != nil {
 		return CLIResetResult{}, err
 	}
 	return res, nil
+}
+
+// resetSecondFactorByCLI resets the second factor of u when there is one, and says whether it did.
+func (s *Service) resetSecondFactorByCLI(ctx context.Context, tx Repository, u User) (bool, error) {
+	on, err := hasEnabledTOTP(ctx, tx, u.ID)
+	if err != nil || !on {
+		return false, err
+	}
+	if err := s.resetSecondFactor(ctx, tx, AuditActorCLI, u); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // findUserForCLI finds a user by username, else by the login email of an email identity.

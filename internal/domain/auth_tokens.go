@@ -241,47 +241,36 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 		// the reset CLI do (they lock the user and then write the tokens); the other order
 		// deadlocks with them. The user comes from the plain read above; the token is read again
 		// under the locks and judged again.
-		ident, hasEmail, err := tx.LockEmailIdentity(ctx, first.UserID)
-		if err != nil {
-			return err
-		}
-		t, found, err := tx.LockAuthToken(ctx, hashToken(token))
-		if err != nil {
-			return err
-		}
-		if err := s.judgePasswordToken(t, found); err != nil {
-			return err
-		}
-		if t.UserID != first.UserID {
-			return tokenInvalid()
-		}
-		now := s.nowUTC()
-		u, found, err := tx.GetUser(ctx, t.UserID)
-		if err != nil {
-			return err
-		}
-		// The link belongs to the email identity it was mailed for, not to the user: an identity
-		// that was removed and added again, or renamed, does not honour it.
-		if !found || u.Status != UserEnabled || !hasEmail || t.LoginEmail == "" || t.LoginEmail != ident.LoginName {
-			return tokenInvalid()
-		}
-		// An invitation is for setting the first password: once there is one, the invitation is
-		// void, whatever token row is left over.
-		if t.Purpose == TokenInvite && ident.PasswordSet {
-			return tokenInvalid()
-		}
-		if err := tx.ChangePassword(ctx, t.UserID, hash); err != nil {
-			return err
-		}
-		if err := tx.UseUserAuthTokens(ctx, t.UserID, passwordTokenPurposes, now); err != nil {
-			return err
-		}
-		// A first step passed with the old password must not turn into a session. The
-		// challenges go before the sessions: see completeSecondFactorLogin.
-		if err := tx.DeleteUserLoginChallenges(ctx, t.UserID); err != nil {
-			return err
-		}
-		return tx.DeleteUserSessions(ctx, t.UserID)
+		return s.changeCredential(ctx, tx, credentialChange{
+			User:        first.UserID,
+			Token:       hashToken(token),
+			Revoke:      RevokeAll,
+			SpendTokens: passwordTokenPurposes,
+			Apply: func(l lockedCredential) error {
+				t := l.Token
+				if err := s.judgePasswordToken(t, l.TokenFound); err != nil {
+					return err
+				}
+				if t.UserID != first.UserID {
+					return tokenInvalid()
+				}
+				u, found, err := tx.GetUser(ctx, t.UserID)
+				if err != nil {
+					return err
+				}
+				// The link belongs to the email identity it was mailed for, not to the user: an identity
+				// that was removed and added again, or renamed, does not honour it.
+				if !found || u.Status != UserEnabled || !l.HasEmail || t.LoginEmail == "" || t.LoginEmail != l.Identity.LoginName {
+					return tokenInvalid()
+				}
+				// An invitation is for setting the first password: once there is one, the invitation is
+				// void, whatever token row is left over.
+				if t.Purpose == TokenInvite && l.Identity.PasswordSet {
+					return tokenInvalid()
+				}
+				return tx.ChangePassword(ctx, t.UserID, hash)
+			},
+		})
 	})
 }
 
