@@ -148,8 +148,11 @@ func (s *Service) ResetUserByCLI(ctx context.Context, in CLIResetInput) (CLIRese
 			}
 			// Serialised with every other change of the password, before anything else is
 			// touched: identity, then challenges, then sessions.
-			if _, _, err := tx.LockEmailIdentity(ctx, cur.User.ID); err != nil {
+			if _, locked, err := tx.LockEmailIdentity(ctx, cur.User.ID); err != nil {
 				return err
+			} else if !locked {
+				// Unbound since it was read: there is no password to set.
+				return ErrCLINoPassword
 			}
 		}
 		if in.SecondFactor {
