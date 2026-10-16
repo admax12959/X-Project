@@ -28,6 +28,14 @@ Every change gets a Codex review before its PR opens: `/codex:review`, plus `/co
 ## Cache
 - Do not connect MCP servers or switch models mid-task
 - Compact only at a natural break, and say what to keep
+- A cache miss rewrites the whole context at 1.25× input price, about
+  what 12 cached turns cost. Two things cause one: switching models
+  (`/model`), and a pause longer than the cache lifetime. Measured here:
+  a 130k rewrite after `/model`, and three 120k rewrites after an
+  overnight pause. Pick the model when the session starts.
+- After a long pause, or once a phase of work is done, start a new
+  session from a short handoff note (branch tips, open tickets, worktree
+  paths) rather than resuming a large one.
 
 ## Token budget
 Every turn re-reads the whole context, so cost is turns × context size.
