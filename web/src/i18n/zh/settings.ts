@@ -1,6 +1,11 @@
-// 个人设置（#15）：个人资料、登录身份、密码、语言。
+// 个人设置（#15）：资料、登录身份、安全、偏好四个标签页。
 export default {
   'settings.title': '设置',
+  'settings.tabs': '设置分区',
+  'settings.tab.profile': '资料',
+  'settings.tab.identities': '登录身份',
+  'settings.tab.security': '安全',
+  'settings.tab.preferences': '偏好',
   'settings.loadFailed': '无法加载你的设置。',
   'settings.profile.title': '个人资料',
   'settings.profile.username': '用户名',

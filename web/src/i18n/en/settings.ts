@@ -1,6 +1,11 @@
-// Personal settings (#15): profile, login identities, password, language.
+// Personal settings (#15): four tabs - profile, login identities, security, preferences.
 export default {
   'settings.title': 'Settings',
+  'settings.tabs': 'Settings sections',
+  'settings.tab.profile': 'Profile',
+  'settings.tab.identities': 'Login identities',
+  'settings.tab.security': 'Security',
+  'settings.tab.preferences': 'Preferences',
   'settings.loadFailed': 'Could not load your settings.',
   'settings.profile.title': 'Profile',
   'settings.profile.username': 'Username',
