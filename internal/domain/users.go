@@ -11,8 +11,11 @@ import (
 
 // UserWithIdentities is a user together with every login identity attached to it.
 type UserWithIdentities struct {
-	User       User
-	Identities []LoginIdentity
+	User User
+	// SecondFactorEnabled: the user has a second factor turned on (#23). Read from the
+	// repository with the user, so every administrator view of a user carries it.
+	SecondFactorEnabled bool
+	Identities          []LoginIdentity
 }
 
 // UserRepository is the user-management part of Repository.
@@ -401,7 +404,7 @@ func (s *Service) UpdateUser(ctx context.Context, actor Actor, id UserID, in Upd
 			}
 			u.IsAdmin = *in.IsAdmin
 		}
-		result = UserWithIdentities{User: u, Identities: cur.Identities}
+		result = UserWithIdentities{User: u, Identities: cur.Identities, SecondFactorEnabled: cur.SecondFactorEnabled}
 		return nil
 	})
 	return result, err

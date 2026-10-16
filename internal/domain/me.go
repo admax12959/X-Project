@@ -63,7 +63,7 @@ func (s *Service) UpdateMe(ctx context.Context, actor Actor, in UpdateMeInput) (
 		if err := tx.UpdateUser(ctx, u, s.nowUTC()); err != nil {
 			return mapUsernameTaken(err)
 		}
-		result = UserWithIdentities{User: u, Identities: cur.Identities}
+		result = UserWithIdentities{User: u, Identities: cur.Identities, SecondFactorEnabled: cur.SecondFactorEnabled}
 		return nil
 	})
 	return result, err

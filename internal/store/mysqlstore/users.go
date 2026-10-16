@@ -45,6 +45,9 @@ func (s *Store) userWithIdentities(ctx context.Context, id domain.UserID, lock s
 		return domain.UserWithIdentities{}, false, err
 	}
 	out := domain.UserWithIdentities{User: u, Identities: []domain.LoginIdentity{}}
+	if err := s.q.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM user_authenticators WHERE user_id = ? AND type = 'totp' AND status = 'enabled')", id).Scan(&out.SecondFactorEnabled); err != nil {
+		return out, false, err
+	}
 	rows, err := s.q.QueryContext(ctx, "SELECT user_id, kind, login_name, bound_at, bound_via, password_hash IS NOT NULL FROM login_identities WHERE user_id = ? ORDER BY id", id)
 	if err != nil {
 		return out, false, err
@@ -169,7 +172,26 @@ func (s *Store) listUsers(ctx context.Context, where string, args []any) ([]doma
 			out[at].Identities = append(out[at].Identities, i)
 		}
 	}
-	return out, idRows.Err()
+	if err := idRows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Who has a second factor turned on.
+	authRows, err := s.q.QueryContext(ctx, "SELECT DISTINCT user_id FROM user_authenticators WHERE type = 'totp' AND status = 'enabled' AND user_id IN (SELECT id FROM users"+where+")", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer authRows.Close()
+	for authRows.Next() {
+		var id domain.UserID
+		if err := authRows.Scan(&id); err != nil {
+			return nil, err
+		}
+		if at, ok := index[id]; ok {
+			out[at].SecondFactorEnabled = true
+		}
+	}
+	return out, authRows.Err()
 }
 
 func (s *Store) ReadUsersLocked(ctx context.Context, ids []domain.UserID) (map[domain.UserID]domain.User, error) {

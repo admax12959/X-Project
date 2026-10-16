@@ -18,6 +18,8 @@ type userBody struct {
 	DirectoryDepartment string `json:"directoryDepartment"`
 	Status              string `json:"status"`
 	IsAdmin             bool   `json:"isAdmin"`
+	// SecondFactorEnabled: the user has a second factor turned on (#23).
+	SecondFactorEnabled bool `json:"secondFactorEnabled"`
 	Identities          []struct {
 		Kind      string `json:"kind"`
 		LoginName string `json:"loginName"`
