@@ -256,7 +256,11 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 		if err := tx.UseUserAuthTokens(ctx, t.UserID, passwordTokenPurposes, now); err != nil {
 			return err
 		}
-		return tx.DeleteUserSessions(ctx, t.UserID)
+		if err := tx.DeleteUserSessions(ctx, t.UserID); err != nil {
+			return err
+		}
+		// A first step passed with the old password must not turn into a session.
+		return tx.DeleteUserLoginChallenges(ctx, t.UserID)
 	})
 }
 

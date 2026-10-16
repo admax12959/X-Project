@@ -78,7 +78,11 @@ type SecondFactorRepository interface {
 
 	CreateLoginChallenge(ctx context.Context, c LoginChallenge) error
 	FindLoginChallenge(ctx context.Context, tokenHash string) (LoginChallenge, bool, error)
-	DeleteLoginChallenge(ctx context.Context, tokenHash string) error
+	// DeleteLoginChallenge claims a challenge: it reports whether this call deleted it, so of two
+	// requests presenting the same challenge only one gets true.
+	DeleteLoginChallenge(ctx context.Context, tokenHash string) (bool, error)
+	// DeleteUserLoginChallenges drops every pending challenge of the user.
+	DeleteUserLoginChallenges(ctx context.Context, userID UserID) error
 	// DeleteExpiredLoginChallenges removes the challenges that expired before at.
 	DeleteExpiredLoginChallenges(ctx context.Context, at time.Time) error
 
@@ -363,14 +367,15 @@ func (s *Service) SubmitSecondFactor(ctx context.Context, token, code string) (L
 		return LoginResult{}, err
 	}
 
-	err = s.repo.InTx(ctx, func(tx Repository) error {
-		if err := tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{}); err != nil {
-			return err
-		}
-		return tx.DeleteLoginChallenge(ctx, ch.TokenHash)
-	})
+	// The lockout was already reset under its lock by the verification; resetting it again here
+	// could erase a lockout that another request has just established. What is left is to spend
+	// the challenge: the claim is the delete, and only the request that deleted it gets a session.
+	claimed, err := s.repo.DeleteLoginChallenge(ctx, ch.TokenHash)
 	if err != nil {
 		return LoginResult{}, err
+	}
+	if !claimed {
+		return LoginResult{}, unauth
 	}
 	return s.createSession(ctx, u, ch.MustChangePassword)
 }
