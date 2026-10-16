@@ -34,7 +34,8 @@ type bindSpec struct {
 	// chosen by an administrator.
 	mustChange bool
 	// before runs inside the transaction, after the checks that the identity may be added and
-	// before it is added; an error ends the bind. A self-service email bind spends its code here.
+	// before it is added; an error ends the bind (a commitThenFail commits what was recorded first).
+	// A self-service email bind spends its code here.
 	before func(tx Repository) error
 	via    BoundVia
 	by     AuditActor // who is doing the binding, for the audit log
@@ -197,7 +198,7 @@ func (s *Service) BindIdentityForUser(ctx context.Context, actor Actor, id UserI
 // that two concurrent binds cannot both pass the checks.
 func (s *Service) bindIdentity(ctx context.Context, userID UserID, sp bindSpec) (UserWithIdentities, error) {
 	var result UserWithIdentities
-	err := s.repo.InTx(ctx, func(tx Repository) error {
+	err := s.inTxKeeping(ctx, func(tx Repository) error {
 		cur, found, err := tx.LockUserWithIdentities(ctx, userID)
 		if err != nil {
 			return err

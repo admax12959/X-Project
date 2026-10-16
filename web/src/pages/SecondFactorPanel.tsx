@@ -1,4 +1,4 @@
-// Security tab content: two-step verification with an authenticator app.
+// Security tab content: two-factor authentication with an authenticator app.
 // Turning on: type the password again -> scan the QR code (or type the key) -> enter one code to
 // confirm -> the recovery codes, shown once. Turned on: the number of recovery codes left, making
 // a new set, turning it off; both ask for a code again.

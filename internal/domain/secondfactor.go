@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -70,7 +71,8 @@ type SecondFactorRepository interface {
 	// ClaimAuthenticatorStep records step as used, only if it is after the last used one
 	// (atomically). false: the step was used already, the code is a replay.
 	ClaimAuthenticatorStep(ctx context.Context, id int64, step int64) (bool, error)
-	// GetSecondFactorLockout reads the user's lockout state, locking the row inside InTx.
+	// GetSecondFactorLockout reads the user's lockout state. Inside InTx the caller holds
+	// LockRateKeys(secondFactorLockKey) first, which is what serialises the readers and writers.
 	GetSecondFactorLockout(ctx context.Context, userID UserID) (SecondFactorLockout, error)
 	PutSecondFactorLockout(ctx context.Context, userID UserID, l SecondFactorLockout) error
 
@@ -379,24 +381,43 @@ func (s *Service) verifySecondFactorCode(ctx context.Context, u User, code strin
 	if !c.Required("code", code) {
 		return c.Err()
 	}
-	if lock, err := s.repo.GetSecondFactorLockout(ctx, u.ID); err != nil {
-		return err
-	} else if s.nowUTC().Before(lock.LockedUntil) {
-		return secondFactorLocked(lock.LockedUntil)
-	}
-	good, err := s.claimSecondFactorCode(ctx, u, code)
-	if err != nil {
-		return err
-	}
-	if !good {
-		return s.recordSecondFactorFailure(ctx, u.ID)
-	}
-	return nil
+	// Check, claim and count in one transaction, serialised per user: parallel guesses are
+	// counted one by one, so the lockout cannot be outrun. A wrong code is on record even though
+	// the request is refused (inTxKeeping commits it).
+	return s.inTxKeeping(ctx, func(tx Repository) error {
+		if err := tx.LockRateKeys(ctx, secondFactorLockKey(u.ID)); err != nil {
+			return err
+		}
+		lock, err := tx.GetSecondFactorLockout(ctx, u.ID)
+		if err != nil {
+			return err
+		}
+		now := s.nowUTC()
+		if now.Before(lock.LockedUntil) {
+			return secondFactorLocked(lock.LockedUntil)
+		}
+		good, err := s.claimSecondFactorCode(ctx, tx, u, code)
+		if err != nil {
+			return err
+		}
+		if good {
+			// A right code ends the count, here and not later in another transaction that could
+			// overwrite a failure recorded in between.
+			if lock.Failures == 0 && lock.LockedUntil.IsZero() {
+				return nil
+			}
+			return tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{})
+		}
+		return s.recordSecondFactorFailure(ctx, tx, u.ID, lock, now)
+	})
 }
 
-func (s *Service) claimSecondFactorCode(ctx context.Context, u User, code string) (bool, error) {
+// secondFactorLockKey is the rate lock that serialises the second-factor attempts of one user.
+func secondFactorLockKey(id UserID) string { return fmt.Sprintf("secondfactor:user:%d", id) }
+
+func (s *Service) claimSecondFactorCode(ctx context.Context, tx Repository, u User, code string) (bool, error) {
 	if isTOTPCode(code) {
-		all, err := s.repo.ListAuthenticators(ctx, u.ID)
+		all, err := tx.ListAuthenticators(ctx, u.ID)
 		if err != nil {
 			return false, err
 		}
@@ -413,41 +434,30 @@ func (s *Service) claimSecondFactorCode(ctx context.Context, u User, code string
 				continue
 			}
 			// Claim the step; of two requests with the same code only one gets it.
-			return s.repo.ClaimAuthenticatorStep(ctx, a.ID, step)
+			return tx.ClaimAuthenticatorStep(ctx, a.ID, step)
 		}
 		return false, nil
 	}
-	return s.claimRecoveryCode(ctx, u.ID, code)
+	return s.claimRecoveryCode(ctx, tx, u.ID, code)
 }
 
 func secondFactorLocked(until time.Time) error {
 	return &Error{Kind: KindTooManyRequests, Errors: []FieldError{{Code: CodeTotpLocked, Params: map[string]any{"lockedUntil": until.UTC().Format(time.RFC3339)}}}}
 }
 
-// recordSecondFactorFailure counts a wrong code against the user, locks the second step when
-// the count reaches the threshold, and returns the error to answer with: totpLocked if that
-// failure locked it, totpInvalid otherwise.
-func (s *Service) recordSecondFactorFailure(ctx context.Context, id UserID) error {
+// recordSecondFactorFailure counts a wrong code against the user (cur is the state read under the
+// user's lock), locks the second step when the count reaches the threshold, and returns the
+// error to answer with, to be committed: totpLocked if that failure locked it, totpInvalid
+// otherwise.
+func (s *Service) recordSecondFactorFailure(ctx context.Context, tx Repository, id UserID, cur SecondFactorLockout, now time.Time) error {
 	var answer error = totpInvalid()
-	err := s.repo.InTx(ctx, func(tx Repository) error {
-		cur, err := tx.GetSecondFactorLockout(ctx, id)
-		if err != nil {
-			return err
-		}
-		now := s.nowUTC()
-		if now.Before(cur.LockedUntil) { // locked by a request that ran in parallel
-			answer = secondFactorLocked(cur.LockedUntil)
-			return nil
-		}
-		cur.Failures++
-		if cur.Failures >= secondFactorMaxFailures {
-			cur = SecondFactorLockout{LockedUntil: now.Add(secondFactorLockFor)}
-			answer = secondFactorLocked(cur.LockedUntil)
-		}
-		return tx.PutSecondFactorLockout(ctx, id, cur)
-	})
-	if err != nil {
+	cur.Failures++
+	if cur.Failures >= secondFactorMaxFailures {
+		cur = SecondFactorLockout{LockedUntil: now.Add(secondFactorLockFor)}
+		answer = secondFactorLocked(cur.LockedUntil)
+	}
+	if err := tx.PutSecondFactorLockout(ctx, id, cur); err != nil {
 		return err
 	}
-	return answer
+	return commitThenFail{answer}
 }

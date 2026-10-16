@@ -1,10 +1,13 @@
-// Personal settings: profile, login identities (bind / unbind), password, interface language.
+// Personal settings in four tabs (the active one is the ?tab= query value, so a link can open it):
+// profile (details, avatar), login identities (bind / unbind, email login), security (password, second factor),
+// preferences (interface language).
 import { Dialog } from '@base-ui/react/dialog';
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router';
 import { api } from '../api/client.ts';
 import { errorsByField } from '../api/errors.ts';
 import type { AdminUser, IdentityKind, LoginMethod } from '../api/types.ts';
-import { LOCALES, setLocale, useT, type Locale } from '../i18n/index.ts';
+import { LOCALES, setLocale, useT, type Locale, type MessageKey } from '../i18n/index.ts';
 import { useSession } from '../session/session.tsx';
 import { Avatar } from '../ui/Avatar.tsx';
 import { Button, Empty, Field, Input, Segmented } from '../ui/controls.tsx';
@@ -25,8 +28,18 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+const TABS = [
+  { id: 'profile', label: 'settings.tab.profile' },
+  { id: 'identities', label: 'settings.tab.identities' },
+  { id: 'security', label: 'settings.tab.security' },
+  { id: 'preferences', label: 'settings.tab.preferences' },
+] as const satisfies readonly { id: string; label: MessageKey }[];
+type TabId = (typeof TABS)[number]['id'];
+
 export function SettingsPage() {
   const { t } = useT();
+  const [params, setParams] = useSearchParams();
+  const tab: TabId = TABS.find((x) => x.id === params.get('tab'))?.id ?? 'profile';
   const { setUser } = useSession();
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [methods, setMethods] = useState<LoginMethod[]>(['email']);
@@ -59,14 +72,40 @@ export function SettingsPage() {
   return (
     <>
       <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
-      <ProfileSection me={me} onSaved={saved} />
-      <AvatarSection me={me} onSaved={saved} />
-      <IdentitiesSection me={me} methods={methods} onChanged={saved} />
-      {me.identities.some((i) => i.kind === 'email') && <PasswordSection />}
-      <Section title={t('settings.security.title')}>
-        <SecondFactorPanel />
-      </Section>
-      <LanguageSection onSaved={saved} />
+      <div role="tablist" aria-label={t('settings.tabs')} className="flex gap-1 border-b border-line">
+        {TABS.map((x) => (
+          <button
+            key={x.id}
+            type="button"
+            role="tab"
+            id={`settings-tab-${x.id}`}
+            aria-selected={tab === x.id}
+            aria-controls="settings-panel"
+            onClick={() => setParams(x.id === 'profile' ? {} : { tab: x.id }, { replace: true })}
+            className={`-mb-px border-b-2 px-3 py-2 ${tab === x.id ? 'border-accent font-semibold text-accent' : 'border-transparent text-text hover:text-accent'}`}
+          >
+            {t(x.label)}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id="settings-panel" aria-labelledby={`settings-tab-${tab}`} className="grid gap-4">
+        {tab === 'profile' && (
+          <>
+            <ProfileSection me={me} onSaved={saved} />
+            <AvatarSection me={me} onSaved={saved} />
+          </>
+        )}
+        {tab === 'identities' && <IdentitiesSection me={me} methods={methods} onChanged={saved} />}
+        {tab === 'security' && (
+          <>
+            {me.identities.some((i) => i.kind === 'email') && <PasswordSection />}
+            <Section title={t('settings.security.title')}>
+              <SecondFactorPanel />
+            </Section>
+          </>
+        )}
+        {tab === 'preferences' && <LanguageSection onSaved={saved} />}
+      </div>
     </>
   );
 }

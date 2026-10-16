@@ -62,6 +62,10 @@ type AuthTokenRepository interface {
 	// DeleteUserSessions ends every session of the user.
 	DeleteUserSessions(ctx context.Context, userID UserID) error
 
+	// LockRateKeys serialises requests that share a rate-limit key: inside InTx it locks the keys
+	// until the transaction ends, so count-then-record cannot interleave. It must come before the
+	// transaction's first plain read.
+	LockRateKeys(ctx context.Context, keys ...string) error
 	// CountRateEvents counts the events of a bucket that happened after since.
 	CountRateEvents(ctx context.Context, bucket string, since time.Time) (int, error)
 	AddRateEvent(ctx context.Context, bucket string, at time.Time) error
@@ -134,7 +138,7 @@ func (s *Service) RequestPasswordRecovery(ctx context.Context, email, clientIP s
 		{"recovery:email:" + hashToken(email), recoveryLimitPerEmail},
 	}
 	err = s.repo.InTx(ctx, func(tx Repository) error {
-		if err := tx.PruneRateEvents(ctx, now.Add(-recoveryWindow)); err != nil {
+		if err := tx.LockRateKeys(ctx, buckets[0].key, buckets[1].key); err != nil {
 			return err
 		}
 		for _, b := range buckets {
@@ -153,6 +157,7 @@ func (s *Service) RequestPasswordRecovery(ctx context.Context, email, clientIP s
 		}
 		return nil
 	})
+	s.pruneRateEvents(ctx, now.Add(-recoveryWindow))
 	if err != nil {
 		return err
 	}
@@ -165,6 +170,15 @@ func (s *Service) RequestPasswordRecovery(ctx context.Context, email, clientIP s
 		}
 	}()
 	return nil
+}
+
+// pruneRateEvents drops the expired rate events. It runs on its own, after the transaction that
+// counted: the counts already ignore old events, so it is housekeeping that must not take part
+// in the locking of a limit (a delete in there can deadlock with the inserts of parallel requests).
+func (s *Service) pruneRateEvents(ctx context.Context, before time.Time) {
+	if err := s.repo.PruneRateEvents(context.WithoutCancel(ctx), before); err != nil {
+		slog.Warn("pruning rate events", "err", err)
+	}
 }
 
 func (s *Service) sendPasswordRecovery(ctx context.Context, email string) error {
