@@ -46,7 +46,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     onUnauthenticated(() => setState({ status: 'anonymous' }));
-    onSetupRequired(reload);
+    // The policy was switched on during the session: show the setup page without reloading (a reload would drop a setup in progress).
+    onSetupRequired(() => setState((prev) => (prev.status === 'authenticated' && !prev.secondFactorSetupRequired ? { ...prev, secondFactorSetupRequired: true } : prev)));
     reload();
   }, [reload]);
 

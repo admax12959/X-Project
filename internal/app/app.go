@@ -44,9 +44,9 @@ func (a *App) Close() {
 
 // OpenService connects to the database and builds the domain service for the command line
 // (#23): no migration, no bootstrap, no background workers and no HTTP, so it can run next to
-// a live server. Mail it queues is delivered by the server's worker. The schema must exist
+// a live server (only deps.Now is used, a test clock). Mail it queues is delivered by the server's worker. The schema must exist
 // already (the server has started once). The returned function closes the database.
-func OpenService(ctx context.Context, cfg Config) (*domain.Service, func(), error) {
+func OpenService(ctx context.Context, cfg Config, deps Deps) (*domain.Service, func(), error) {
 	masterKey, err := cfg.MasterKey()
 	if err != nil {
 		return nil, nil, err
@@ -56,7 +56,7 @@ func OpenService(ctx context.Context, cfg Config) (*domain.Service, func(), erro
 		return nil, nil, err
 	}
 	svc := domain.NewService(mysqlstore.New(db), domain.Options{
-		SessionTTL: cfg.Session.TTL, SecretKey: masterKey, SecretKeyVersion: cfg.SecretKeyVersion,
+		Now: deps.Now, SessionTTL: cfg.Session.TTL, SecretKey: masterKey, SecretKeyVersion: cfg.SecretKeyVersion,
 		MailRetryBackoff: cfg.Mail.RetryBackoff, LocalStorageDir: cfg.Storage.LocalDir,
 	})
 	return svc, func() { svc.WaitBackground(); _ = db.Close() }, nil

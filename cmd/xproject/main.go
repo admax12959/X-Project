@@ -78,7 +78,7 @@ func (e errExit) Error() string { return "exit " + strconv.Itoa(int(e)) }
 func runCommand(cfg app.Config, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	svc, closeDB, err := app.OpenService(ctx, cfg)
+	svc, closeDB, err := app.OpenService(ctx, cfg, app.Deps{})
 	if err != nil {
 		return err
 	}

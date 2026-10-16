@@ -76,7 +76,7 @@ export function onUnauthenticated(fn: () => void) {
 }
 
 let setupRequiredHandler: () => void = () => {};
-/** Called on a 403 secondFactorSetupRequired: the policy was switched on while the session was open. The session layer reloads and shows the setup page. */
+/** Called on a 403 secondFactorSetupRequired: the policy was switched on while the session was open. The session layer then shows the setup page. */
 export function onSetupRequired(fn: () => void) {
   setupRequiredHandler = fn;
 }

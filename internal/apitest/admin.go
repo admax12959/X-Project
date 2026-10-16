@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/admax12959/X-Project/internal/app"
 	"github.com/admax12959/X-Project/internal/cli"
 )
 
@@ -46,7 +47,13 @@ type CLIResult struct {
 // environment's database, in the same process.
 func (e *Env) CLI(args ...string) CLIResult {
 	var out, errOut bytes.Buffer
-	code := cli.Run(context.Background(), e.app.Service, args, &out, &errOut)
+	// Through app.OpenService, the way the command in the container builds its service.
+	svc, closeDB, err := app.OpenService(context.Background(), e.Config, app.Deps{Now: e.Clock.Now})
+	if err != nil {
+		e.t.Fatalf("app.OpenService: %v", err)
+	}
+	defer closeDB()
+	code := cli.Run(context.Background(), svc, args, &out, &errOut)
 	return CLIResult{Stdout: out.String(), Stderr: errOut.String(), Exit: code}
 }
 

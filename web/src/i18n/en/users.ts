@@ -35,7 +35,6 @@ export default {
   'users.identity.ldap': 'LDAP',
   'users.edit': 'Edit',
   'users.secondFactor.reset': 'Reset two-step verification',
-  'users.secondFactor.on': 'Two-step verification: on',
   'users.secondFactor.reset.title': 'Reset the two-step verification of {name}?',
   'users.secondFactor.reset.body': 'The authenticator and all recovery codes are deleted, and the user can then log in with the password alone. The user is notified by email when mail is configured, and the reset is recorded in the audit log. A user who is required to have two-step verification has to set it up again at the next request.',
   'users.secondFactor.reset.submit': 'Reset',
