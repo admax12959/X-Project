@@ -72,5 +72,6 @@ export default {
   'error.totpInvalid': 'The code is wrong or was already used. Wait for the next code and try again.',
   'error.totpLocked': 'Too many wrong codes. Two-step verification is locked for a while; try again later.',
   'error.totpAlreadyEnabled': 'Two-step verification is already on.',
+  'error.secondFactorEnforced': 'Your organization requires two-step verification, so you cannot turn it off.',
   'error.secondFactorUnreadable': 'The stored authenticator cannot be read (the master key changed). An administrator has to reset it.',
 };

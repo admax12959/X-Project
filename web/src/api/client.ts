@@ -13,6 +13,7 @@ import type {
   ChangePasswordInput,
   SecondFactorRequired,
   SecondFactorStatus,
+  SecondFactorWithCodes,
   TotpSetup,
   ChangeEvent,
   CodePlatform,
@@ -284,7 +285,11 @@ export const api = {
       /** New secret after the password was typed again. 422 password required / invalidCredentials, totpAlreadyEnabled; 503 ldapUnreachable. */
       startTotp: (password: string) => request<TotpSetup>('POST', '/api/me/second-factor/totp', { body: { password } }),
       /** Turns it on when the code is right. 422 code required / totpInvalid; 404 when no setup was started. */
-      confirmTotp: (code: string) => request<SecondFactorStatus>('POST', '/api/me/second-factor/totp/confirm', { body: { code } }),
+      confirmTotp: (code: string) => request<SecondFactorWithCodes>('POST', '/api/me/second-factor/totp/confirm', { body: { code } }),
+      /** Needs a code (authenticator or recovery code). The old codes are void. 422 code required / totpInvalid; 429 totpLocked; 404 without a second factor. */
+      regenerateRecoveryCodes: (code: string) => request<SecondFactorWithCodes>('POST', '/api/me/second-factor/recovery-codes', { body: { code } }),
+      /** Needs a code. Same errors as regenerating, plus 403 secondFactorEnforced for a user who must have one. */
+      disable: (code: string) => request<SecondFactorStatus>('POST', '/api/me/second-factor/disable', { body: { code } }),
     },
     /** Only ldap: 422 on password when the authentication fails (never 401), identityKindBound, identityTaken; 503 ldapUnreachable. */
     bindIdentity: (input: BindIdentityInput) => request<AdminUser>('POST', '/api/me/identities', { body: input }),

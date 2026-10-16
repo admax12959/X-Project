@@ -54,6 +54,8 @@ const renderers: Record<string, Renderer> = {
     from: deptName(e.params.from, 'audit.department.none'),
     to: deptName(e.params.to, 'audit.department.none'),
   }),
+  secondFactorDisabled: (e) => ({ user: targetUser(e) }),
+  recoveryCodesRegenerated: (e) => ({ user: targetUser(e) }),
   secondFactorEnabled: (e) => ({ user: targetUser(e), type: translate('audit.secondFactor.totp') }),
   configChanged: (e) => ({
     section: hasKey(`audit.section.${str(e.params.section)}`) ? translate(`audit.section.${str(e.params.section)}` as MessageKey) : str(e.params.section),

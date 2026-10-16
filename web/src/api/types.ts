@@ -34,7 +34,9 @@ export type LoginMethod = 'email' | 'ldap';
 
 /** What the login page needs to know: the methods it may offer, and whether "forgot password" can work (it needs mail). */
 export type LoginMethods = { items: LoginMethod[]; passwordRecovery: boolean };
-export type SecondFactorStatus = { enabled: boolean; authenticators: { type: 'totp'; enabledAt: string }[] };
+export type SecondFactorStatus = { enabled: boolean; authenticators: { type: 'totp'; enabledAt: string }[]; recoveryCodesRemaining: number };
+/** The answer of the calls that make recovery codes (turning on, regenerating): the codes are in it this once. */
+export type SecondFactorWithCodes = SecondFactorStatus & { recoveryCodes: string[] };
 
 /** secret: base32 for typing in; otpauthUri: what the QR code holds; qrSvg: the QR code as an SVG document. */
 export type TotpSetup = { secret: string; otpauthUri: string; qrSvg: string };
