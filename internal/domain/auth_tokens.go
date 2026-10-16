@@ -49,6 +49,9 @@ type AuthToken struct {
 	CreatedAt time.Time
 	ExpiresAt time.Time
 	UsedAt    time.Time // zero unless used
+	// LoginEmail is the login email a password-setting token was mailed to; the token works only
+	// while the user's email identity still has this login name. Empty for other purposes.
+	LoginEmail string
 }
 
 // AuthTokenRepository is the persistence port of one-time tokens and rate-limit events.
@@ -61,6 +64,8 @@ type AuthTokenRepository interface {
 	UseUserAuthTokens(ctx context.Context, userID UserID, purposes []TokenPurpose, at time.Time) error
 	// DeleteUserSessions ends every session of the user.
 	DeleteUserSessions(ctx context.Context, userID UserID) error
+	// DeleteOtherUserSessions ends every session of the user except the one with keepTokenHash.
+	DeleteOtherUserSessions(ctx context.Context, userID UserID, keepTokenHash string) error
 
 	// LockRateKeys serialises requests that share a rate-limit key: inside InTx it locks the keys
 	// until the transaction ends, so count-then-record cannot interleave. It must come before the
@@ -76,20 +81,20 @@ func tokenInvalid() error      { return Validation(Invalid("token", CodeTokenInv
 func rateLimitedError() *Error { return newKind(KindTooManyRequests, CodeRateLimited) }
 
 // newToken makes a token and the row that stores its hash.
-func (s *Service) newToken(userID UserID, purpose TokenPurpose, ttl time.Duration) (string, AuthToken, error) {
+func (s *Service) newToken(userID UserID, purpose TokenPurpose, loginEmail string, ttl time.Duration) (string, AuthToken, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", AuthToken{}, err
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	now := s.nowUTC()
-	return token, AuthToken{TokenHash: hashToken(token), UserID: userID, Purpose: purpose, CreatedAt: now, ExpiresAt: now.Add(ttl)}, nil
+	return token, AuthToken{TokenHash: hashToken(token), UserID: userID, Purpose: purpose, CreatedAt: now, ExpiresAt: now.Add(ttl), LoginEmail: loginEmail}, nil
 }
 
 // issueToken stores a new token within tx, after spending the user's earlier unused tokens of
 // the same purpose, and returns the token to put into a mail.
-func (s *Service) issueToken(ctx context.Context, tx Repository, userID UserID, purpose TokenPurpose, ttl time.Duration) (string, error) {
-	token, row, err := s.newToken(userID, purpose, ttl)
+func (s *Service) issueToken(ctx context.Context, tx Repository, userID UserID, purpose TokenPurpose, loginEmail string, ttl time.Duration) (string, error) {
+	token, row, err := s.newToken(userID, purpose, loginEmail, ttl)
 	if err != nil {
 		return "", err
 	}
@@ -191,7 +196,7 @@ func (s *Service) sendPasswordRecovery(ctx context.Context, email string) error 
 		if err != nil || !found || u.Status != UserEnabled {
 			return err
 		}
-		token, err := s.issueToken(ctx, tx, u.ID, TokenPasswordReset, passwordResetTokenTTL)
+		token, err := s.issueToken(ctx, tx, u.ID, TokenPasswordReset, ident.LoginName, passwordResetTokenTTL)
 		if err != nil {
 			return err
 		}
@@ -236,9 +241,13 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 		if err != nil {
 			return err
 		}
-		if _, hasEmail, err := tx.FindIdentityByUser(ctx, t.UserID, IdentityEmail); err != nil {
+		ident, hasEmail, err := tx.FindIdentityByUser(ctx, t.UserID, IdentityEmail)
+		if err != nil {
 			return err
-		} else if !found || u.Status != UserEnabled || !hasEmail {
+		}
+		// The link belongs to the email identity it was mailed for, not to the user: an identity
+		// that was removed and added again, or renamed, does not honour it.
+		if !found || u.Status != UserEnabled || !hasEmail || t.LoginEmail == "" || t.LoginEmail != ident.LoginName {
 			return tokenInvalid()
 		}
 		if err := tx.ChangePassword(ctx, t.UserID, hash); err != nil {
@@ -247,7 +256,11 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 		if err := tx.UseUserAuthTokens(ctx, t.UserID, passwordTokenPurposes, now); err != nil {
 			return err
 		}
-		return tx.DeleteUserSessions(ctx, t.UserID)
+		if err := tx.DeleteUserSessions(ctx, t.UserID); err != nil {
+			return err
+		}
+		// A first step passed with the old password must not turn into a session.
+		return tx.DeleteUserLoginChallenges(ctx, t.UserID)
 	})
 }
 
@@ -287,7 +300,7 @@ func (s *Service) SendInvitation(ctx context.Context, actor Actor, id UserID) er
 
 // inviteWithin issues an invitation token and queues the mail, within tx.
 func (s *Service) inviteWithin(ctx context.Context, tx Repository, userID UserID, loginEmail string) error {
-	token, err := s.issueToken(ctx, tx, userID, TokenInvite, inviteTokenTTL)
+	token, err := s.issueToken(ctx, tx, userID, TokenInvite, loginEmail, inviteTokenTTL)
 	if err != nil {
 		return err
 	}

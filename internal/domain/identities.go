@@ -118,6 +118,12 @@ func (s *Service) UnbindOwnIdentity(ctx context.Context, actor Actor, kind strin
 		if err := tx.DeleteIdentity(ctx, cur.User.ID, IdentityKind(kind)); err != nil {
 			return err
 		}
+		if removed.Kind == IdentityEmail {
+			// Links mailed to the removed identity's address must not work any more.
+			if err := tx.UseUserAuthTokens(ctx, cur.User.ID, passwordTokenPurposes, s.nowUTC()); err != nil {
+				return err
+			}
+		}
 		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), identityUnboundAudit(cur.User.ID, removed.Kind, removed.LoginName)); err != nil {
 			return err
 		}

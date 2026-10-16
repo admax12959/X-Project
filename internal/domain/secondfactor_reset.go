@@ -169,6 +169,9 @@ func (s *Service) ResetUserByCLI(ctx context.Context, in CLIResetInput) (CLIRese
 			if err := tx.DeleteUserSessions(ctx, cur.User.ID); err != nil {
 				return err
 			}
+			if err := tx.DeleteUserLoginChallenges(ctx, cur.User.ID); err != nil {
+				return err
+			}
 			if err := s.recordAudit(ctx, tx, AuditActorCLI, passwordResetAudit(cur.User.ID)); err != nil {
 				return err
 			}

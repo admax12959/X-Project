@@ -13,8 +13,8 @@ import (
 )
 
 func (s *Store) InsertAuthToken(ctx context.Context, t domain.AuthToken) error {
-	_, err := s.q.ExecContext(ctx, "INSERT INTO auth_tokens (token_hash, user_id, purpose, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
-		t.TokenHash, t.UserID, string(t.Purpose), t.CreatedAt, t.ExpiresAt)
+	_, err := s.q.ExecContext(ctx, "INSERT INTO auth_tokens (token_hash, user_id, purpose, created_at, expires_at, login_email) VALUES (?, ?, ?, ?, ?, ?)",
+		t.TokenHash, t.UserID, string(t.Purpose), t.CreatedAt, t.ExpiresAt, sql.NullString{String: t.LoginEmail, Valid: t.LoginEmail != ""})
 	return err
 }
 
@@ -22,8 +22,9 @@ func (s *Store) LockAuthToken(ctx context.Context, tokenHash string) (domain.Aut
 	var t domain.AuthToken
 	var purpose string
 	var used sql.NullTime
-	err := s.q.QueryRowContext(ctx, "SELECT id, token_hash, user_id, purpose, created_at, expires_at, used_at FROM auth_tokens WHERE token_hash = ? FOR UPDATE", tokenHash).
-		Scan(&t.ID, &t.TokenHash, &t.UserID, &purpose, &t.CreatedAt, &t.ExpiresAt, &used)
+	var email sql.NullString
+	err := s.q.QueryRowContext(ctx, "SELECT id, token_hash, user_id, purpose, created_at, expires_at, used_at, login_email FROM auth_tokens WHERE token_hash = ? FOR UPDATE", tokenHash).
+		Scan(&t.ID, &t.TokenHash, &t.UserID, &purpose, &t.CreatedAt, &t.ExpiresAt, &used, &email)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, false, nil
 	}
@@ -31,6 +32,7 @@ func (s *Store) LockAuthToken(ctx context.Context, tokenHash string) (domain.Aut
 		return t, false, err
 	}
 	t.Purpose = domain.TokenPurpose(purpose)
+	t.LoginEmail = email.String
 	if used.Valid {
 		t.UsedAt = used.Time
 	}
@@ -48,6 +50,11 @@ func (s *Store) UseUserAuthTokens(ctx context.Context, userID domain.UserID, pur
 
 func (s *Store) DeleteUserSessions(ctx context.Context, userID domain.UserID) error {
 	_, err := s.q.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = ?", userID)
+	return err
+}
+
+func (s *Store) DeleteOtherUserSessions(ctx context.Context, userID domain.UserID, keepTokenHash string) error {
+	_, err := s.q.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?", userID, keepTokenHash)
 	return err
 }
 

@@ -154,9 +154,6 @@ func (s *Service) RegenerateRecoveryCodes(ctx context.Context, actor Actor, code
 		if codes, err = s.replaceRecoveryCodes(ctx, tx, u.ID); err != nil {
 			return err
 		}
-		if err := tx.PutSecondFactorLockout(ctx, u.ID, SecondFactorLockout{}); err != nil {
-			return err
-		}
 		if err := s.recordAudit(ctx, tx, AuditActorOf(actor), recoveryCodesRegeneratedAudit(u.ID)); err != nil {
 			return err
 		}

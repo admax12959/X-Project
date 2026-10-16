@@ -102,8 +102,17 @@ func (s *Store) FindLoginChallenge(ctx context.Context, tokenHash string) (domai
 	return c, err == nil, err
 }
 
-func (s *Store) DeleteLoginChallenge(ctx context.Context, tokenHash string) error {
-	_, err := s.q.ExecContext(ctx, "DELETE FROM login_challenges WHERE token_hash = ?", tokenHash)
+func (s *Store) DeleteLoginChallenge(ctx context.Context, tokenHash string) (bool, error) {
+	res, err := s.q.ExecContext(ctx, "DELETE FROM login_challenges WHERE token_hash = ?", tokenHash)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+func (s *Store) DeleteUserLoginChallenges(ctx context.Context, userID domain.UserID) error {
+	_, err := s.q.ExecContext(ctx, "DELETE FROM login_challenges WHERE user_id = ?", userID)
 	return err
 }
 

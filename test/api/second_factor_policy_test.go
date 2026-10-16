@@ -238,3 +238,22 @@ func TestAPasswordChangeAndASetupRequirementCanBothApply(t *testing.T) {
 	enableWithCodes(t, tina, "a-new-password-1")
 	tina.Get("/api/applications").ExpectStatus(http.StatusOK)
 }
+
+// A setup-restricted session of another holder of the password must not turn into a full one when
+// the user enrols: enrolling ends every other session of the user.
+func TestEnrollingTheSecondFactorEndsTheOtherSessionsOfTheUser(t *testing.T) {
+	t.Parallel()
+	env := apitest.New(t)
+	frozenMidStep(env)
+	tina := plainUserClient(t, env, "tina")
+	forceAll(t, env.AdminClient(), true)
+	thief := env.Client()
+	thief.LoginAs("tina", "initial-pw-1").ExpectStatus(http.StatusOK)
+	thief.Get("/api/applications").ExpectError(http.StatusForbidden, "", "secondFactorSetupRequired")
+
+	enableWithCodes(t, tina, "initial-pw-1")
+
+	tina.Get("/api/applications").ExpectStatus(http.StatusOK)
+	thief.Get("/api/session").ExpectError(http.StatusUnauthorized, "", "unauthenticated")
+	thief.Get("/api/applications").ExpectError(http.StatusUnauthorized, "", "unauthenticated")
+}

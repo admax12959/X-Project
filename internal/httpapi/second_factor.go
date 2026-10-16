@@ -134,7 +134,7 @@ func (s *server) confirmTOTP(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	codes, err := s.svc.ConfirmTOTP(r.Context(), actorOf(r), body.Code)
+	codes, err := s.svc.ConfirmTOTP(r.Context(), actorOf(r), sessionToken(r), body.Code)
 	if err != nil {
 		writeError(w, r, err)
 		return
