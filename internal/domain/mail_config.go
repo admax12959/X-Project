@@ -224,12 +224,13 @@ func validCACerts(bundle string) bool {
 	}
 }
 
-// normalizeSiteURL accepts an http(s) address with a host (and optionally a path prefix, for a
-// site served below a path) and returns it without a trailing slash.
+// normalizeSiteURL accepts an http(s) address with a host and returns it without a trailing
+// slash. A path prefix is refused: the web app only serves root-relative routes, so a link
+// below a prefix would not open the page.
 func normalizeSiteURL(raw string) (string, bool) {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" ||
-		u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || strings.Contains(raw, "?") || strings.Contains(raw, "#") {
+		u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || (u.Path != "" && u.Path != "/") || strings.Contains(raw, "?") || strings.Contains(raw, "#") {
 		return "", false
 	}
 	return strings.TrimRight(u.String(), "/"), true

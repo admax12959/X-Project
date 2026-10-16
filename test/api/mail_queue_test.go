@@ -134,7 +134,7 @@ func TestMailLinksAreBuiltFromTheConfiguredSiteAddress(t *testing.T) {
 	if err := env.EnqueueMail(req); err != nil {
 		t.Fatal(err)
 	}
-	admin.Put(smtpConfigPath, smtpForm(map[string]any{"password": "", "siteUrl": "https://corp.example/xp/"})).ExpectStatus(http.StatusOK)
+	admin.Put(smtpConfigPath, smtpForm(map[string]any{"password": "", "siteUrl": "https://corp.example:8443/"})).ExpectStatus(http.StatusOK)
 	if err := env.EnqueueMail(req); err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestMailLinksAreBuiltFromTheConfiguredSiteAddress(t *testing.T) {
 	for _, c := range []struct {
 		m    domain.MailMessage
 		link string
-	}{{first, "https://xp.corp.example/invite/tok-abc"}, {second, "https://corp.example/xp/invite/tok-abc"}} {
+	}{{first, "https://xp.corp.example/invite/tok-abc"}, {second, "https://corp.example:8443/invite/tok-abc"}} {
 		if !strings.Contains(c.m.Text, c.link) || !strings.Contains(c.m.HTML, `href="`+c.link+`"`) {
 			t.Errorf("the mail does not carry the link %s:\n%s\n%s", c.link, c.m.Text, c.m.HTML)
 		}

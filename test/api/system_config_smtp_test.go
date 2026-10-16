@@ -157,6 +157,7 @@ func TestSMTPFormIsValidated(t *testing.T) {
 		{"site address required", map[string]any{"siteUrl": ""}, "siteUrl", "required"},
 		{"site address must be http(s)", map[string]any{"siteUrl": "ftp://xp.corp.example"}, "siteUrl", "invalid"},
 		{"site address without a host", map[string]any{"siteUrl": "https://"}, "siteUrl", "invalid"},
+		{"site address below a path", map[string]any{"siteUrl": "https://xp.corp.example/xproject"}, "siteUrl", "invalid"},
 		{"site address without a query", map[string]any{"siteUrl": "https://xp.corp.example/?a=b"}, "siteUrl", "invalid"},
 		{"site address without credentials", map[string]any{"siteUrl": "https://u:p@xp.corp.example"}, "siteUrl", "invalid"},
 		{"field too long", map[string]any{"username": strings.Repeat("a", 1001)}, "username", "tooLong"},
@@ -186,9 +187,9 @@ func TestSiteAddressIsStoredWithoutATrailingSlash(t *testing.T) {
 	env := apitest.New(t)
 	admin := env.AdminClient()
 
-	admin.Put(smtpConfigPath, smtpForm(map[string]any{"siteUrl": " https://corp.example/xp/ "})).ExpectStatus(http.StatusOK)
+	admin.Put(smtpConfigPath, smtpForm(map[string]any{"siteUrl": " https://corp.example/ "})).ExpectStatus(http.StatusOK)
 
-	if v, _ := getSMTPConfig(t, admin); v.SiteURL != "https://corp.example/xp" {
+	if v, _ := getSMTPConfig(t, admin); v.SiteURL != "https://corp.example" {
 		t.Fatalf("siteUrl = %q", v.SiteURL)
 	}
 }
