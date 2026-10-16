@@ -60,6 +60,8 @@ type AuthTokenRepository interface {
 	// LockAuthToken reads a token by hash with a locking read (inside InTx), so that two
 	// requests cannot both use it.
 	LockAuthToken(ctx context.Context, tokenHash string) (AuthToken, bool, error)
+	// FindAuthToken is LockAuthToken without the lock: a cheap look before anything expensive is done.
+	FindAuthToken(ctx context.Context, tokenHash string) (AuthToken, bool, error)
 	// UseUserAuthTokens marks every unused token of the user with one of the purposes as used.
 	UseUserAuthTokens(ctx context.Context, userID UserID, purposes []TokenPurpose, at time.Time) error
 	// DeleteUserSessions ends every session of the user.
@@ -220,6 +222,16 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 	if err := c.Err(); err != nil {
 		return err
 	}
+	// A token that does not exist, is spent or has expired is refused before the password is
+	// hashed, so that guesses on this public endpoint do not cost a bcrypt each. The decision is
+	// taken again under the lock below.
+	first, found, err := s.repo.FindAuthToken(ctx, hashToken(token))
+	if err != nil {
+		return err
+	}
+	if err := s.judgePasswordToken(first, found); err != nil {
+		return err
+	}
 	hash, err := hashPassword(password)
 	if err != nil {
 		return err
@@ -229,16 +241,10 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 		if err != nil {
 			return err
 		}
-		if !found || !isPasswordPurpose(t.Purpose) {
-			return tokenInvalid()
+		if err := s.judgePasswordToken(t, found); err != nil {
+			return err
 		}
 		now := s.nowUTC()
-		if !t.UsedAt.IsZero() {
-			return Validation(Invalid("token", CodeTokenUsed, nil))
-		}
-		if !now.Before(t.ExpiresAt) {
-			return Validation(Invalid("token", CodeTokenExpired, nil))
-		}
 		// The identity is locked before anything else is read, so that a change of the password
 		// or a reset that is running is finished (and visible) when the token is judged.
 		ident, hasEmail, err := tx.LockEmailIdentity(ctx, t.UserID)
@@ -254,6 +260,11 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 		if !found || u.Status != UserEnabled || !hasEmail || t.LoginEmail == "" || t.LoginEmail != ident.LoginName {
 			return tokenInvalid()
 		}
+		// An invitation is for setting the first password: once there is one, the invitation is
+		// void, whatever token row is left over.
+		if t.Purpose == TokenInvite && ident.PasswordSet {
+			return tokenInvalid()
+		}
 		if err := tx.ChangePassword(ctx, t.UserID, hash); err != nil {
 			return err
 		}
@@ -267,6 +278,21 @@ func (s *Service) SetPasswordWithToken(ctx context.Context, token, password stri
 		}
 		return tx.DeleteUserSessions(ctx, t.UserID)
 	})
+}
+
+// judgePasswordToken is the verdict on a token read for the set-password page: unknown or of
+// another purpose, spent, or expired; nil when it can still be used.
+func (s *Service) judgePasswordToken(t AuthToken, found bool) error {
+	if !found || !isPasswordPurpose(t.Purpose) {
+		return tokenInvalid()
+	}
+	if !t.UsedAt.IsZero() {
+		return Validation(Invalid("token", CodeTokenUsed, nil))
+	}
+	if !s.nowUTC().Before(t.ExpiresAt) {
+		return Validation(Invalid("token", CodeTokenExpired, nil))
+	}
+	return nil
 }
 
 func isPasswordPurpose(p TokenPurpose) bool {
@@ -285,16 +311,18 @@ func (s *Service) SendInvitation(ctx context.Context, actor Actor, id UserID) er
 		return err
 	}
 	return s.repo.InTx(ctx, func(tx Repository) error {
+		// The identity is locked first (as everywhere), so that a password set a moment ago by the
+		// invitation itself is seen here and no second invitation is issued after it.
+		ident, hasEmail, err := tx.LockEmailIdentity(ctx, id)
+		if err != nil {
+			return err
+		}
 		u, found, err := tx.GetUser(ctx, id)
 		if err != nil {
 			return err
 		}
 		if !found {
 			return newKind(KindNotFound, CodeNotFound)
-		}
-		ident, hasEmail, err := tx.FindIdentityByUser(ctx, id, IdentityEmail)
-		if err != nil {
-			return err
 		}
 		if !hasEmail || ident.PasswordSet || u.Status != UserEnabled {
 			return newKind(KindValidation, CodeInviteNotPending)

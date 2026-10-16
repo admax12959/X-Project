@@ -19,11 +19,19 @@ func (s *Store) InsertAuthToken(ctx context.Context, t domain.AuthToken) error {
 }
 
 func (s *Store) LockAuthToken(ctx context.Context, tokenHash string) (domain.AuthToken, bool, error) {
+	return s.readAuthToken(ctx, tokenHash, " FOR UPDATE")
+}
+
+func (s *Store) FindAuthToken(ctx context.Context, tokenHash string) (domain.AuthToken, bool, error) {
+	return s.readAuthToken(ctx, tokenHash, "")
+}
+
+func (s *Store) readAuthToken(ctx context.Context, tokenHash, lock string) (domain.AuthToken, bool, error) {
 	var t domain.AuthToken
 	var purpose string
 	var used sql.NullTime
 	var email sql.NullString
-	err := s.q.QueryRowContext(ctx, "SELECT id, token_hash, user_id, purpose, created_at, expires_at, used_at, login_email FROM auth_tokens WHERE token_hash = ? FOR UPDATE", tokenHash).
+	err := s.q.QueryRowContext(ctx, "SELECT id, token_hash, user_id, purpose, created_at, expires_at, used_at, login_email FROM auth_tokens WHERE token_hash = ?"+lock, tokenHash).
 		Scan(&t.ID, &t.TokenHash, &t.UserID, &purpose, &t.CreatedAt, &t.ExpiresAt, &used, &email)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, false, nil
