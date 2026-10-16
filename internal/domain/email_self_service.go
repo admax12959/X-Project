@@ -191,23 +191,59 @@ func (s *Service) failBucket(userID UserID) string {
 	return fmt.Sprintf("emailcode-fail:user:%d", userID)
 }
 
-// guessLimit refuses a user who typed too many wrong codes lately.
-func (s *Service) guessLimit(ctx context.Context, userID UserID) error {
-	n, err := s.repo.CountRateEvents(ctx, s.failBucket(userID), s.nowUTC().Add(-emailCodeFailWindow))
+// commitThenFail is returned from a transaction body to commit what the body wrote and then
+// fail with err: a wrong guess has to be on record even though the request is refused.
+type commitThenFail struct{ err error }
+
+func (e commitThenFail) Error() string { return e.err.Error() }
+func (e commitThenFail) Unwrap() error { return e.err }
+
+// inTxKeeping runs fn like InTx, except that a commitThenFail commits and then comes out as its
+// error.
+func (s *Service) inTxKeeping(ctx context.Context, fn func(tx Repository) error) error {
+	var after error
+	err := s.repo.InTx(ctx, func(tx Repository) error {
+		err := fn(tx)
+		var keep commitThenFail
+		if errors.As(err, &keep) {
+			after = keep.err
+			return nil
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return after
+}
+
+func isWrongCode(err error) bool {
+	e, ok := AsError(err)
+	return ok && e.Kind == KindValidation && len(e.Errors) == 1 && e.Errors[0].Field == "code" && e.Errors[0].Code == CodeTokenInvalid
+}
+
+// verifyGuessedCode is verifyEmailCode behind the guess limit. The limit is read and a wrong code
+// is recorded inside the caller's transaction (which must hold the user's row lock and must not
+// have written anything yet), so parallel guesses are counted one by one: a user who typed too
+// many wrong codes lately is refused, even with the right code, and the refusal that records a
+// wrong code still commits (inTxKeeping).
+func (s *Service) verifyGuessedCode(ctx context.Context, tx Repository, userID UserID, purpose TokenPurpose, email, code string) error {
+	bucket := s.failBucket(userID)
+	n, err := tx.CountRateEvents(ctx, bucket, s.nowUTC().Add(-emailCodeFailWindow))
 	if err != nil {
 		return err
 	}
 	if n >= emailCodeFailLimit {
 		return rateLimitedError()
 	}
-	return nil
-}
-
-// noteGuess records a wrong code (after the transaction that refused it ended).
-func (s *Service) noteGuess(ctx context.Context, userID UserID, err error) {
-	if e, ok := AsError(err); ok && e.Kind == KindValidation && len(e.Errors) == 1 && e.Errors[0].Field == "code" && e.Errors[0].Code == CodeTokenInvalid {
-		_ = s.repo.AddRateEvent(ctx, s.failBucket(userID), s.nowUTC())
+	err = s.verifyEmailCode(ctx, tx, userID, purpose, email, code)
+	if isWrongCode(err) {
+		if aerr := tx.AddRateEvent(ctx, bucket, s.nowUTC()); aerr != nil {
+			return aerr
+		}
+		return commitThenFail{err}
 	}
+	return err
 }
 
 // BindEmailInput is the confirmation of a new email identity: the address, the code mailed to
@@ -232,9 +268,6 @@ func (s *Service) BindOwnEmailIdentity(ctx context.Context, actor Actor, in Bind
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
 	}
-	if err := s.guessLimit(ctx, actor.User.ID); err != nil {
-		return UserWithIdentities{}, err
-	}
 	hash, err := hashPassword(in.Password)
 	if err != nil {
 		return UserWithIdentities{}, err
@@ -242,10 +275,9 @@ func (s *Service) BindOwnEmailIdentity(ctx context.Context, actor Actor, in Bind
 	u, err := s.bindIdentity(ctx, actor.User.ID, bindSpec{
 		kind: IdentityEmail, loginName: email, hash: hash, via: BoundViaSelf, by: AuditActorOf(actor),
 		before: func(tx Repository) error {
-			return s.verifyEmailCode(ctx, tx, actor.User.ID, TokenBindEmail, email, in.Code)
+			return s.verifyGuessedCode(ctx, tx, actor.User.ID, TokenBindEmail, email, in.Code)
 		},
 	})
-	s.noteGuess(ctx, actor.User.ID, err)
 	return u, err
 }
 
@@ -269,11 +301,8 @@ func (s *Service) ChangeOwnLoginEmail(ctx context.Context, actor Actor, email, c
 	if err := c.Err(); err != nil {
 		return UserWithIdentities{}, err
 	}
-	if err := s.guessLimit(ctx, actor.User.ID); err != nil {
-		return UserWithIdentities{}, err
-	}
 	var result UserWithIdentities
-	err := s.repo.InTx(ctx, func(tx Repository) error {
+	err := s.inTxKeeping(ctx, func(tx Repository) error {
 		cur, found, err := tx.LockUserWithIdentities(ctx, actor.User.ID)
 		if err != nil {
 			return err
@@ -284,7 +313,7 @@ func (s *Service) ChangeOwnLoginEmail(ctx context.Context, actor Actor, email, c
 		if err := s.checkEmailTarget(ctx, tx, cur, TokenChangeEmail, email); err != nil {
 			return err
 		}
-		if err := s.verifyEmailCode(ctx, tx, cur.User.ID, TokenChangeEmail, email, code); err != nil {
+		if err := s.verifyGuessedCode(ctx, tx, cur.User.ID, TokenChangeEmail, email, code); err != nil {
 			return err
 		}
 		old, _ := cur.identity(IdentityEmail)
@@ -324,7 +353,6 @@ func (s *Service) ChangeOwnLoginEmail(ctx context.Context, actor Actor, email, c
 		result = cur
 		return nil
 	})
-	s.noteGuess(ctx, actor.User.ID, err)
 	return result, err
 }
 
