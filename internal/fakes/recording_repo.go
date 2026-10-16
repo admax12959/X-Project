@@ -22,6 +22,9 @@ type RecordingRepo struct {
 	// Identity is what LockEmailIdentity returns; NoEmailIdentity makes it report none.
 	Identity        domain.LoginIdentity
 	NoEmailIdentity bool
+	// IdentityGoneOnLock: the identity is there for the plain reads and gone when it is locked,
+	// as when it is unbound between the two.
+	IdentityGoneOnLock bool
 	Token           domain.AuthToken // what LockAuthToken and FindAuthToken return
 	// Sessions are the token hashes FindSession finds, for the user UserID.
 	Sessions map[string]bool
@@ -62,7 +65,7 @@ func (r *RecordingRepo) LockUserWithIdentities(context.Context, domain.UserID) (
 
 func (r *RecordingRepo) LockEmailIdentity(context.Context, domain.UserID) (domain.LoginIdentity, bool, error) {
 	r.rec("LockEmailIdentity")
-	if r.NoEmailIdentity {
+	if r.NoEmailIdentity || r.IdentityGoneOnLock {
 		return domain.LoginIdentity{}, false, nil
 	}
 	return r.Identity, true, nil
