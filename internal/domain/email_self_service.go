@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net/mail"
 	"strings"
@@ -367,6 +368,10 @@ func (s *Service) notifySecurity(ctx context.Context, tx Repository, userID User
 	if a, perr := mail.ParseAddress(to); !usable || perr != nil || a.Address != to || strings.ContainsAny(to, "\r\n") {
 		return nil
 	}
-	_, err = s.enqueueMail(ctx, tx, MailRequest{Template: tpl, To: to, Recipient: userID, Data: data})
-	return err
+	if _, err := s.enqueueMail(ctx, tx, MailRequest{Template: tpl, To: to, Recipient: userID, Data: data}); err != nil {
+		// Best effort, as documented: a statement that fails inside the transaction does not abort
+		// it, so the change it is about still commits.
+		slog.Warn("mail: a security notice could not be queued", "user", userID, "template", tpl, "err", err)
+	}
+	return nil
 }
